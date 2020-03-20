@@ -167,6 +167,12 @@ hpcrun_fmt_hdr_free(hpcrun_fmt_hdr_t* hdr, hpcfmt_free_fn dealloc);
 #define HPCRUN_FMT_METRIC_SHOW_INCLUSIVE  2
 #define HPCRUN_FMT_METRIC_SHOW_EXCLUSIVE  3
 
+// Attributes for metrics:
+// augment (default): allow hpcprof to augment to compute the statistics
+// flat (usually for derived metrics): do not hpcprof to augment
+#define HPCRUN_FMT_METRIC_ATTRIBUTE_AUGMENT 0
+#define HPCRUN_FMT_METRIC_ATTRIBUTE_FLAT    1
+
 //***************************************************************************
 // epoch-hdr
 //***************************************************************************
@@ -264,7 +270,10 @@ typedef struct hpcrun_metricFlags_fields {
   MetricFlags_Ty_t     ty     : 8;
   MetricFlags_ValTy_t  valTy  : 8;
   MetricFlags_ValFmt_t valFmt : 8;
-  uint8_t              unused0;
+
+  // attribute of metric. See the macro HPCRUN_FMT_METRIC_ATTRIBUTE_*
+  // it was formerly: unused0;
+  uint8_t              attribute; 
 
   uint16_t             partner;
   uint8_t /*bool*/     show;
@@ -293,8 +302,9 @@ typedef struct hpcrun_metricFlags_bitfield_XXX {
   uint partner      : 16;
   bool show         : 1;
   bool showPercent  : 1;
+  uint8_t attribute : 8;
 
-  uint64_t unused0 : 34;
+  uint64_t unused0 : 26;
   uint64_t unused1;
 } hpcrun_metricFlags_bitfield_XXX;
 

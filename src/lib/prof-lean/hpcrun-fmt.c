@@ -266,7 +266,7 @@ const hpcrun_metricFlags_t hpcrun_metricFlags_NULL = {
   .fields.ty          = MetricFlags_Ty_NULL,
   .fields.valTy       = MetricFlags_ValTy_NULL,
   .fields.valFmt      = MetricFlags_ValFmt_NULL,
-  .fields.unused0     = 0,
+  .fields.attribute   = HPCRUN_FMT_METRIC_ATTRIBUTE_AUGMENT,
 
   .fields.partner     = 0,
   .fields.show        = (uint8_t)true,
@@ -368,7 +368,7 @@ hpcrun_fmt_metricDesc_fread(metric_desc_t* x, metric_aux_info_t *aux_info, FILE*
   // FIXME: tallent: temporarily support old non-portable convention
   if ( !(x->flags.fields.ty == MetricFlags_Ty_Raw
 	   || x->flags.fields.ty == MetricFlags_Ty_Final)
-       || x->flags.fields.unused0 != 0
+     /*  || x->flags.fields.unused0 != 0 */
        || x->flags.fields.unused1 != 0) {
     fseek(fs, -sizeof(x->flags), SEEK_CUR);
     
@@ -385,6 +385,7 @@ hpcrun_fmt_metricDesc_fread(metric_desc_t* x, metric_aux_info_t *aux_info, FILE*
     x->flags.fields.partner     = (uint16_t) x_flags_old.fields.partner;
     x->flags.fields.show        = x_flags_old.fields.show;
     x->flags.fields.showPercent = x_flags_old.fields.showPercent;
+    x->flags.fields.attribute   = x_flags_old.fields.attribute;
   }
 
   HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(x->period), fs));
@@ -428,12 +429,12 @@ int
 hpcrun_fmt_metricDesc_fprint(metric_desc_t* x, metric_aux_info_t *aux_info, FILE* fs, const char* pre)
 {
   fprintf(fs, "%s[(nm: %s) (desc: %s) "
-	  "((ty: %d) (val-ty: %d) (val-fmt: %d) (partner: %u) (show: %d) (showPercent: %d)) "
+	  "((ty: %d) (val-ty: %d) (val-fmt: %d) (partner: %u) (show: %d) (showPercent: %d)) (attr: %d) "
 	  "(period: %"PRIu64") (formula: %s) (format: %s)\n" ,
 	  pre, hpcfmt_str_ensure(x->name), hpcfmt_str_ensure(x->description),
 	  (int)x->flags.fields.ty, (int)x->flags.fields.valTy,
 	  (int)x->flags.fields.valFmt,
-	  (uint)x->flags.fields.partner, x->flags.fields.show, x->flags.fields.showPercent,
+	  (uint)x->flags.fields.partner, x->flags.fields.show, x->flags.fields.showPercent, x->flags.fields.attribute,
 	  x->period,
 	  hpcfmt_str_ensure(x->formula), hpcfmt_str_ensure(x->format));
   fprintf(fs, "    (frequency: %d) (multiplexed: %d) (period-mean: %f) (num-samples: %d)]\n",

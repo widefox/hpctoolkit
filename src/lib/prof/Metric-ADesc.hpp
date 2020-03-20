@@ -561,6 +561,12 @@ public:
   formula() const
   { return m_formula; }
 
+  bool
+  hasFormula()
+  {
+    return !m_formula.empty();
+  }
+
   void 
   format(std::string fmt)
   { m_format = fmt; }

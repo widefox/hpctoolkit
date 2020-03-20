@@ -298,15 +298,24 @@ hpcrun_id2metric_linked(int metric_id)
 
 
 // non finalizing
-void hpcrun_set_display(int metric_id, uint8_t show) {
+void 
+hpcrun_set_display(int metric_id, uint8_t show) {
   metric_desc_t* mdesc = hpcrun_id2metric_linked(metric_id);
   mdesc->flags.fields.show = show;
 }
 
-// non finalizing
-void hpcrun_set_percent(int metric_id, uint8_t show_percent) {
+// set the metric's percent attribute 
+void 
+hpcrun_set_metric_percent(int metric_id, uint8_t show_percent) {
   metric_desc_t* mdesc = hpcrun_id2metric_linked(metric_id);
   mdesc->flags.fields.showPercent = show_percent;
+}
+
+// set the metric's general attribute
+void 
+hpcrun_set_metric_attribute(int metric_id, uint8_t attribute) {
+  metric_desc_t* mdesc = hpcrun_id2metric_linked(metric_id);
+  mdesc->flags.fields.attribute = attribute;
 }
 
 

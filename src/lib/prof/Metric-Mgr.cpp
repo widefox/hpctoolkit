@@ -182,7 +182,8 @@ Mgr::makeSummaryMetrics(bool needAllStats, bool needMultiOccurance,
 
       Metric::ADesc* mNew =	makeSummaryMetric("Sum",  m, mVec);
 
-      if (needAllStats) {
+      // we do not create stat metrics if the metric is a derived metric
+      if (needAllStats && !mNew->hasFormula()) {
         makeSummaryMetric("Mean",   m, mVec);
         makeSummaryMetric("StdDev", m, mVec);
         makeSummaryMetric("CfVar",  m, mVec);
@@ -251,7 +252,8 @@ Mgr::makeSummaryMetricsIncr(bool needAllStats, uint srcBegId, uint srcEndId)
     Metric::ADesc* mNew =
       makeSummaryMetricIncr("Sum",  m);
 
-    if (needAllStats) {
+    // we do not create stat metrics if the metric is a derived metric
+    if (needAllStats && !m->hasFormula()) {
       makeSummaryMetricIncr("Mean",   m);
       makeSummaryMetricIncr("StdDev", m);
       makeSummaryMetricIncr("CfVar",  m);
@@ -328,8 +330,15 @@ Mgr::makeSummaryMetric(const string mDrvdTy, const Metric::ADesc* mSrc,
   }
   
   string mNmFmt = mSrc->nameToFmt();
-  string mNmBase = mSrc->nameBase() + ":" + mDrvdTy;
   const string& mDesc = mSrc->description();
+
+  string mNmBase = mSrc->nameBase();
+
+  // for hpcrun derived metric, we don't want to add the suffix to the base name
+  // we'll keep it the original name.
+  if (mSrc->formula().empty()) {
+    mNmBase += ":" + mDrvdTy;
+  }
 
   DerivedDesc* m =
     new DerivedDesc(mNmFmt, mDesc, expr, visibility, true/*isSortKey*/,
@@ -436,7 +445,14 @@ Mgr::makeSummaryMetricIncr(const string mDrvdTy, const Metric::ADesc* mSrc)
   }
   
   string mNmFmt = mSrc->nameToFmt();
-  string mNmBase = mSrc->nameBase() + ":" + mDrvdTy;
+  string mNmBase = mSrc->nameBase();
+
+  // for hpcrun derived metric, we don't want to add the suffix to the base name
+  // we'll keep it the original name.
+  if (mSrc->formula().empty()) {
+    mNmBase += ":" + mDrvdTy;
+  }
+  
   const string& mDesc = mSrc->description();
 
   DerivedIncrDesc* m =
