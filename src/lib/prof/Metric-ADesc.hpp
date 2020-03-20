@@ -167,7 +167,7 @@ public:
       m_num_samples(x.m_num_samples), m_isMultiplexed(x.m_isMultiplexed),
       m_period_mean(x.m_period_mean), m_sampling_type(x.m_sampling_type),
       m_isTemporary(false), m_formula(x.m_formula), m_format(x.m_format), 
-      m_order(x.m_order)
+      m_order(x.m_order), m_metricAttribute(x.m_metricAttribute)
   { }
 
   ADesc&
@@ -198,6 +198,8 @@ public:
       m_formula       = x.m_formula;
       m_format        = x.m_format;
       m_order         = x.m_order;
+
+      m_metricAttribute = x.m_metricAttribute;
     }
     return *this;
   }
@@ -562,10 +564,16 @@ public:
   { return m_formula; }
 
   bool
-  hasFormula()
-  {
-    return !m_formula.empty();
-  }
+  hasFormula() const
+  { return !m_formula.empty(); }
+
+  void
+  metricAttribute(int attribute) 
+  { m_metricAttribute = attribute; }
+
+  int
+  metricAttribute() const
+  { return m_metricAttribute; }
 
   void 
   format(std::string fmt)
@@ -646,6 +654,9 @@ private:
 
   // hpcrun metric order
   int m_order;
+
+  // metric attribute
+  int m_metricAttribute;
 };
 
 

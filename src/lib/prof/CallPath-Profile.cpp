@@ -1383,6 +1383,8 @@ Profile::fmt_epoch_fread(Profile* &prof, FILE* infs, uint rFlags,
 
     m->formula      (mdesc.formula);
     m->format       (mdesc.format);
+    
+    m->metricAttribute(mdesc.flags.fields.attribute);
 
     // ----------------------------------------
     // 1c. add to the list of metric
@@ -1406,6 +1408,8 @@ Profile::fmt_epoch_fread(Profile* &prof, FILE* infs, uint rFlags,
       mSmpl->flags  (mdesc.flags);
       mSmpl->formula(mdesc.formula);
       mSmpl->format (mdesc.format);
+      
+      mSmpl->metricAttribute(mdesc.flags.fields.attribute);
       
       prof->metricMgr()->insert(mSmpl);
     }

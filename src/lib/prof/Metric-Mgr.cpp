@@ -356,6 +356,7 @@ Mgr::makeSummaryMetric(const string mDrvdTy, const Metric::ADesc* mSrc,
   m->formula      (mSrc->formula());
   m->format       (mSrc->format());
   m->order        (metric_order);
+  m->metricAttribute(mSrc->metricAttribute());
 
   insert(m);
   expr->accumId(0, m->id());
@@ -470,6 +471,8 @@ Mgr::makeSummaryMetricIncr(const string mDrvdTy, const Metric::ADesc* mSrc)
   m->formula      (mSrc->formula());
   m->format       (mSrc->format());
   m->order        (metric_order);
+  
+  m->metricAttribute(mSrc->metricAttribute());
 
   insert(m);
   expr->accumId(0, m->id());

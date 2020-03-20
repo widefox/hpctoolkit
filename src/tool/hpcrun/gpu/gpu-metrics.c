@@ -166,7 +166,8 @@ name ## _metric_kind
 
 #define DIVISION_FORMULA(name) \
   hpcrun_set_display(METRIC_ID(name ## _ACUMU), 0); \
-  hpcrun_set_percent(METRIC_ID(name), 0); \
+  hpcrun_set_metric_percent(METRIC_ID(name), 0); \
+  hpcrun_set_metric_attribute(METRIC_ID(name), HPCRUN_FMT_METRIC_ATTRIBUTE_FLAT); \
   hpcrun_set_display(METRIC_ID(name), HPCRUN_FMT_METRIC_SHOW_EXCLUSIVE); \
   reg_metric  = hpcrun_id2metric_linked(METRIC_ID(name)); \
   reg_formula = hpcrun_malloc_safe(sizeof(char) * MAX_CHAR_FORMULA); \
@@ -778,7 +779,7 @@ gpu_metrics_GSAMP_enable
 
   FINALIZE_METRIC_KIND();
 
-  hpcrun_set_percent(METRIC_ID(GPU_SAMPLE_UTILIZATION), 1);
+  hpcrun_set_metric_percent(METRIC_ID(GPU_SAMPLE_UTILIZATION), 1);
 
   metric_desc_t* util_metric = 
     hpcrun_id2metric_linked(METRIC_ID(GPU_SAMPLE_UTILIZATION));
