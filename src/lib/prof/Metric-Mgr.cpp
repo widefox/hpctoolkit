@@ -183,7 +183,7 @@ Mgr::makeSummaryMetrics(bool needAllStats, bool needMultiOccurance,
       Metric::ADesc* mNew =	makeSummaryMetric("Sum",  m, mVec);
 
       // we do not create stat metrics if the metric is a derived metric
-      if (needAllStats && !mNew->hasFormula()) {
+      if (needAllStats && mNew->canAugmentMetric()) {
         makeSummaryMetric("Mean",   m, mVec);
         makeSummaryMetric("StdDev", m, mVec);
         makeSummaryMetric("CfVar",  m, mVec);
@@ -253,7 +253,7 @@ Mgr::makeSummaryMetricsIncr(bool needAllStats, uint srcBegId, uint srcEndId)
       makeSummaryMetricIncr("Sum",  m);
 
     // we do not create stat metrics if the metric is a derived metric
-    if (needAllStats && !m->hasFormula()) {
+    if (needAllStats && m->canAugmentMetric()) {
       makeSummaryMetricIncr("Mean",   m);
       makeSummaryMetricIncr("StdDev", m);
       makeSummaryMetricIncr("CfVar",  m);
@@ -267,7 +267,6 @@ Mgr::makeSummaryMetricsIncr(bool needAllStats, uint srcBegId, uint srcEndId)
   }
 
   computePartners();
- 
   return firstId;
 }
 

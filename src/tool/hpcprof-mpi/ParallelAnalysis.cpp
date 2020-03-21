@@ -248,6 +248,7 @@ packSend(std::pair<Prof::CallPath::Profile*,
   Prof::CallPath::Profile* profile = data.first;
   ParallelAnalysis::PackedMetrics* packedMetrics = data.second;
   packMetrics(*profile, *packedMetrics);
+
   MPI_Send(packedMetrics->data(), packedMetrics->dataSize(),
 	   MPI_DOUBLE, dest, myRank, comm);
 }

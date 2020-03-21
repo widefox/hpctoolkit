@@ -825,7 +825,7 @@ Profile::writeXML_hdr(std::ostream& os, uint metricBeg, uint metricEnd,
 	  metricIdToFormula.insert(std::make_pair(mId, frm));
 	}
       }
-      else {
+      else if (m->canAugmentMetric()) {
 	// must represent accumulator 2
 	uint mId = m->id();
 	UIntToStringMap::iterator it = metricIdToFormula.find(mId);
@@ -1408,7 +1408,7 @@ Profile::fmt_epoch_fread(Profile* &prof, FILE* infs, uint rFlags,
       mSmpl->flags  (mdesc.flags);
       mSmpl->formula(mdesc.formula);
       mSmpl->format (mdesc.format);
-      
+
       mSmpl->metricAttribute(mdesc.flags.fields.attribute);
       
       prof->metricMgr()->insert(mSmpl);
@@ -1705,12 +1705,13 @@ Profile::fmt_epoch_fwrite(const Profile& prof, FILE* fs, uint wFlags)
 
     mdesc.name = const_cast<char*>(nmFmt.c_str());
     mdesc.description = const_cast<char*>(desc.c_str());
-    mdesc.flags.fields.ty = MetricFlags_Ty_Final;
-    mdesc.flags.fields.valTy = Metric::ADesc::toHPCRunMetricValTy(m->type());
-    mdesc.flags.fields.valFmt = MetricFlags_ValFmt_Real;
-    mdesc.period = 1;
-    mdesc.formula = NULL;
-    mdesc.format = NULL;
+    mdesc.flags.fields.ty        = MetricFlags_Ty_Final;
+    mdesc.flags.fields.valTy     = Metric::ADesc::toHPCRunMetricValTy(m->type());
+    mdesc.flags.fields.valFmt    = MetricFlags_ValFmt_Real;
+    mdesc.flags.fields.attribute = (uint8_t) m->metricAttribute();
+    mdesc.period  = 1;
+    mdesc.formula = NULL; // m->formula().c_str();
+    mdesc.format  = NULL; // m->format().c_str();
     mdesc.is_frequency_metric = false;
 
     metric_aux_info_t aux_info;

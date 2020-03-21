@@ -302,9 +302,9 @@ typedef struct hpcrun_metricFlags_bitfield_XXX {
   uint partner      : 16;
   bool show         : 1;
   bool showPercent  : 1;
-  uint8_t attribute : 8;
+  
+  uint64_t attribute;
 
-  uint64_t unused0 : 26;
   uint64_t unused1;
 } hpcrun_metricFlags_bitfield_XXX;
 
