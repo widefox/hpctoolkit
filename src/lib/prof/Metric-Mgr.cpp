@@ -182,7 +182,7 @@ Mgr::makeSummaryMetrics(bool needAllStats, bool needMultiOccurance,
 
       Metric::ADesc* mNew =	makeSummaryMetric("Sum",  m, mVec);
 
-      if (needAllStats) {
+      if ( needAllStats && mNew->canAugmentMetric() ) {
         makeSummaryMetric("Mean",   m, mVec);
         makeSummaryMetric("StdDev", m, mVec);
         makeSummaryMetric("CfVar",  m, mVec);
@@ -251,7 +251,7 @@ Mgr::makeSummaryMetricsIncr(bool needAllStats, uint srcBegId, uint srcEndId)
     Metric::ADesc* mNew =
       makeSummaryMetricIncr("Sum",  m);
 
-    if (needAllStats) {
+    if ( needAllStats && mNew->canAugmentMetric() ) {
       makeSummaryMetricIncr("Mean",   m);
       makeSummaryMetricIncr("StdDev", m);
       makeSummaryMetricIncr("CfVar",  m);
@@ -344,8 +344,15 @@ Mgr::makeSummaryMetric(const string mDrvdTy, const Metric::ADesc* mSrc,
   }
   
   string mNmFmt = mSrc->nameToFmt();
-  string mNmBase = mSrc->nameBase() + ":" + mDrvdTy;
   const string& mDesc = description + " '" + mSrc->description() + "'";
+
+  string mNmBase = mSrc->nameBase();
+
+  // for hpcrun derived metric, we don't want to add the suffix to the base name
+  // we'll keep it the original name.
+  if (!mSrc->hasFormula()) {
+    mNmBase += ":" + mDrvdTy;
+  }
 
   DerivedDesc* m =
     new DerivedDesc(mNmFmt, mDesc, expr, visibility, true/*isSortKey*/,
@@ -363,7 +370,8 @@ Mgr::makeSummaryMetric(const string mDrvdTy, const Metric::ADesc* mSrc,
   m->formula      (formula);
   m->format       (mSrc->format());
   m->order        (metric_order);
-
+  m->metricAttribute(mSrc->metricAttribute());
+  
   insert(m);
   expr->accumId(0, m->id());
 
@@ -472,7 +480,14 @@ Mgr::makeSummaryMetricIncr(const string mDrvdTy, const Metric::ADesc* mSrc)
   }
   
   string mNmFmt = mSrc->nameToFmt();
-  string mNmBase = mSrc->nameBase() + ":" + mDrvdTy;
+  string mNmBase = mSrc->nameBase();
+
+  // for hpcrun derived metric, we don't want to add the suffix to the base name
+  // we'll keep it the original name.
+  if (!mSrc->hasFormula()) {
+    mNmBase += ":" + mDrvdTy;
+  }
+  
   const string& mDesc = description + " '" + mSrc->description() + "'";
 
   DerivedIncrDesc* m =
@@ -490,6 +505,8 @@ Mgr::makeSummaryMetricIncr(const string mDrvdTy, const Metric::ADesc* mSrc)
   m->formula      (formula);
   m->format       (mSrc->format());
   m->order        (metric_order);
+
+  m->metricAttribute(mSrc->metricAttribute());
 
   insert(m);
   expr->accumId(0, m->id());
@@ -859,7 +876,7 @@ Mgr::insertInMapsAndMakeUniqueName(Metric::ADesc* m)
   // 1. metric name to Metric::ADescVec table
   string nm = m->name();
   StringToADescVecMap::iterator it = m_nuniqnmToMetricMap.find(nm);
-  if (it != m_nuniqnmToMetricMap.end()) {
+  if (it != m_nuniqnmToMetricMap.end() ) {
     Metric::ADescVec& mvec = it->second;
 
     // ensure uniqueness: qualifier is an integer >= 1
@@ -871,11 +888,16 @@ Mgr::insertInMapsAndMakeUniqueName(Metric::ADesc* m)
     }
     sfx_new += StrUtil::toStr(qualifier);
     
-    m->nameSfx(sfx_new);
-    nm = m->name(); // update 'nm'
-    isChanged = true;
-
+    /*if (!m->canAugmentMetric()) */ {
+      // for non-augmentable metrics (hpcrun derived metrics) hpcprof-mpi will
+      // add the qualifier here.
+      // We want to keep the original name, and should neglect appending the qualifier.
+      m->nameSfx(sfx_new);
+      nm = m->name(); // update 'nm'
+      isChanged = true;
+    }
     mvec.push_back(m);
+    
   }
   else {
     m_nuniqnmToMetricMap.insert(make_pair(nm, Metric::ADescVec(1, m)));

@@ -310,6 +310,14 @@ void hpcrun_set_percent(int metric_id, uint8_t show_percent) {
 }
 
 
+// set the metric's general attribute
+void
+hpcrun_set_metric_attribute(int metric_id, uint8_t attribute) {
+  metric_desc_t* mdesc = hpcrun_id2metric_linked(metric_id);
+  mdesc->flags.fields.attribute = attribute;
+}
+
+
 metric_desc_p_tbl_t*
 hpcrun_get_metric_tbl(kind_info_t **curr)
 {
