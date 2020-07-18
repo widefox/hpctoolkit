@@ -579,7 +579,6 @@ public:
   canAugmentMetric() const
   { return m_metricAttribute == HPCRUN_FMT_METRIC_ATTRIBUTE_AUGMENT; }
 
-
   void 
   format(std::string fmt)
   { m_format = fmt; }

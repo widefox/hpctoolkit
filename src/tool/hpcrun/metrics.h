@@ -126,7 +126,9 @@ metric_desc_t* hpcrun_id2metric_linked(int metric_id);
 // non finalizing
 void hpcrun_set_display(int metric_id, uint8_t show);
 
-void hpcrun_set_percent(int metric_id, uint8_t show_percent);
+void hpcrun_set_metric_percent(int metric_id, uint8_t show_percent);
+
+void hpcrun_set_metric_attribute(int metric_id, uint8_t attribute);
 
 void hpcrun_set_metric_attribute(int metric_id, uint8_t attribute);
 

@@ -265,7 +265,6 @@ Mgr::makeSummaryMetricsIncr(bool needAllStats, uint srcBegId, uint srcEndId)
   }
 
   computePartners();
- 
   return firstId;
 }
 
@@ -350,7 +349,7 @@ Mgr::makeSummaryMetric(const string mDrvdTy, const Metric::ADesc* mSrc,
 
   // for hpcrun derived metric, we don't want to add the suffix to the base name
   // we'll keep it the original name.
-  if (!mSrc->hasFormula()) {
+  if (mSrc->formula().empty()) {
     mNmBase += ":" + mDrvdTy;
   }
 
@@ -505,6 +504,8 @@ Mgr::makeSummaryMetricIncr(const string mDrvdTy, const Metric::ADesc* mSrc)
   m->formula      (formula);
   m->format       (mSrc->format());
   m->order        (metric_order);
+  
+  m->metricAttribute(mSrc->metricAttribute());
 
   m->metricAttribute(mSrc->metricAttribute());
 
