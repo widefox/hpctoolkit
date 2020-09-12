@@ -378,6 +378,7 @@ MY_BASE_FILES =				\
 	gpu/gpu-trace.c			\
 	gpu/gpu-trace-channel.c		\
 	gpu/gpu-trace-item.c		\
+	gpu/gpu-trace-channel-set.c	\
 	\
 	ompt/ompt-callstack.c           \
 	ompt/ompt-defer.c               \
@@ -520,7 +521,20 @@ if OPT_ENABLE_ROCM
 MY_ROCM_FILES=\
 	sample-sources/amd.c \
 	gpu/amd/roctracer-activity-translate.c \
-	gpu/amd/roctracer-api.c 	
+	gpu/amd/roctracer-api.c \
+	gpu/amd/rocm-debug-api.c \
+	gpu/amd/rocm-binary-processing.c
+endif
+
+if OPT_ENABLE_LEVEL0
+MY_LEVEL0_FILES=\
+	sample-sources/level0.c \	
+	gpu/level0/level0-api.c \
+	gpu/level0/level0-command-list-map.c \
+	gpu/level0/level0-command-process.c \
+	gpu/level0/level0-data-node.c \
+	gpu/level0/level0-event-map.c \
+	gpu/level0/level0-handle-map.c
 endif
 
 MY_UPC_FILES = sample-sources/upc.c
@@ -957,11 +971,18 @@ endif
 if OPT_ENABLE_ROCM
   libhpcrun_la_SOURCES  += $(MY_ROCM_FILES)
   libhpcrun_la_CPPFLAGS += -DENABLE_ROCM
-  libhpcrun_la_CFLAGS   += $(OPT_ROCM_IFLAGS) -g
+  libhpcrun_la_CFLAGS   += $(OPT_ROCM_IFLAGS)
 
   MY_CPP_DEFINES  += -DHPCRUN_SS_AMD
 endif
 
+if OPT_ENABLE_LEVEL0
+  libhpcrun_la_SOURCES  += $(MY_LEVEL0_FILES)
+  libhpcrun_la_CPPFLAGS += -DENABLE_LEVEL0
+  libhpcrun_la_CFLAGS   += $(OPT_LEVEL0_IFLAGS)
+
+  MY_CPP_DEFINES  += -DHPCRUN_SS_LEVEL0
+endif
 if ENABLE_OPENCL
   libhpcrun_la_CFLAGS += $(OPENCL_IFLAGS)
 
