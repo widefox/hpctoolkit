@@ -55,13 +55,16 @@ namespace hpctoolkit::finalizers {
 // itself. This handles the little details.
 class DirectClassification final : public ProfileFinalizer {
 public:
-  DirectClassification();
+  // `dwarfThreshold` is in the units of bytes.
+  // If dwarfThreshold == std::numeric_limits<uintmax_t>::max(), no limit.
+  DirectClassification(uintmax_t dwarfThreshold);
 
   ExtensionClass provides() const noexcept { return ExtensionClass::classification; }
   ExtensionClass requires() const noexcept { return ExtensionClass::resolvedPath; }
   void module(const Module&, Classification&) override;
 
 private:
+  uintmax_t dwarfThreshold;
   void fullDwarf(void* dw, const Module&, Classification&);
   void symtab(void* elf, const Module&, Classification&);
 };

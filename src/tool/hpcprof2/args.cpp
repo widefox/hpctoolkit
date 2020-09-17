@@ -109,6 +109,13 @@ Output Options:
       --no-traces             Disable generation of traces.
       --no-source             Disable embedded source output.
 
+Processing options:
+      --dwarf-max-size=<limit>[<unit>]
+                              Specify a limit on the binary size to parse DWARF
+                              data from. Units are K,M,G,T (powers of 1024)
+                              If limit is "unlimited," always parses DWARF.
+                              Default limit is 100M.
+
 Compatibility Options:
       --name=NAME             Equivalent to `-n NAME'
       --metric-db (yes|no)    `no' is equivalent to --no-thread-local.
@@ -124,7 +131,7 @@ Current Obsolete Options:
 ProfArgs::ProfArgs(int argc, char* const argv[])
   : title(), threads(1), instructionGrain(false), output("hpctoolkit-database"),
     include_sources(true), include_traces(true), include_thread_local(true),
-    format(Format::exmldb), sparse_debug(false) {
+    format(Format::exmldb), dwarfMaxSize(100*1024*1024), sparse_debug(false) {
   int arg_instructionGrain = instructionGrain;
   int arg_includeSources = include_sources;
   int arg_includeTraces = include_traces;
@@ -134,6 +141,7 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
     {"version", no_argument, NULL, 0},
     {"metric-db", required_argument, NULL, 0},
     {"no-thread-local", no_argument, NULL, 0},
+    {"dwarf-max-size", required_argument, NULL, 0},
     // The rest can be in any order
     {"help", no_argument, NULL, 'h'},
     {"verbose", no_argument, NULL, 'v'},
@@ -273,6 +281,39 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
         include_thread_local = false;
         seenNoThreadLocal = true;
         break;
+      case 3: {  // --dwarf-max-size
+        char* end;
+        double limit = std::strtod(optarg, &end);
+        if(end == optarg) {  // Failed conversion
+          std::string s(optarg);
+          size_t start;
+          for(start = 0; start < s.size() && std::isspace(s[start]); start++);
+          s = std::move(s).substr(start);
+
+          if(s == "unlimited") dwarfMaxSize = std::numeric_limits<uintmax_t>::max();
+          else {
+            std::cerr << "Error: invalid limit for --dwarf-max-size: `"
+                      << s << "'\n";
+            std::exit(2);
+          }
+        } else {
+          uintmax_t factor = 1024;
+          if(end[0] != '\0') {
+            switch(end[0]) {
+            case 'k': case 'K': factor = 1024; break;
+            case 'm': case 'M': factor = 1024 * 1024; break;
+            case 'g': case 'G': factor = 1024 * 1024 * 1024; break;
+            case 't': case 'T': factor = 1024UL * 1024 * 1024 * 1024; break;
+            }
+            if(end[1] != '\0') {
+              std::cerr << "Error: invalid suffix for --dwarf-max-size: `"
+                        << optarg << "'\n";
+              std::exit(2);
+            }
+          }
+          dwarfMaxSize = std::floor(limit * factor);
+        }
+      }
       }
       break;
     default:

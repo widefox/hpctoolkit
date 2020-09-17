@@ -50,6 +50,7 @@
 #include "pipeline.hpp"
 
 #include <elfutils/libdw.h>
+#include <elfutils/libdwelf.h>
 #include <dwarf.h>
 #include <libelf.h>
 
@@ -61,19 +62,77 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sstream>
+#include <iomanip>
 
 using namespace hpctoolkit;
 using namespace finalizers;
 
-DirectClassification::DirectClassification() {
+DirectClassification::DirectClassification(uintmax_t dt)
+  : dwarfThreshold(dt) {
   elf_version(EV_CURRENT);  // We always assume the current ELF version.
 }
+
+// Search for an alternative debug file to load. Roughly copied from
+// dwarf_getalt, which is a rough copy of GDB's handling.
+static stdshim::filesystem::path altfile(const stdshim::filesystem::path& path, Elf* elf) {
+  stdshim::filesystemx::error_code ec;
+  path.lexically_normal();
+
+  // Attempt 1: build-id
+  const void* build_id;
+  ssize_t build_id_len = dwelf_elf_gnu_build_id(elf, &build_id);
+  if(build_id_len >= 2) {  // We need at least 2 bytes to make the filename
+    const auto* bytes = (const std::uint8_t*)build_id;
+    std::ostringstream ss;
+
+    stdshim::filesystem::path p = "/usr/lib/debug/.build-id";
+    ss << std::hex << std::setw(2) << std::setfill('0') << (int)bytes[0];
+    p /= ss.str();
+    ss.str("");
+    for(ssize_t i = 1; i < build_id_len; i++)
+      ss << std::hex << std::setw(2) << std::setfill('0') << (int)bytes[i];
+    ss << ".debug";
+    p /= std::move(ss).str();
+
+    if(stdshim::filesystem::exists(p, ec))
+      return p;
+  }
+
+  // Attempt 2: gnu_debuglink
+  GElf_Word crc;
+  const char* debug_link = dwelf_elf_gnu_debuglink(elf, &crc);
+  if(debug_link != nullptr) {
+    stdshim::filesystem::path dpath = std::string(debug_link);
+    if(dpath.is_absolute()) {
+      if(stdshim::filesystem::exists(dpath, ec)) return dpath;
+    } else {
+      auto parent = path.lexically_normal().parent_path();
+      stdshim::filesystem::path tpath = parent / dpath;
+      if(stdshim::filesystem::exists(tpath, ec)) return tpath;
+      tpath = parent / ".debug" / dpath;
+      if(stdshim::filesystem::exists(tpath, ec)) return tpath;
+      tpath = stdshim::filesystem::path("/usr/lib/debug")
+        / parent.root_name() / parent.relative_path() / dpath;
+      if(stdshim::filesystem::exists(tpath, ec)) return tpath;
+    }
+  }
+
+  // Failed, just return
+  return "";
+}
+
+#ifdef ELF_C_READ_MMAP
+#define HPC_ELF_C_READ ELF_C_READ_MMAP
+#else
+#define HPC_ELF_C_READ ELF_C_READ
+#endif
 
 void DirectClassification::module(const Module& m, Classification& c) {
   int fd = -1;
   const auto& rpath = m.userdata[sink.resolvedPath()];
-  if(!rpath.empty()) fd = open(rpath.c_str(), O_RDONLY);
-  else fd = open(m.path().c_str(), O_RDONLY);
+  const auto& mpath = rpath.empty() ? m.path() : rpath;
+  fd = open(mpath.c_str(), O_RDONLY);
   if(fd == -1) return;  // Can't do anything if we can't open it.
 
   struct stat sbuf;
@@ -83,20 +142,42 @@ void DirectClassification::module(const Module& m, Classification& c) {
     return;
   }
 
-#ifdef ELF_C_READ_MMAP
-  Elf* elf = elf_begin(fd, ELF_C_READ_MMAP, nullptr);
-#else
-  Elf* elf = elf_begin(fd, ELF_C_READ, nullptr);
-#endif
+  Elf* elf = elf_begin(fd, HPC_ELF_C_READ, nullptr);
   if(elf == nullptr) {
     close(fd);
     return;  // We only work with ELF files.
   }
 
+  // Process the DWARF, but only if its small enough
+  auto baseweight = stdshim::filesystem::file_size(mpath);
   Dwarf* dbg = dwarf_begin_elf(elf, DWARF_C_READ, nullptr);
   if(dbg != nullptr) {
-    fullDwarf(dbg, m, c);
+    if(dwarfThreshold == std::numeric_limits<uintmax_t>::max()
+       || baseweight < dwarfThreshold)
+      fullDwarf(dbg, m, c);
+    else util::log::warning{} << "Skipping DWARF for " << mpath.string() << ","
+      " over threshold (" << baseweight << " > " << dwarfThreshold << ")";
     dwarf_end(dbg);
+  } else {
+    auto altpath = altfile(mpath, elf);
+    if(!altpath.empty()) {
+      int altfd = -1;
+      altfd = open(altpath.c_str(), O_RDONLY);
+      if(altfd != -1) {
+        auto altweight = stdshim::filesystem::file_size(altpath);
+        Dwarf* altdbg = dwarf_begin(altfd, DWARF_C_READ);
+        if(altdbg != nullptr) {
+          if(dwarfThreshold == std::numeric_limits<uintmax_t>::max()
+             || baseweight + altweight < dwarfThreshold)
+            fullDwarf(altdbg, m, c);
+          else util::log::warning{} << "Skipping DWARF for " << mpath.string()
+            << ", over threshold (" << baseweight << " + " << altweight << " ="
+            " " << (baseweight + altweight) << " > " << dwarfThreshold << ")";
+          dwarf_end(altdbg);
+        }
+        close(fd);
+      }
+    }
   }
 
   symtab(elf, m, c);
@@ -191,8 +272,9 @@ void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classificati
       const char* const* dirs = nullptr;
       std::size_t dirs_cnt = 0;
       dwarf_getsrcdirs(dfiles, &dirs, &dirs_cnt);
-      if(dirs[0] != nullptr) compdir = std::string(dirs[0]);
+      if(dirs_cnt > 0 && dirs[0] != nullptr) compdir = std::string(dirs[0]);
 
+      files.reserve(dfiles_cnt);
       for(std::size_t i = 0; i < dfiles_cnt; i++) {
         stdshim::filesystem::path fn(std::string(dwarf_filesrc(dfiles, i, nullptr, nullptr)));
         if(!fn.is_absolute()) fn = compdir / fn;
@@ -353,8 +435,9 @@ void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classificati
   // Overwrite everything with our new line info.
   c.setLines(std::move(lscopes));
 } catch(std::exception& e) {
+  const auto& rpath = m.userdata[sink.resolvedPath()];
   util::log::error() << "Exception caught during DWARF parsing for "
     << m.path().filename().string() << ", information may not be complete.\n"
        "  what(): " << e.what() << "\n"
-       "  Full path: " << m.path().string();
+       "  Full path: " << (rpath.empty() ? m.path() : rpath).string();
 }

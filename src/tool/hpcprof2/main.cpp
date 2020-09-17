@@ -87,7 +87,7 @@ int main(int argc, char* const argv[]) {
   pipelineB << pr;
 
   // Insert the proper Finalizer for drawing data directly from the Modules.
-  finalizers::DirectClassification dc;
+  finalizers::DirectClassification dc(args.dwarfMaxSize);
   pipelineB << dc;
 
   // Now that Modules will be Classified during Finalization, add a Transformer

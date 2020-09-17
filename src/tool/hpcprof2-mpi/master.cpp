@@ -126,7 +126,7 @@ int rank0(ProfArgs&& args) {
   pipelineB << pr;
 
   // Insert the proper Finalizer for drawing data directly from the Modules.
-  finalizers::DirectClassification dc;
+  finalizers::DirectClassification dc(args.dwarfMaxSize);
   pipelineB << dc;
 
   // Do the Classification-based expansions, but pack them up for later.
