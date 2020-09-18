@@ -101,8 +101,18 @@ Hpcrun4::Hpcrun4(const stdshim::filesystem::path& fn)
     }
   }
   hpcrun_fmt_hdr_free(&hdr, std::free);
-  // Generate the hierarchical tuple from the header fields
-  {
+  // Try to read the hierarchical tuple, if we fail synth from the header data
+  id_tuple_t sfTuple;
+  if(hpcrun_sparse_read_id_tuple(file, &sfTuple) == SF_SUCCEED) {
+    std::vector<tms_id_t> tuple;
+    tuple.reserve(sfTuple.length);
+    for(size_t i = 0; i < sfTuple.length; i++)
+      tuple.push_back(sfTuple.ids[i]);
+    id_tuple_free(&sfTuple);
+    tattrs.idTuple(std::move(tuple));
+  } else {
+    util::log::warning{} << "Synthesizing hierarchical tuple for: "
+                         << path.string();
     std::vector<tms_id_t> tuple;
     if(hostid) tuple.push_back({.kind = IDTUPLE_NODE, .index=*hostid});
     if(threadid && *threadid >= 500)  // GPUDEVICE goes before RANK
