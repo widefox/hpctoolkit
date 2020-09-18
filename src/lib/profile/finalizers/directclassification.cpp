@@ -245,44 +245,41 @@ void dwarfwalk(Dwarf_Die die, const std::function<T(Dwarf_Die&, T)>& pre,
   do {
     Dwarf_Die child;
     T subt = pre(die, t);
-    if(dwarf_child(&die, &child) == 0)
+
+    bool recurse = false;
+    switch(dwarf_tag(&die)) {
+    case DW_TAG_compile_unit:
+    case DW_TAG_module:
+    case DW_TAG_lexical_block:
+    case DW_TAG_with_stmt:
+    case DW_TAG_catch_block:
+    case DW_TAG_try_block:
+    case DW_TAG_entry_point:
+    case DW_TAG_inlined_subroutine:
+    case DW_TAG_subprogram:
+    case DW_TAG_namespace:
+    case DW_TAG_class_type:
+    case DW_TAG_structure_type:
+      recurse = true;
+      break;
+    }
+
+    if(recurse && dwarf_child(&die, &child) == 0)
       dwarfwalk(child, pre, post, subt);
     post(die, subt, t);
   } while(dwarf_siblingof(&die, &die) == 0);
 }
 
 void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classification& c) try {
-  std::unordered_map<const char*, Function*> funcs;
+  std::unordered_map<Dwarf_Off, std::reference_wrapper<Function>> funcs;
   std::vector<Classification::LineScope> lscopes;
 
   Dwarf* dbg = (Dwarf*)dbg_vp;
 
-  // Walk through each CU and start setting scopes.
+  // Process the bits one CU at a time
   Dwarf_CU* cu = nullptr;
   Dwarf_Die root;
   while(dwarf_get_units(dbg, cu, &cu, nullptr, nullptr, &root, nullptr) == 0) {
-    // Get all the source files and make a map from the DWARF to our structures.
-    std::vector<const File*> files;
-    {
-      Dwarf_Files* dfiles = nullptr;
-      std::size_t dfiles_cnt = 0;
-      dwarf_getsrcfiles(&root, &dfiles, &dfiles_cnt);
-
-      stdshim::filesystem::path compdir;
-      const char* const* dirs = nullptr;
-      std::size_t dirs_cnt = 0;
-      dwarf_getsrcdirs(dfiles, &dirs, &dirs_cnt);
-      if(dirs_cnt > 0 && dirs[0] != nullptr) compdir = std::string(dirs[0]);
-
-      files.reserve(dfiles_cnt);
-      for(std::size_t i = 0; i < dfiles_cnt; i++) {
-        stdshim::filesystem::path fn(std::string(dwarf_filesrc(dfiles, i, nullptr, nullptr)));
-        if(!fn.is_absolute()) fn = compdir / fn;
-        files.emplace_back(&sink.file(fn));
-      }
-    }
-
-    // Walk the DIEs for the function ranges in this CU
     dwarfwalk<std::size_t>(root,
       [&](Dwarf_Die& die, std::size_t paridx) -> std::size_t {
         // Check that the DIE is a function-like thing. Skip if not.
@@ -290,121 +287,101 @@ void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classificati
         if(tag != DW_TAG_subprogram && tag != DW_TAG_inlined_subroutine)
           return paridx;
 
+        // Skip declarations. They'll be added when we find them.
+        if(dwarf_hasattr(&die, DW_AT_declaration)) return paridx;
+
         // Skip any abstract instances. We want only the concrete ones.
         if(dwarf_func_inline(&die)) return paridx;
 
-        // Unwrap this as much as possible to get the actual TAG_subprogram DIE.
-        Dwarf_Attribute* attr;
         Dwarf_Attribute attr_mem;
-        Dwarf_Die die_mem;
-        Dwarf_Die* funcdie = &die;
-        while(true) {
-          attr = dwarf_attr(funcdie, DW_AT_abstract_origin, &attr_mem);
+        Dwarf_Attribute* attr;
+
+        // If this is an inlining, we work from that Function.
+        Dwarf_Off offsetid = dwarf_dieoffset(&die);
+        if((attr = dwarf_attr(&die, DW_AT_abstract_origin, &attr_mem)) != nullptr) {
+          Dwarf_Die fdie_mem;
+          Dwarf_Die* fdie = dwarf_formref_die(attr, &fdie_mem);
+          if(fdie != nullptr) offsetid = dwarf_dieoffset(fdie);
+        }
+        auto funcit = funcs.find(offsetid);
+        if(funcit == funcs.end())
+          funcit = funcs.emplace(offsetid, c.addFunction(m)).first;
+        Function& func = funcit->second.get();
+
+        // Try to fill in any missing data in the function
+        if(func.name.empty()) {
+          attr = dwarf_attr_integrate(&die, DW_AT_linkage_name, &attr_mem);
           if(attr == nullptr)
-            attr = dwarf_attr(funcdie, DW_AT_specification, &attr_mem);
-          if(attr == nullptr) break;
-          funcdie = dwarf_formref_die(attr, &die_mem);
-        }
-
-        // Try and get a link-name for the function. Libdw (should) deduplicate
-        // the names so we can just use the const char*.
-        // If it doesn't have a name, we skip it for now. It wouldn't help us.
-        const char* funcname;
-        {
-          attr = dwarf_attr(funcdie, DW_AT_linkage_name, &attr_mem);
-          if(attr == nullptr)
-            attr = dwarf_attr(funcdie, DW_AT_name, &attr_mem);
-          if(attr == nullptr) return paridx;
-          funcname = dwarf_formstring(attr);
-        }
-
-        // Get the Function for this, or create one if none exist.
-        auto it = funcs.find(funcname);
-        if(it == funcs.end())
-          it = funcs.emplace(funcname, &c.addFunction(m)).first;
-        auto& func = *it->second;
-
-        // Try to fill in as much information about the Function from this DIE.
-        {
-          Dwarf_Attribute* attr;
-          if(func.name.empty()) {
-            char* dn = hpctoolkit_demangle(funcname);
-            if(dn) {
-              func.name = dn;
-              std::free(dn);
-            } else func.name = funcname;
-          }
-          if(func.offset == 0) {
-            Dwarf_Addr offset;
-            if(dwarf_entrypc(funcdie, &offset) == 0) func.offset = offset;
-          }
-          if(func.file == nullptr) {
-            // If there is no file info, whatever we have is good enough.
-            attr = dwarf_attr_integrate(&die, DW_AT_decl_file, &attr_mem);
-            if(attr != nullptr) {
-              Dwarf_Word word;
-              dwarf_formudata(attr, &word);
-              func.file = files.at(word);
-            }
-            attr = dwarf_attr_integrate(&die, DW_AT_decl_line, &attr_mem);
-            if(attr != nullptr) {
-              Dwarf_Word word;
-              dwarf_formudata(attr, &word);
-              func.line = word;
-            }
-          } else {
-            // If there's already file info, check if ours is a non-declaration.
-            Dwarf_Die die_mem2;
-            Dwarf_Die* basedie = &die;
-            while(true) {
-              attr = dwarf_attr(basedie, DW_AT_declaration, &attr_mem);
-              bool isdecl = false;
-              dwarf_formflag(attr, &isdecl);
-              if(isdecl) break;  // Stop unwinding if its a declaration.
-
-              attr = dwarf_attr(basedie, DW_AT_decl_file, &attr_mem);
-              if(attr != nullptr) {  // Use this one, its better, probably.
-                Dwarf_Word word;
-                dwarf_formudata(attr, &word);
-                func.file = files.at(word);
-                attr = dwarf_attr_integrate(&die, DW_AT_decl_line, &attr_mem);
-                if(attr != nullptr) {
-                  Dwarf_Word word;
-                  dwarf_formudata(attr, &word);
-                  func.line = word;
-                }
-                break;
-              }
-
-              attr = dwarf_attr(basedie, DW_AT_abstract_origin, &attr_mem);
-              if(attr == nullptr)
-                attr = dwarf_attr(basedie, DW_AT_specification, &attr_mem);
-              if(attr == nullptr) break;  // Nowhere to go now
-              basedie = dwarf_formref_die(attr, &die_mem2);
-            }
+            attr = dwarf_attr_integrate(&die, DW_AT_name, &attr_mem);
+          if(attr != nullptr) {
+            const char* name = dwarf_formstring(attr);
+            char* dn = hpctoolkit_demangle(name);
+            func.name = dn == nullptr ? name : dn;
+            if(dn != nullptr) std::free(dn);
           }
         }
+        if(func.offset == 0) {
+          Dwarf_Addr offset;
+          if(dwarf_entrypc(&die, &offset) == 0) func.offset = offset;
+        }
+        if(func.file == nullptr) {
+          const char* path_cstr = dwarf_decl_file(&die);
+          if(path_cstr != nullptr) {
+            stdshim::filesystem::path path = std::string(path_cstr);
+            if(!path.is_absolute()) {
+              Dwarf_Attribute cattr_mem;
+              Dwarf_Die cu_mem;
+              const char* comp_dir_cstr = dwarf_formstring(
+                dwarf_attr(dwarf_diecu(&die, &cu_mem, nullptr, nullptr),
+                           DW_AT_comp_dir, &cattr_mem));
+              if(comp_dir_cstr != nullptr)
+                path = stdshim::filesystem::path(std::string(comp_dir_cstr)) / path;
+            }
+            func.file = &sink.file(std::move(path));
+          }
+        }
+        if(func.line == 0) {
+          int linenum;
+          if(dwarf_decl_line(&die, &linenum) == 0) func.line = linenum;
+        }
 
-        // Get the file and line of this inlined function call. If its inlined.
+        // If this is not an inlined call, just emit as a normal Scope
+        if(tag != DW_TAG_inlined_subroutine)
+          return c.addScope(func, paridx);
+
+        // Try to find the file for this inlined call.
         const File* srcf = nullptr;
-        uint64_t srcl = 0;
         {
-          Dwarf_Word word;
-          Dwarf_Attribute* attr = dwarf_attr(&die, DW_AT_call_file, &attr_mem);
-          if(attr != nullptr) {
-            dwarf_formudata(attr, &word);
-            srcf = files.at(word);
-          }
-          attr = dwarf_attr(&die, DW_AT_call_line, &attr_mem);
-          if(attr != nullptr) {
-            dwarf_formudata(attr, &word);
-            srcl = word;
+          Dwarf_Word idx = 0;
+          if(dwarf_formudata(dwarf_attr_integrate(&die, DW_AT_call_file,
+                             &attr_mem), &idx) == 0 && idx > 0) {
+            Dwarf_Files* files;
+            size_t nfiles;
+            if(dwarf_getsrcfiles(&root, &files, &nfiles) == 0 && idx < nfiles) {
+              const char* path_cstr = dwarf_filesrc(files, idx, nullptr, nullptr);
+              if(path_cstr != nullptr) {
+                stdshim::filesystem::path path = std::string(path_cstr);
+                if(!path.is_absolute()) {
+                  Dwarf_Attribute cattr_mem;
+                  const char* comp_dir_cstr = dwarf_formstring(
+                    dwarf_attr(&root, DW_AT_comp_dir, &cattr_mem));
+                  if(comp_dir_cstr != nullptr)
+                    path = stdshim::filesystem::path(std::string(comp_dir_cstr)) / path;
+                }
+                srcf = &sink.file(std::move(path));
+              }
+            }
           }
         }
+        if(srcf == nullptr) srcf = &sink.file("???");
 
-        // Build/get the tail ScopeChain for this DIE
-        return srcf ? c.addScope(func, *srcf, srcl, paridx)
-                    : c.addScope(func, paridx);
+        uint64_t linenum = 0;
+        if((attr = dwarf_attr(&die, DW_AT_call_line, &attr_mem)) != nullptr) {
+          Dwarf_Word word;
+          if(dwarf_formudata(attr, &word) == 0) linenum = word;
+        }
+
+        return c.addScope(func, *srcf, linenum, paridx);
     }, [&](Dwarf_Die& die, std::size_t idx, std::size_t paridx) {
         // Mark all remaining ranges as being from this tail
         ptrdiff_t offset = 0;
@@ -421,14 +398,30 @@ void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classificati
     dwarf_getsrclines(&root, &lines, &cnt);
     for(std::size_t i = 0; i < cnt; i++) {
       Dwarf_Line* line = dwarf_onesrcline(lines, i);
-      Dwarf_Addr addr;
+      Dwarf_Addr addr = 0;
       dwarf_lineaddr(line, &addr);
+
       Dwarf_Files* dfiles;
       std::size_t fidx;
       dwarf_line_file(line, &dfiles, &fidx);
-      int lineno;
+      const File* file = nullptr;
+      const char* path_cstr = dwarf_filesrc(dfiles, fidx, nullptr, nullptr);
+      if(path_cstr != nullptr) {
+        stdshim::filesystem::path path = std::string(path_cstr);
+        if(!path.is_absolute()) {
+          Dwarf_Attribute cattr_mem;
+          const char* comp_dir_cstr = dwarf_formstring(
+            dwarf_attr(&root, DW_AT_comp_dir, &cattr_mem));
+          if(comp_dir_cstr != nullptr)
+            path = stdshim::filesystem::path(std::string(comp_dir_cstr)) / path;
+        }
+        file = &sink.file(std::move(path));
+      }
+
+      int lineno = 0;
       dwarf_lineno(line, &lineno);
-      lscopes.emplace_back(addr, files[fidx], lineno);
+
+      lscopes.emplace_back(addr, file, lineno);
     }
   }
 
