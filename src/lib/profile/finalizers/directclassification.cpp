@@ -227,11 +227,13 @@ void DirectClassification::symtab(void* elf_vp, const Module& m, Classification&
 
     // Handle the name, the usual way
     const char* name = elf_strptr(elf, sh_symtab->sh_link, sym->st_name);
-    char* dn = hpctoolkit_demangle(name);
-    if(dn) {
-      func.name = dn;
-      std::free(dn);
-    } else func.name = name;
+    if(name != nullptr) {
+      char* dn = hpctoolkit_demangle(name);
+      if(dn) {
+        func.name = dn;
+        std::free(dn);
+      } else func.name = name;
+    }
 
     // Add our Classification as usual.
     c.setScope(range, c.addScope(func, Classification::scopenone));
@@ -275,6 +277,43 @@ void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classificati
   std::vector<Classification::LineScope> lscopes;
 
   Dwarf* dbg = (Dwarf*)dbg_vp;
+
+  // Cache Files so that we don't hammer the maps too much
+  const File* unknownFile = nullptr;
+  std::unordered_map<Dwarf_Files*, std::vector<const File*>> fileCache;
+  auto getFile = [&](Dwarf_Files* files, Dwarf_Die* cudie, size_t idx, bool allowUnknown) -> const File* {
+    if(files != nullptr && idx > 0) {
+      auto& fvec = fileCache.emplace(files, std::vector<const File*>{}).first->second;
+      if(idx < fvec.size() && fvec[idx] != nullptr) return fvec[idx];
+      if(idx >= fvec.size()) fvec.resize(idx+1, nullptr);
+
+      const char* path_cstr = dwarf_filesrc(files, idx, nullptr, nullptr);
+      if(path_cstr != nullptr) {
+        stdshim::filesystem::path path = std::string(path_cstr);
+        if(!path.is_absolute()) {
+          Dwarf_Attribute attr_mem;
+          const char* comp_dir_cstr = dwarf_formstring(
+            dwarf_attr(cudie, DW_AT_comp_dir, &attr_mem));
+          if(comp_dir_cstr != nullptr)
+            path = stdshim::filesystem::path(std::string(comp_dir_cstr)) / path;
+        }
+        fvec[idx] = &sink.file(std::move(path));
+        return fvec[idx];
+      }
+    }
+    if(allowUnknown) {
+      if(unknownFile == nullptr) unknownFile = &sink.file("???");
+      return unknownFile;
+    }
+    return nullptr;
+  };
+  auto getFileDie = [&](Dwarf_Die* cudie, size_t idx, bool allowUnknown) -> const File* {
+    Dwarf_Files* files;
+    size_t nfiles;
+    if(dwarf_getsrcfiles(cudie, &files, &nfiles) == 0 && idx < nfiles)
+      return getFile(files, cudie, idx, allowUnknown);
+    return getFile(nullptr, cudie, 0, allowUnknown);
+  };
 
   // Process the bits one CU at a time
   Dwarf_CU* cu = nullptr;
@@ -325,24 +364,15 @@ void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classificati
           if(dwarf_entrypc(&die, &offset) == 0) func.offset = offset;
         }
         if(func.file == nullptr) {
-          const char* path_cstr = dwarf_decl_file(&die);
-          if(path_cstr != nullptr) {
-            stdshim::filesystem::path path = std::string(path_cstr);
-            if(!path.is_absolute()) {
-              Dwarf_Attribute cattr_mem;
-              Dwarf_Die cu_mem;
-              const char* comp_dir_cstr = dwarf_formstring(
-                dwarf_attr(dwarf_diecu(&die, &cu_mem, nullptr, nullptr),
-                           DW_AT_comp_dir, &cattr_mem));
-              if(comp_dir_cstr != nullptr)
-                path = stdshim::filesystem::path(std::string(comp_dir_cstr)) / path;
-            }
-            func.file = &sink.file(std::move(path));
+          Dwarf_Word idx = 0;
+          if(dwarf_formudata(dwarf_attr_integrate(&die, DW_AT_decl_file,
+                             &attr_mem), &idx) == 0 && idx > 0) {
+            Dwarf_Die cu_mem;
+            func.file = getFileDie(dwarf_diecu(&die, &cu_mem, nullptr, nullptr),
+                                   idx, false);
+            int linenum;
+            if(dwarf_decl_line(&die, &linenum) == 0) func.line = linenum;
           }
-        }
-        if(func.line == 0) {
-          int linenum;
-          if(dwarf_decl_line(&die, &linenum) == 0) func.line = linenum;
         }
 
         // If this is not an inlined call, just emit as a normal Scope
@@ -355,25 +385,9 @@ void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classificati
           Dwarf_Word idx = 0;
           if(dwarf_formudata(dwarf_attr_integrate(&die, DW_AT_call_file,
                              &attr_mem), &idx) == 0 && idx > 0) {
-            Dwarf_Files* files;
-            size_t nfiles;
-            if(dwarf_getsrcfiles(&root, &files, &nfiles) == 0 && idx < nfiles) {
-              const char* path_cstr = dwarf_filesrc(files, idx, nullptr, nullptr);
-              if(path_cstr != nullptr) {
-                stdshim::filesystem::path path = std::string(path_cstr);
-                if(!path.is_absolute()) {
-                  Dwarf_Attribute cattr_mem;
-                  const char* comp_dir_cstr = dwarf_formstring(
-                    dwarf_attr(&root, DW_AT_comp_dir, &cattr_mem));
-                  if(comp_dir_cstr != nullptr)
-                    path = stdshim::filesystem::path(std::string(comp_dir_cstr)) / path;
-                }
-                srcf = &sink.file(std::move(path));
-              }
-            }
-          }
+            srcf = getFileDie(&root, idx, true);
+          } else srcf = getFile(nullptr, &root, 0, true);
         }
-        if(srcf == nullptr) srcf = &sink.file("???");
 
         uint64_t linenum = 0;
         if((attr = dwarf_attr(&die, DW_AT_call_line, &attr_mem)) != nullptr) {
@@ -404,19 +418,7 @@ void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classificati
       Dwarf_Files* dfiles;
       std::size_t fidx;
       dwarf_line_file(line, &dfiles, &fidx);
-      const File* file = nullptr;
-      const char* path_cstr = dwarf_filesrc(dfiles, fidx, nullptr, nullptr);
-      if(path_cstr != nullptr) {
-        stdshim::filesystem::path path = std::string(path_cstr);
-        if(!path.is_absolute()) {
-          Dwarf_Attribute cattr_mem;
-          const char* comp_dir_cstr = dwarf_formstring(
-            dwarf_attr(&root, DW_AT_comp_dir, &cattr_mem));
-          if(comp_dir_cstr != nullptr)
-            path = stdshim::filesystem::path(std::string(comp_dir_cstr)) / path;
-        }
-        file = &sink.file(std::move(path));
-      }
+      const File* file = getFile(dfiles, &root, fidx, true);
 
       int lineno = 0;
       dwarf_lineno(line, &lineno);
