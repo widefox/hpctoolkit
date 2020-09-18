@@ -73,20 +73,17 @@ public:
   ThreadAttributes(const ThreadAttributes& o) = default;
   ~ThreadAttributes() = default;
 
-  /// Get or set the ID of the host that ran this Thread.
+  /// Get the ID of the host that ran this Thread.
   // MT: Externally Synchronized
   const stdshim::optional<uint32_t>& hostid() const noexcept { return m_hostid; }
-  void hostid(uint32_t);
 
-  /// Get or set the MPI rank of this Thread.
+  /// Get the MPI rank of this Thread.
   // MT: Externally Synchronized
   const stdshim::optional<unsigned long>& mpirank() const noexcept { return m_mpirank; }
-  void mpirank(unsigned long);
 
-  /// Get or set the thread id of this Thread.
+  /// Get the thread id of this Thread.
   // MT: Externally Synchronized
   const stdshim::optional<unsigned long>& threadid() const noexcept { return m_threadid; }
-  void threadid(unsigned long);
 
   /// Get or set the process id of this Thread.
   // MT: Externally Synchronized
@@ -98,9 +95,11 @@ public:
   const stdshim::optional<unsigned long long>& timepointCnt() const noexcept { return m_timepointCnt; }
   void timepointCnt(unsigned long long);
 
-  /// Get the hierarchical tuple assigned to this Thread.
+  /// Get or set the hierarchical tuple assigned to this Thread. Should never
+  /// be empty.
   // MT: Externally Synchronized
   const std::vector<tms_id_t>& idTuple() const noexcept;
+  void idTuple(const std::vector<tms_id_t>&);
 
 private:
   // TODO: Remove these 4 fields and replace the bits above with functions that

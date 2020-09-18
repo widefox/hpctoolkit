@@ -96,24 +96,6 @@ void ProfileAttributes::environment(const std::string& var,
   m_env.emplace(var, val);
 }
 
-void ThreadAttributes::hostid(uint32_t id) {
-  if(m_hostid)
-    util::log::fatal() << "Attempt to reset a host id value!";
-  m_hostid = id;
-}
-
-void ThreadAttributes::mpirank(unsigned long rank) {
-  if(m_mpirank)
-    util::log::fatal() << "Attempt to reset an MPI rank value!";
-  m_mpirank = rank;
-}
-
-void ThreadAttributes::threadid(unsigned long id) {
-  if(m_threadid)
-    util::log::fatal() << "Attempt to reset a thread id value!";
-  m_threadid = id;
-}
-
 void ThreadAttributes::procid(unsigned long pid) {
   if(m_procid)
     util::log::fatal() << "Attempt to reset a process id value!";
@@ -127,15 +109,26 @@ void ThreadAttributes::timepointCnt(unsigned long long cnt) {
 }
 
 const std::vector<tms_id_t>& ThreadAttributes::idTuple() const noexcept {
-  if(m_idTuple.size() == 0) {
-    // For now, we try to reconstruct the tuple based on the other fields.
-    // Eventually the other fields will search m_idTuple instead.
-    if(m_mpirank) m_idTuple.push_back({IDTUPLE_RANK, *m_mpirank});
-    if(m_threadid) m_idTuple.push_back({IDTUPLE_THREAD, *m_threadid});
-    if(m_idTuple.size() == 0)
-      util::log::fatal() << "Reconstructed idTuple is empty!";
-  }
+  if(m_idTuple.empty())
+    util::log::fatal{} << "Thread with an empty tuple!";
   return m_idTuple;
+}
+
+void ThreadAttributes::idTuple(const std::vector<tms_id_t>& tuple) {
+  if(!m_idTuple.empty())
+    util::log::fatal{} << "Attempt to reset a hierarchical tuple!";
+  if(tuple.empty())
+    util::log::fatal{} << "Attempt to set an empty hierarchical tuple!";
+  for(const auto& t: tuple) {
+    switch(t.kind) {
+    case IDTUPLE_NODE: m_hostid = t.index; break;
+    case IDTUPLE_RANK: m_mpirank = t.index; break;
+    case IDTUPLE_THREAD: m_threadid = t.index; break;
+    case IDTUPLE_GPUSTREAM: m_threadid = t.index + 500; break;
+    default: break;
+    }
+  }
+  m_idTuple = tuple;
 }
 
 bool ProfileAttributes::merge(const ProfileAttributes& o) {

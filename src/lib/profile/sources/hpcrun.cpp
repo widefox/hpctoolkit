@@ -81,6 +81,9 @@ HpcrunFSv2::HpcrunFSv2(const stdshim::filesystem::path& fn)
     std::fclose(file);
     throw std::logic_error("Invalid version of .hpcrun file!");
   }
+  stdshim::optional<unsigned long> mpirank;
+  stdshim::optional<unsigned long> threadid;
+  stdshim::optional<unsigned long> hostid;
   for(uint32_t i = 0; i < hdr.nvps.len; i++) {
     const std::string k(hdr.nvps.lst[i].name);
     const auto v = hdr.nvps.lst[i].val;
@@ -92,11 +95,11 @@ HpcrunFSv2::HpcrunFSv2(const stdshim::filesystem::path& fn)
     else if(k == HPCRUN_FMT_NV_jobId)
       attrs.job(std::strtol(v, nullptr, 10));
     else if(k == HPCRUN_FMT_NV_mpiRank)
-      tattrs.mpirank(std::strtol(v, nullptr, 10));
+      mpirank = std::strtol(v, nullptr, 10);
     else if(k == HPCRUN_FMT_NV_tid)
-      tattrs.threadid(std::strtol(v, nullptr, 10));
+      threadid = std::strtol(v, nullptr, 10);
     else if(k == HPCRUN_FMT_NV_hostid)
-      tattrs.hostid(std::strtol(v, nullptr, 16));
+      hostid = std::strtol(v, nullptr, 16);
     else if(k == HPCRUN_FMT_NV_pid)
       tattrs.procid(std::strtol(v, nullptr, 10));
     else if(k != HPCRUN_FMT_NV_traceMinTime
@@ -109,6 +112,23 @@ HpcrunFSv2::HpcrunFSv2(const stdshim::filesystem::path& fn)
   // Clean up the mess
   hpcrun_fmt_hdr_free(&hdr, std::free);
   std::fclose(file);
+
+  // Generate the hierarchical tuple from the header fields
+  {
+    std::vector<tms_id_t> tuple;
+    if(hostid) tuple.push_back({.kind = IDTUPLE_NODE, .index=*hostid});
+    if(threadid && *threadid >= 500)  // GPUDEVICE goes before RANK
+      tuple.push_back({.kind = IDTUPLE_GPUDEVICE, .index=0});
+    if(mpirank) tuple.push_back({.kind = IDTUPLE_RANK, .index=*mpirank});
+    if(threadid) {
+      if(*threadid >= 500) {  // GPU stream
+        tuple.push_back({.kind = IDTUPLE_GPUCONTEXT, .index=0});
+        tuple.push_back({.kind = IDTUPLE_GPUSTREAM, .index=*threadid - 500});
+      } else
+        tuple.push_back({.kind = IDTUPLE_THREAD, .index=*threadid});
+    }
+    tattrs.idTuple(std::move(tuple));
+  }
 
   // We also support a corrosponding hpctrace file if it exists. Try it.
   // If anything goes wrong, we just won't actually use it.
