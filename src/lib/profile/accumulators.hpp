@@ -80,7 +80,7 @@ public:
   MetricScopeSet() = default;
   MetricScopeSet(MetricScope s) : base(1<<s) {};
 
-  bool has(MetricScope s) { return base::operator[](s); }
+  bool has(MetricScope s) const noexcept { return base::operator[](s); }
 
   MetricScopeSet operator|(const MetricScopeSet& o) { return (base)*this | (base)o; }
   MetricScopeSet operator+(const MetricScopeSet& o) { return (base)*this | (base)o; }

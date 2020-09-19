@@ -75,13 +75,13 @@ public:
     Sink(IdPacker& s);
 
     DataClass accepts() const noexcept override {
-      return DataClass::references + DataClass::contexts;
+      return DataClass::references + DataClass::contexts + DataClass::attributes;
     }
     ExtensionClass requires() const noexcept override {
-      return ExtensionClass::identifier;
+      return ExtensionClass::identifier + ExtensionClass::mscopeIdentifiers;
     }
     DataClass wavefronts() const noexcept override {
-      return DataClass::references + DataClass::contexts;
+      return DataClass::references + DataClass::contexts + DataClass::attributes;
     }
 
     void notifyWavefront(DataClass) override;
@@ -123,10 +123,14 @@ public:
     Finalizer(IdUnpacker& s) : shared(s) {};
     ~Finalizer() = default;
 
-    ExtensionClass provides() const noexcept override { return ExtensionClass::identifier; }
+    ExtensionClass provides() const noexcept override {
+      return ExtensionClass::identifier + ExtensionClass::mscopeIdentifiers;
+    }
     ExtensionClass requires() const noexcept override { return {}; }
 
     void context(const Context&, unsigned int&) override;
+    void metric(const Metric&, unsigned int&) override;
+    void metric(const Metric&, Metric::ScopedIdentifiers&) override;
 
   private:
     IdUnpacker& shared;
@@ -142,6 +146,8 @@ private:
   std::vector<std::reference_wrapper<const Module>> modmap;
   unsigned int globalid;
   std::unordered_map<unsigned int, std::unordered_map<Scope, std::vector<Scope>>> exmap;
+
+  std::unordered_map<std::string, std::pair<unsigned int, Metric::ScopedIdentifiers>> metmap;
 };
 
 }

@@ -137,6 +137,18 @@ void IdPacker::Sink::notifyWavefront(DataClass ds) {
     pack(ct, (std::uint64_t)shared.ctxcnt);
     ct.insert(ct.end(), shared.ctxtree.begin(), shared.ctxtree.end());
 
+    // Format: ... [met cnt] ([id] [p id] [ex id] [inc id] [name])...
+    pack(ct, (std::uint64_t)src.metrics().size());
+    for(auto& m: src.metrics().citerate()) {
+      pack(ct, (std::uint64_t)m().userdata[src.identifier()]);
+      const auto& ids = m().userdata[src.mscopeIdentifiers()];
+      const auto& sc = m().scopes();
+      pack(ct, (std::uint64_t)(sc.has(MetricScope::point) ? ids.point : -1));
+      pack(ct, (std::uint64_t)(sc.has(MetricScope::exclusive) ? ids.exclusive : -1));
+      pack(ct, (std::uint64_t)(sc.has(MetricScope::inclusive) ? ids.inclusive : -1));
+      pack(ct, m().name());
+    }
+
     notifyPacked(std::move(ct));
   }
 }
@@ -213,6 +225,18 @@ void IdUnpacker::Expander::unpack() {
       }
     }
   }
+
+  cnt = ::unpack<std::uint64_t>(it);
+  for(std::size_t i = 0; i < cnt; i++) {
+    auto id = ::unpack<std::uint64_t>(it);
+    Metric::ScopedIdentifiers ids;
+    ids.point = ::unpack<std::uint64_t>(it);
+    ids.exclusive = ::unpack<std::uint64_t>(it);
+    ids.inclusive = ::unpack<std::uint64_t>(it);
+    auto name = ::unpack<std::string>(it);
+    shared.metmap.insert({std::move(name), {id, ids}});
+  }
+
   shared.ctxtree.clear();
 }
 
@@ -254,4 +278,12 @@ void IdUnpacker::Finalizer::context(const Context& c, unsigned int& id) {
   default:
     util::log::fatal{} << "Unrecognized Scope in IdUnpacker!";
   }
+}
+
+void IdUnpacker::Finalizer::metric(const Metric& m, unsigned int& id) {
+  id = shared.metmap.at(m.name()).first;
+}
+
+void IdUnpacker::Finalizer::metric(const Metric& m, Metric::ScopedIdentifiers& ids) {
+  ids = shared.metmap.at(m.name()).second;
 }
