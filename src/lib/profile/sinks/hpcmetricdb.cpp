@@ -171,10 +171,10 @@ void HPCMetricDB::notifyThreadFinal(const Thread::Temporary& tt) {
   {
     std::ostringstream ss;
     ss << std::setfill('0') << "experiment"
-          "-" << std::setw(6) << t.attributes.mpirank().value()
-        << "-" << std::setw(3) << t.attributes.threadid().value()
-        << "-" << std::setw(8) << std::hex << t.attributes.hostid().value() << std::dec
-        << "-" << t.attributes.procid().value()
+          "-" << std::setw(6) << t.attributes.mpirank().value_or(0)
+        << "-" << std::setw(3) << t.attributes.threadid().value_or(0)
+        << "-" << std::setw(8) << std::hex << t.attributes.hostid().value_or(0) << std::dec
+        << "-" << t.attributes.procid().value_or(0)
         << "-0." << HPCPROF_MetricDBSfx;
     t.userdata[ud_thread].outfile = dir / ss.str();
   }

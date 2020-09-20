@@ -437,25 +437,13 @@ HPCPROF-tmsdb_____
 // profile id tuples - format conversion with ThreadAttribute and IntPair
 //---------------------------------------------------------------------------
 //builds a new ID tuple from ThreadAttributes
-//TODO: we will build Id Tuple in hpcrun in the future, this is temporary
 tms_id_tuple_t SparseDB::buildIdTuple(const hpctoolkit::ThreadAttributes& ta,
                                       const int rank)
 {
-  tms_id_t rank_idx;
-  rank_idx.kind = IDTUPLE_RANK;
-  rank_idx.index = (uint64_t)ta.mpirank().value();
-
-  tms_id_t thread_idx;
-  thread_idx.kind = IDTUPLE_THREAD;
-  thread_idx.index = (uint64_t)ta.threadid().value();
-
-  tms_id_t* ids = (tms_id_t*)malloc(2 * sizeof(tms_id_t));
-  ids[0] = rank_idx;
-  ids[1] = thread_idx;
-
   id_tuple_t idtuple;
-  idtuple.length = 2;
-  idtuple.ids = ids;
+  idtuple.length = ta.idTuple().size();
+  // TODO: Fix the types so that we don't need a const_cast here
+  idtuple.ids = const_cast<tms_id_t*>(ta.idTuple().data());
 
   tms_id_tuple_t tuple;
   tuple.idtuple = idtuple;
