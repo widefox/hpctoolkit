@@ -178,17 +178,17 @@ IdUnpacker::IdUnpacker(std::vector<uint8_t>&& c) : ctxtree(std::move(c)) {
   globalid = ::unpack<std::uint64_t>(it);
 }
 
-void IdUnpacker::Expander::unpack() {
-  auto it = shared.ctxtree.cbegin();
+void IdUnpacker::unpack(ProfilePipeline::Source& sink) {
+  auto it = ctxtree.cbegin();
   ::unpack<std::uint64_t>(it);  // Skip over the global id
 
-  shared.exmod = &sink.module("/nonexistent/exmod");
-  shared.exfile = &sink.file("/nonexistent/exfile");
-  shared.exfunc.reset(new Function(*shared.exmod));
+  exmod = &sink.module("/nonexistent/exmod");
+  exfile = &sink.file("/nonexistent/exfile");
+  exfunc.reset(new Function(*exmod));
 
   auto cnt = ::unpack<std::uint64_t>(it);
   for(std::size_t i = 0; i < cnt; i++)
-    shared.modmap.emplace_back(sink.module(::unpack<std::string>(it)));
+    modmap.emplace_back(sink.module(::unpack<std::string>(it)));
 
   cnt = ::unpack<std::uint64_t>(it);
   for(std::size_t i = 0; i < cnt; i++) {
@@ -202,23 +202,23 @@ void IdUnpacker::Expander::unpack() {
     } else {
       // Format: [module id] [offset]
       auto off = ::unpack<std::uint64_t>(it);
-      s = {shared.modmap.at(next), off};
+      s = {modmap.at(next), off};
     }
     std::size_t cnt = ::unpack<std::uint64_t>(it);
-    auto& scopes = shared.exmap[parent][s];
+    auto& scopes = exmap[parent][s];
     for(std::size_t x = 0; x < cnt; x++) {
       auto ty = *it;
       it++;
       auto id = ::unpack<std::uint64_t>(it);
       switch(ty) {
       case 0:  // unknown or point -> point
-        scopes.emplace_back(*shared.exmod, id);
+        scopes.emplace_back(*exmod, id);
         break;
       case 1:  // function or inlined_function -> inlined_function
-        scopes.emplace_back(*shared.exfunc, *shared.exfile, id);
+        scopes.emplace_back(*exfunc, *exfile, id);
         break;
       case 2:  // loop -> loop
-        scopes.emplace_back(Scope::loop, *shared.exfile, id);
+        scopes.emplace_back(Scope::loop, *exfile, id);
         break;
       default:
         util::log::fatal{} << "Unrecognized packed Scope type " << ty;
@@ -234,14 +234,14 @@ void IdUnpacker::Expander::unpack() {
     ids.exclusive = ::unpack<std::uint64_t>(it);
     ids.inclusive = ::unpack<std::uint64_t>(it);
     auto name = ::unpack<std::string>(it);
-    shared.metmap.insert({std::move(name), {id, ids}});
+    metmap.insert({std::move(name), {id, ids}});
   }
 
-  shared.ctxtree.clear();
+  ctxtree.clear();
 }
 
 Context& IdUnpacker::Expander::context(Context& c, Scope& s) {
-  util::call_once(shared.once, [this]{ unpack(); });
+  util::call_once(shared.once, [this]{ shared.unpack(sink); });
   Context* cp = &c;
   bool first = true;
   for(const auto& next: shared.exmap.at(c.userdata[sink.identifier()]).at(s)) {
@@ -281,9 +281,17 @@ void IdUnpacker::Finalizer::context(const Context& c, unsigned int& id) {
 }
 
 void IdUnpacker::Finalizer::metric(const Metric& m, unsigned int& id) {
-  id = shared.metmap.at(m.name()).first;
+  util::call_once(shared.once, [this]{ shared.unpack(sink); });
+  auto it = shared.metmap.find(m.name());
+  if(it == shared.metmap.end())
+    util::log::fatal{} << "Unrecognized metric in IdUnpacker: " << m.name();
+  id = it->second.first;
 }
 
 void IdUnpacker::Finalizer::metric(const Metric& m, Metric::ScopedIdentifiers& ids) {
-  ids = shared.metmap.at(m.name()).second;
+  util::call_once(shared.once, [this]{ shared.unpack(sink); });
+  auto it = shared.metmap.find(m.name());
+  if(it == shared.metmap.end())
+    util::log::fatal{} << "Unrecognized metric in IdUnpacker: " << m.name();
+  ids = it->second.second;
 }

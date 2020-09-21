@@ -114,7 +114,6 @@ public:
     Context& context(Context&, Scope&) override;
 
   private:
-    void unpack();
     IdUnpacker& shared;
   };
 
@@ -137,6 +136,7 @@ public:
   };
 
 private:
+  void unpack(ProfilePipeline::Source&);
   std::vector<uint8_t> ctxtree;
 
   std::once_flag once;
