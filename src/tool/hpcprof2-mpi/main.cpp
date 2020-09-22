@@ -61,11 +61,11 @@ int rank0(ProfArgs&&);
 int rankN(ProfArgs&&);
 
 int main(int argc, char* const argv[]) {
-  // Read in the arguments.
-  ProfArgs args(argc, argv);
-
   // Fire up MPI. We just use the WORLD communicator for everything.
   mpi::World::initialize();
+
+  // Read in the arguments.
+  ProfArgs args(argc, argv);
 
   // Because rank 0 is acts so differently from the others, its easier to
   // split the program into two copies that handle their own bits.

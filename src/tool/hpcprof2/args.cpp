@@ -49,10 +49,13 @@
 #include "lib/profile/source.hpp"
 #include "lib/profile/finalizers/struct.hpp"
 #include "include/hpctoolkit-config.h"
+#include "lib/profile/mpi/bcast.hpp"
 
-#include <omp.h>
-#include <iostream>
 #include <getopt.h>
+#include <iostream>
+#include <iomanip>
+#include <omp.h>
+#include <random>
 
 using namespace hpctoolkit;
 namespace fs = stdshim::filesystem;
@@ -77,6 +80,8 @@ General Options:
   -v, --verbose               Increase the verbosity of messages.
   -q, --quiet                 Disable all non-error messages.
   -o FILE                     Output to the given filename.
+      --force                 Overwrite the output if it exists already.
+  -O FILE                     Shorthand for `--force -o FILE'.
   -Q, --dry-run               Disable output. Useful for performance testing.
   -jN                         Use N threads to accelerate processing.
 
@@ -129,13 +134,14 @@ Current Obsolete Options:
 )EOF";
 
 ProfArgs::ProfArgs(int argc, char* const argv[])
-  : title(), threads(1), instructionGrain(false), output("hpctoolkit-database"),
+  : title(), threads(1), instructionGrain(false), output(),
     include_sources(true), include_traces(true), include_thread_local(true),
     format(Format::exmldb), dwarfMaxSize(100*1024*1024), sparse_debug(false) {
   int arg_instructionGrain = instructionGrain;
   int arg_includeSources = include_sources;
   int arg_includeTraces = include_traces;
   int arg_sparseDebug = sparse_debug;
+  int arg_overwriteOutput = 0;
   struct option longopts[] = {
     // These first ones are more special and must be in this order.
     {"version", no_argument, NULL, 0},
@@ -155,6 +161,7 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
     {"no-source", no_argument, &arg_includeSources, 0},
     {"name", required_argument, NULL, 'n'},
     {"sparse-debug", no_argument, &arg_sparseDebug, 1},
+    {"force", no_argument, &arg_overwriteOutput, 1},
     {0, 0, 0, 0}
   };
 
@@ -164,7 +171,7 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
 
   int opt;
   int longopt;
-  while((opt = getopt_long(argc, argv, "hvqQo:j:S:R:n:f:M:", longopts, &longopt)) >= 0) {
+  while((opt = getopt_long(argc, argv, "hvqQO:o:j:S:R:n:f:M:", longopts, &longopt)) >= 0) {
     switch(opt) {
     case 'h':
       std::cout << "Usage: " << fs::path(argv[0]).filename().string()
@@ -177,8 +184,12 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
     case 'q':
       // Eventually, assert(verbosity == 1); verbosity = 0;
       break;
+    case 'O':
+      arg_overwriteOutput = 1;
+      // fallthrough
     case 'o':
       output = fs::path(optarg);
+      if(!output.has_filename()) output = output.parent_path();
       break;
     case 'Q':
       dryRun = true;
@@ -323,12 +334,49 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
     }
   }
 
-  if(dryRun) output = fs::path();
-
   instructionGrain = arg_instructionGrain;
   include_sources = arg_includeSources;
   include_traces = arg_includeTraces;
   sparse_debug = arg_sparseDebug;
+
+  if(dryRun) output = fs::path();
+  else {
+    if(mpi::World::rank() == 0) {
+      if(output.empty()) {
+        // This is a soft error, we replace with hpctoolkit-database and give a
+        // serious warning.
+        util::log::error{} << "Output database argument not given, defaulting"
+          " to `hpctoolkit-database'";
+        output = "hpctoolkit-database";
+      }
+      if(stdshim::filesystem::exists(output)) {
+        if(arg_overwriteOutput == 0) {
+          // The output must not exist beforehand, otherwise we will munge the
+          // path until it doesn't exist anymore.
+          // There's a potential for races here, which we don't attempt to fix;
+          // the user should be explicit about their outputs.
+          auto fbase = output.filename().string();
+          output = output.parent_path();
+
+          std::minstd_rand gen(std::random_device{}());
+          std::uniform_int_distribution<uint32_t> rand;
+          std::ostringstream ss;
+          do {
+            ss.str("");
+            ss << fbase << "-" << std::hex << std::setfill('0') << std::setw(8)
+               << rand(gen);
+          } while(stdshim::filesystem::exists(output / ss.str()));
+          util::log::warning{} << "Output database `" << (output/fbase).string()
+            << "' exists, outputting to `" << (output/ss.str()).string() << "'";
+          output /= ss.str();
+        } else {
+          // The output should be overwritten, so we first remove it.
+          stdshim::filesystem::remove_all(output);
+        }
+      }
+    }
+    output = mpi::bcast(output.string(), 0);
+  }
 
   // Now that the arguments have been munged, we can do the inputs.
   for(int idx = optind; idx < argc; idx++) {
