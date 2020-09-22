@@ -62,6 +62,7 @@ using namespace hpctoolkit;
 using Settings = ProfilePipeline::Settings;
 using Source = ProfilePipeline::Source;
 using Sink = ProfilePipeline::Sink;
+using WavefrontOrdering = ProfilePipeline::WavefrontOrdering;
 
 const ProfilePipeline::timeout_t ProfilePipeline::timeout_forever;
 
@@ -84,13 +85,39 @@ Settings& Settings::operator<<(ProfileSink& s) {
   auto acc = s.accepts();
   if(acc.hasMetrics()) acc += DataClass::attributes + DataClass::threads;
   if(acc.hasContexts()) acc += DataClass::references;
-  sinks.push_back({acc, acc & wav, req, std::ref(s)});
+  sinks.emplace_back(acc, acc & wav, req, s);
   return *this;
 }
 Settings& Settings::operator<<(std::unique_ptr<ProfileSink>&& sp) {
   if(!sp) return *this;
   up_sinks.emplace_back(std::move(sp));
   return operator<<(*up_sinks.back());
+}
+
+WavefrontOrdering::WavefrontOrdering() : arc(std::numeric_limits<std::size_t>::max()) {};
+WavefrontOrdering::WavefrontOrdering(std::size_t i) : arc(i) {};
+WavefrontOrdering::WavefrontOrdering(WavefrontOrdering&& o)
+  : arc(o.arc) { o.arc = std::numeric_limits<std::size_t>::max(); }
+WavefrontOrdering& WavefrontOrdering::operator=(WavefrontOrdering&& o) {
+  arc = o.arc;
+  o.arc = std::numeric_limits<std::size_t>::max();
+  return *this;
+}
+
+Settings& Settings::operator>>(WavefrontOrdering& dep) {
+  if(sinks.empty())
+    util::log::fatal{} << "Attempt to extract a WavefrontOrdering without a Sink!";
+  dep = WavefrontOrdering{sinks.size() - 1};
+  return *this;
+}
+Settings& Settings::operator<<(const WavefrontOrdering& dep) {
+  if(sinks.empty())
+    util::log::fatal{} << "Attempt to assign a WavefrontOrdering without a Sink!";
+  if(dep.arc == std::numeric_limits<std::size_t>::max()
+     || dep.arc == sinks.size()-1) return *this;
+  sinks.back().wavefrontDeps.fetch_add(1, std::memory_order_relaxed);
+  sinks.at(dep.arc).wavefrontRDeps.emplace_back(sinks.size()-1);
+  return *this;
 }
 
 Settings& Settings::operator<<(ProfileFinalizer& f) {
@@ -182,10 +209,10 @@ ProfilePipeline::ProfilePipeline(Settings&& b, std::size_t team_sz)
     scheduledWaves |= s.waveLimit;
     if(!(attributes + references + contexts + DataClass::threads).allOf(s.waveLimit))
       util::log::fatal() << "Early wavefronts for non-global data currently not supported!";
-    if(s.waveLimit.hasAttributes()) sinkwaves.attributes.emplace_back(s());
-    if(s.waveLimit.hasReferences()) sinkwaves.references.emplace_back(s());
-    if(s.waveLimit.hasContexts()) sinkwaves.contexts.emplace_back(s());
-    if(s.waveLimit.hasThreads()) sinkwaves.threads.emplace_back(s());
+    if(s.waveLimit.hasAttributes()) sinkwaves.attributes.emplace_back(s);
+    if(s.waveLimit.hasReferences()) sinkwaves.references.emplace_back(s);
+    if(s.waveLimit.hasContexts()) sinkwaves.contexts.emplace_back(s);
+    if(s.waveLimit.hasThreads()) sinkwaves.threads.emplace_back(s);
   }
   structs.file.freeze();
   structs.context.freeze();
@@ -240,6 +267,7 @@ void ProfilePipeline::run() {
   char barrier_arc_3;
   char barrier_arc_4;
   char barrier_arc;
+  char wavefront_barrier_arc;
   char end_arc;
 #endif
   ANNOTATE_HAPPENS_BEFORE(&start_arc);
@@ -247,11 +275,22 @@ void ProfilePipeline::run() {
   {
     ANNOTATE_HAPPENS_AFTER(&start_arc);
 
-    // First deliver an notification for the waves that will not be occuring.
     DataClass currentWaves = unscheduledWaves;
+
+    // Helper function for handling wavefront notifications
+    std::function<void(SinkEntry&)> sendWavefront = [&](SinkEntry& e) {
+      e().notifyWavefront(currentWaves);
+      e.waveLimit -= currentWaves;
+      if(!e.waveLimit.hasAny())
+        for(const auto& rd: e.wavefrontRDeps)
+          if(sinks[rd].wavefrontDeps.fetch_sub(1, std::memory_order_acquire) == 0)
+            sendWavefront(sinks[rd]);
+    };
+
+    // First deliver an notification for the waves that will not be occuring.
     #pragma omp for schedule(dynamic) nowait
     for(std::size_t idx = 0; idx < sinkwaves.unscheduled.size(); ++idx)
-      sinkwaves.unscheduled[idx].get().notifyWavefront(currentWaves);
+      sendWavefront(sinkwaves.unscheduled[idx]);
 
     // Then handle the early wavefronts.
     // TODO: Make this more of a task-loop structure
@@ -265,33 +304,7 @@ void ProfilePipeline::run() {
       currentWaves += DataClass::attributes;
       #pragma omp for schedule(dynamic) nowait
       for(std::size_t idx = 0; idx < sinkwaves.attributes.size(); ++idx)
-        sinkwaves.attributes[idx].get().notifyWavefront(currentWaves);
-    }
-
-    if(scheduledWaves.hasReferences()) {
-      #pragma omp for schedule(dynamic)
-      for(std::size_t idx = 0; idx < sources.size(); ++idx) {
-        sources[idx].get().read(DataClass::references);
-        ANNOTATE_HAPPENS_BEFORE(&barrier_arc_2);
-      }
-      ANNOTATE_HAPPENS_AFTER(&barrier_arc_2);
-      currentWaves += DataClass::references;
-      #pragma omp for schedule(dynamic) nowait
-      for(std::size_t idx = 0; idx < sinkwaves.references.size(); ++idx)
-        sinkwaves.references[idx].get().notifyWavefront(currentWaves);
-    }
-
-    if(scheduledWaves.hasContexts()) {
-      #pragma omp for schedule(dynamic)
-      for(std::size_t idx = 0; idx < sources.size(); ++idx) {
-        sources[idx].get().read(DataClass::contexts);
-        ANNOTATE_HAPPENS_BEFORE(&barrier_arc_3);
-      }
-      ANNOTATE_HAPPENS_AFTER(&barrier_arc_3);
-      currentWaves += DataClass::contexts;
-      #pragma omp for schedule(dynamic) nowait
-      for(std::size_t idx = 0; idx < sinkwaves.contexts.size(); ++idx)
-        sinkwaves.contexts[idx].get().notifyWavefront(currentWaves);
+        sendWavefront(sinkwaves.attributes[idx]);
     }
 
     if(scheduledWaves.hasThreads()) {
@@ -304,8 +317,39 @@ void ProfilePipeline::run() {
       currentWaves += DataClass::threads;
       #pragma omp for schedule(dynamic) nowait
       for(std::size_t idx = 0; idx < sinkwaves.threads.size(); ++idx)
-        sinkwaves.threads[idx].get().notifyWavefront(currentWaves);
+        sendWavefront(sinkwaves.threads[idx]);
     }
+
+    if(scheduledWaves.hasReferences()) {
+      #pragma omp for schedule(dynamic)
+      for(std::size_t idx = 0; idx < sources.size(); ++idx) {
+        sources[idx].get().read(DataClass::references);
+        ANNOTATE_HAPPENS_BEFORE(&barrier_arc_2);
+      }
+      ANNOTATE_HAPPENS_AFTER(&barrier_arc_2);
+      currentWaves += DataClass::references;
+      #pragma omp for schedule(dynamic) nowait
+      for(std::size_t idx = 0; idx < sinkwaves.references.size(); ++idx)
+        sendWavefront(sinkwaves.references[idx]);
+    }
+
+    if(scheduledWaves.hasContexts()) {
+      #pragma omp for schedule(dynamic)
+      for(std::size_t idx = 0; idx < sources.size(); ++idx) {
+        sources[idx].get().read(DataClass::contexts);
+        ANNOTATE_HAPPENS_BEFORE(&barrier_arc_3);
+      }
+      ANNOTATE_HAPPENS_AFTER(&barrier_arc_3);
+      currentWaves += DataClass::contexts;
+      #pragma omp for schedule(dynamic) nowait
+      for(std::size_t idx = 0; idx < sinkwaves.contexts.size(); ++idx)
+        sendWavefront(sinkwaves.contexts[idx]);
+    }
+
+    // Sync up, to make sure all the notifications arrive before any of the writes.
+    ANNOTATE_HAPPENS_BEFORE(&wavefront_barrier_arc);
+    #pragma omp barrier
+    ANNOTATE_HAPPENS_AFTER(&wavefront_barrier_arc);
 
     // Now for the finishing wave
     #pragma omp for schedule(dynamic)

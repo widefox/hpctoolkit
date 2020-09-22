@@ -152,6 +152,11 @@ int rank0(ProfArgs&& args) {
   } tiduniquer;
   pipelineB << tiduniquer;
 
+  // MPI requires a very strict order to be followed for its collectives.
+  // So we serialize most of the Sinks. Its not ideal but its a flaw in MPI's design.
+  ProfilePipeline::WavefrontOrdering mpiDep;
+  pipelineB >> mpiDep;
+
   // When everything is ready, ship off the block to the workers.
   struct Sender : public IdPacker::Sink {
     Sender(IdPacker& s) : IdPacker::Sink(s) {};
@@ -159,7 +164,7 @@ int rank0(ProfArgs&& args) {
       mpi::bcast(std::move(block), 0);
     }
   } spacker(packer);
-  pipelineB << spacker;
+  pipelineB << spacker << mpiDep >> mpiDep;
 
   // For unpacking metrics, we need to be able to map the IDs back to their
   // Contexts. This does the magic for us.
@@ -212,12 +217,11 @@ int rank0(ProfArgs&& args) {
     std::unique_ptr<sinks::HPCTraceDB> tdb;
     if(args.include_traces)
       tdb = make_unique_x<sinks::HPCTraceDB>(args.output, false);
-    if(args.include_thread_local)
-      sdb = make_unique_x<SparseDB>(args.output);
+    sdb = make_unique_x<SparseDB>(args.output);
     auto exml = make_unique_x<sinks::ExperimentXML4>(args.output, args.include_sources,
                                                      tdb.get());
-    pipelineB << std::move(tdb) << std::move(exml);
-    if(sdb) pipelineB << *sdb;
+    pipelineB << std::move(tdb) << mpiDep >> mpiDep << std::move(exml);
+    if(sdb) pipelineB << *sdb << mpiDep;
 
     // ExperimentXML doesn't support instruction-level metrics, so we need a
     // line-merging transformer. Since this only changes the Scope, we don't

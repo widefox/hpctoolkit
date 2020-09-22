@@ -159,6 +159,8 @@ int rankN(ProfArgs&& args) {
     } msender;
     pipelineB2 << msender;
 
+    ProfilePipeline::WavefrontOrdering mpiDep;
+
     // We only emit our part of the MetricDB and TraceDB.
     std::unique_ptr<SparseDB> sdb;
     switch(args.format) {
@@ -170,9 +172,9 @@ int rankN(ProfArgs&& args) {
       break;
     case ProfArgs::Format::sparse:
       if(args.include_traces)
-        pipelineB2 << make_unique_x<sinks::HPCTraceDB>(args.output, false);
-      if(args.include_thread_local)
-        pipelineB2 << *(sdb = make_unique_x<SparseDB>(args.output));
+        pipelineB2 << make_unique_x<sinks::HPCTraceDB>(args.output, false)
+                   >> mpiDep;
+      pipelineB2 << *(sdb = make_unique_x<SparseDB>(args.output)) << mpiDep;
       break;
     }
 

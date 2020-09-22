@@ -88,10 +88,21 @@ protected:
 
   // All the Sinks, with notes on which callbacks they should be triggered for.
   struct SinkEntry {
+    SinkEntry(DataClass d, DataClass w, ExtensionClass e, ProfileSink& s)
+      : dataLimit(d), waveLimit(w), extensionLimit(e), sink(s),
+        wavefrontDeps(0) {};
+    SinkEntry(SinkEntry&& o)
+      : dataLimit(o.dataLimit), waveLimit(o.waveLimit),
+        extensionLimit(o.extensionLimit), sink(o.sink),
+        wavefrontDeps(0) {};
+
     DataClass dataLimit;
     DataClass waveLimit;
     ExtensionClass extensionLimit;
     std::reference_wrapper<ProfileSink> sink;
+
+    std::atomic<unsigned int> wavefrontDeps;  // Count
+    std::vector<std::size_t> wavefrontRDeps;  // Indices in sinks
 
     operator ProfileSink&() { return sink; }
     ProfileSink& operator()() { return sink; }
@@ -124,6 +135,26 @@ protected:
 /// handles the buffers when a Sink is not ready to receive data yet.
 class ProfilePipeline final : public detail::ProfilePipelineBase {
 public:
+  class Settings;
+
+  /// Variable type to use marking the beginning of an requested ordering
+  /// between the wavefront notifications of two or more Sinks.
+  class WavefrontOrdering final {
+  public:
+    WavefrontOrdering();
+
+    WavefrontOrdering(const WavefrontOrdering&) = delete;
+    WavefrontOrdering& operator=(const WavefrontOrdering&) = delete;
+    WavefrontOrdering(WavefrontOrdering&&);
+    WavefrontOrdering& operator=(WavefrontOrdering&&);
+
+  private:
+    friend class ProfilePipeline;
+    friend class Settings;
+    explicit WavefrontOrdering(std::size_t);
+    std::size_t arc;
+  };
+
   /// Setup structure for Pipelines. Roughly speaking, if the normal Pipeline
   /// is a compiled fast-as-lightning object, this is the source form.
   class Settings final : public detail::ProfilePipelineBase {
@@ -140,6 +171,14 @@ public:
     // MT: Externally Synchronized
     Settings& operator<<(ProfileSink&);
     Settings& operator<<(std::unique_ptr<ProfileSink>&&);
+
+    /// Obtain the WavefrontOrdering referencing the Sink last added.
+    // MT: Externally Synchronized
+    Settings& operator>>(WavefrontOrdering&);
+
+    /// Append a WavefrontOrdering dependency on the last added Sink.
+    // MT: Externally Synchronized
+    Settings& operator<<(const WavefrontOrdering&);
 
     /// Append a new Transformer to the future Pipeline, with optional ownership.
     // MT: Externally Synchronized
@@ -398,11 +437,11 @@ private:
 
   // Sinks sorted by which early waves they want
   struct {
-    std::vector<std::reference_wrapper<ProfileSink>> attributes;
-    std::vector<std::reference_wrapper<ProfileSink>> references;
-    std::vector<std::reference_wrapper<ProfileSink>> contexts;
-    std::vector<std::reference_wrapper<ProfileSink>> threads;
-    std::vector<std::reference_wrapper<ProfileSink>> unscheduled;
+    std::vector<std::reference_wrapper<SinkEntry>> attributes;
+    std::vector<std::reference_wrapper<SinkEntry>> references;
+    std::vector<std::reference_wrapper<SinkEntry>> contexts;
+    std::vector<std::reference_wrapper<SinkEntry>> threads;
+    std::vector<std::reference_wrapper<SinkEntry>> unscheduled;
   } sinkwaves;
 
   // Storage for the pointers to the SourceLocals.
