@@ -62,18 +62,8 @@ void bcast(void* data, std::size_t cnt, const Datatype&, std::size_t rootRank);
 
 /// Broadcast operation. Copies the given data from the root rank to all other
 /// processes in the team. Returns the given data.
-template<class T>
-T bcast(typename std::remove_reference<T>::type&& data, std::size_t root) {
-  detail::bcast(&data, 1, detail::asDatatype<typename std::remove_reference<T>::type>(), root);
-  return data;
-}
-
-/// Broadcast operation. Variant to handle simple types.
-template<class T>
-typename std::enable_if<
-  std::is_trivially_copy_constructible<T>::value,
-  T>::type
-bcast(T data, std::size_t root) {
+template<class T, std::void_t<decltype(detail::asDatatype<T>())>* = nullptr>
+T bcast(T data, std::size_t root) {
   detail::bcast(&data, 1, detail::asDatatype<T>(), root);
   return data;
 }
@@ -84,14 +74,14 @@ T* bcast(T*, std::size_t) = delete;
 
 /// Broadcast operation. Variant to allow for the usage of std::array.
 template<class T, std::size_t N>
-std::array<T, N> bcast(std::array<T, N>&& data, std::size_t root) {
+std::array<T, N> bcast(std::array<T, N> data, std::size_t root) {
   detail::bcast(data.data(), N, detail::asDatatype<T>(), root);
   return data;
 }
 
 /// Broadcast operation. Variant to allow for the usage of std::vector.
 template<class T, class A>
-std::vector<T, A> bcast(std::vector<T, A>&& data, std::size_t root) {
+std::vector<T, A> bcast(std::vector<T, A> data, std::size_t root) {
   unsigned long long sz = data.size();
   detail::bcast(&sz, 1, detail::asDatatype<unsigned long long>(), root);
   data.resize(sz);
@@ -101,17 +91,17 @@ std::vector<T, A> bcast(std::vector<T, A>&& data, std::size_t root) {
 
 /// Broadcast operation. Variant to allow for the usage of std::string.
 template<class C, class T, class A>
-std::basic_string<C,T,A> bcast(std::basic_string<C,T,A>&& data, std::size_t root) {
+std::basic_string<C,T,A> bcast(std::basic_string<C,T,A> data, std::size_t root) {
   unsigned long long sz = data.size();
   detail::bcast(&sz, 1, detail::asDatatype<unsigned long long>(), root);
   data.resize(sz);
-  bcast(data.data(), sz, detail::asDatatype<C>(), root);
+  detail::bcast(&data[0], sz, detail::asDatatype<C>(), root);
   return data;
 }
 
 /// Broadcast operation. Variant to allow for the usage of std::vector<std::string>
 template<class C, class T, class AS, class AV>
-std::vector<std::basic_string<C,T,AS>,AV> bcast(std::vector<std::basic_string<C,T,AS>,AV>&& data, std::size_t root) {
+std::vector<std::basic_string<C,T,AS>,AV> bcast(std::vector<std::basic_string<C,T,AS>,AV> data, std::size_t root) {
   std::vector<unsigned long long> sizes;
   if(World::rank() == root) {
     sizes.reserve(data.size());
@@ -137,13 +127,6 @@ std::vector<std::basic_string<C,T,AS>,AV> bcast(std::vector<std::basic_string<C,
 /// you're not the root. Relies on default initialization.
 template<class T>
 T bcast(std::size_t root) { return bcast(T{}, root); }
-
-/// Broadcast operation. Variant to allow for copy semantics.
-template<class T>
-typename std::enable_if<
-  !std::is_trivially_copy_constructible<T>::value,
-  T>::type
-bcast(const T& data, std::size_t root) { return bcast(T(data), root); }
 
 }  // namespace hpctoolkit::mpi
 

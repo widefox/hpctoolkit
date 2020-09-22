@@ -63,28 +63,8 @@ void exscan(void* data, std::size_t cnt, const Datatype&, const Op&);
 
 /// Inclusive scan operation. Returns the accumulation of the values given
 /// here and in all other lesser rank indices. Returns the resulting value.
-template<class T>
-T scan(typename std::remove_reference<T>::type&& data, const Op& op) {
-  detail::scan(&data, 1, detail::asDatatype<typename std::remove_reference<T>::type>(), op);
-  return data;
-}
-
-/// Exclusive scan operation. Effectively the inclusive scan without including
-/// the current process's contribution. Note that no value is returned in rank
-/// 0, thus the need for an optional return value.
-template<class T>
-stdshim::optional<typename std::remove_reference<T>::type> exscan(typename std::remove_reference<T>::type&& data, const Op& op) {
-  detail::exscan(&data, 1, detail::asDatatype<typename std::remove_reference<T>::type>(), op);
-  if(World::rank() == 0) return {};
-  return data;
-}
-
-/// Inclusive scan operation. Variant to handle simple types.
-template<class T>
-typename std::enable_if<
-  std::is_trivially_copy_constructible<T>::value,
-  T>::type
-scan(T&& data, const Op& op) {
+template<class T, std::void_t<decltype(detail::asDatatype<T>())>* = nullptr>
+T scan(T data, const Op& op) {
   detail::scan(&data, 1, detail::asDatatype<T>(), op);
   return data;
 }
@@ -92,11 +72,8 @@ scan(T&& data, const Op& op) {
 /// Exclusive scan operation. Effectively the inclusive scan without including
 /// the current process's contribution. Note that no value is returned in rank
 /// 0, thus the need for an optional return value.
-template<class T>
-typename std::enable_if<
-  std::is_trivially_copy_constructible<T>::value,
-  stdshim::optional<T>>::type
-exscan(T data, const Op& op) {
+template<class T, std::void_t<decltype(detail::asDatatype<T>())>* = nullptr>
+stdshim::optional<T> exscan(T data, const Op& op) {
   detail::exscan(&data, 1, detail::asDatatype<T>(), op);
   if(World::rank() == 0) return {};
   return data;
@@ -112,33 +89,17 @@ T* exscan(T*, const Op&) = delete;
 
 /// Inclusive scan operation. Variant to allow for the usage of std::array.
 template<class T, std::size_t N>
-std::array<T, N> scan(std::array<T, N>&& data, const Op& op) {
+std::array<T, N> scan(std::array<T, N> data, const Op& op) {
   detail::scan(data.data(), N, detail::asDatatype<T>(), op);
   return data;
 }
 
 /// Exclusive scan operation. Variant to allow for the usage of std::array.
 template<class T, std::size_t N>
-stdshim::optional<std::array<T, N>> exscan(std::array<T, N>&& data, const Op& op) {
+stdshim::optional<std::array<T, N>> exscan(std::array<T, N> data, const Op& op) {
   detail::exscan(data.data(), N, detail::asDatatype<T>(), op);
   if(World::rank() == 0) return {};
   return data;
-}
-
-/// Inclusive scan operation. Variant to allow for copy semantics.
-template<class T>
-typename std::enable_if<
-  !std::is_trivially_copy_constructible<T>::value,
-  T>::type
-scan(const T& data, const Op& op) { return scan(T(data), op); }
-
-/// Exclusive scan operation. Variant to allow for copy semantics.
-template<class T>
-typename std::enable_if<
-  !std::is_trivially_copy_constructible<T>::value,
-  stdshim::optional<T>>::type
-exscan(const T& data, const Op& op) {
-  return exscan(T(data), op);
 }
 
 }  // namespace hpctoolkit::mpi
