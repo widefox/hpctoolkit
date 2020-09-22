@@ -1362,7 +1362,7 @@ void SparseDB::getMyCtxs(const std::vector<uint64_t>& ctx_off,
 {
   assert(ctx_off.size() > 0);
 
-  /* 
+  
   //split work among ranks by volume of ctxs
   uint64_t total_size = ctx_off.back();
   uint64_t max_size_per_rank = round(total_size/num_ranks);
@@ -1372,8 +1372,8 @@ void SparseDB::getMyCtxs(const std::vector<uint64_t>& ctx_off,
   for(uint i = 1; i<ctx_off.size(); i++){
     if(ctx_off[i] > my_start && ctx_off[i] <= my_end) my_ctxs.emplace_back(CTXID((i-1)));
   }
-  */
-
+  
+/*
   //split work among ranks by number of ctxs
   size_t num_ctxs_per_rank = round(ctx_off.size()/num_ranks);
   uint64_t my_start = rank * num_ctxs_per_rank;
@@ -1381,7 +1381,7 @@ void SparseDB::getMyCtxs(const std::vector<uint64_t>& ctx_off,
 
   for(uint i = my_start; i<my_end; i++){
     my_ctxs.emplace_back(CTXID(i));
-  }
+  }*/
 }
 
 
@@ -2287,7 +2287,7 @@ void SparseDB::rwAllCtxGroup(const std::vector<uint32_t>& my_ctxs,
     uint32_t ctx_id = my_ctxs[i];
     size_t cur_ctx_size = ctx_off[CTX_VEC_IDX(ctx_id) + 1] - ctx_off[CTX_VEC_IDX(ctx_id)];
 
-    if((cur_size + cur_ctx_size) <= pow(10,6)) { //temp 10^4 TODO: user-defined memory limit
+    if((cur_size + cur_ctx_size) <= pow(10,8)) { //temp 10^4 TODO: user-defined memory limit
     //if(cur_cnt <= 1000){
       ctx_ids.emplace_back(ctx_id);
       cur_size += cur_ctx_size;

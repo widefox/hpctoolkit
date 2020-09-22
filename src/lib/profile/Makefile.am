@@ -80,7 +80,7 @@ MYSOURCES = \
 	\
 	sources/hpcrun.cpp sources/packed.cpp sources/hpcrun4.cpp \
 	\
-	sinks/experimentxml.cpp sinks/hpctracedb.cpp sinks/hpcmetricdb.cpp \
+	sinks/experimentxml.cpp sinks/hpctracedb.cpp sinks/hpcmetricdb.cpp sinks/hpctracedb2.cpp \
 	sinks/packed.cpp sinks/experimentxml4.cpp \
 	\
 	finalizers/struct.cpp finalizers/directclassification.cpp \

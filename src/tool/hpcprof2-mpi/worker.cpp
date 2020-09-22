@@ -55,6 +55,7 @@
 #include "lib/profile/sinks/lambda.hpp"
 #include "lib/profile/sinks/packed.hpp"
 #include "lib/profile/sinks/hpctracedb.hpp"
+#include "lib/profile/sinks/hpctracedb2.hpp"
 #include "lib/profile/sinks/hpcmetricdb.hpp"
 #include "lib/profile/finalizers/denseids.hpp"
 #include "lib/profile/finalizers/directclassification.hpp"
@@ -172,8 +173,7 @@ int rankN(ProfArgs&& args) {
       break;
     case ProfArgs::Format::sparse:
       if(args.include_traces)
-        pipelineB2 << make_unique_x<sinks::HPCTraceDB>(args.output, false)
-                   >> mpiDep;
+        pipelineB2 << make_unique_x<sinks::HPCTraceDB2>(args.output) >> mpiDep;      
       pipelineB2 << *(sdb = make_unique_x<SparseDB>(args.output)) << mpiDep;
       break;
     }

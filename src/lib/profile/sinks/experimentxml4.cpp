@@ -47,6 +47,7 @@
 #include "experimentxml4.hpp"
 
 #include "hpctracedb.hpp"
+#include "hpctracedb2.hpp"
 #include "hpcmetricdb.hpp"
 #include "../util/xml.hpp"
 

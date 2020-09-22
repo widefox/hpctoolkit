@@ -57,6 +57,7 @@
 #include "lib/profile/sinks/experimentxml.hpp"
 #include "lib/profile/sinks/experimentxml4.hpp"
 #include "lib/profile/sinks/hpctracedb.hpp"
+#include "lib/profile/sinks/hpctracedb2.hpp"
 #include "lib/profile/sinks/hpcmetricdb.hpp"
 #include "lib/profile/finalizers/denseids.hpp"
 #include "lib/profile/finalizers/directclassification.hpp"
@@ -214,12 +215,12 @@ int rank0(ProfArgs&& args) {
     break;
   }
   case ProfArgs::Format::sparse: {
-    std::unique_ptr<sinks::HPCTraceDB> tdb;
+    std::unique_ptr<sinks::HPCTraceDB2> tdb;
     if(args.include_traces)
-      tdb = make_unique_x<sinks::HPCTraceDB>(args.output, false);
+      tdb = make_unique_x<sinks::HPCTraceDB2>(args.output);
     sdb = make_unique_x<SparseDB>(args.output);
     auto exml = make_unique_x<sinks::ExperimentXML4>(args.output, args.include_sources,
-                                                     tdb.get());
+                                                     nullptr);
     pipelineB << std::move(tdb) << mpiDep >> mpiDep << std::move(exml);
     if(sdb) pipelineB << *sdb << mpiDep;
 
