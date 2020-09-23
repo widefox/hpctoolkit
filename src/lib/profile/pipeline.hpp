@@ -90,19 +90,28 @@ protected:
   struct SinkEntry {
     SinkEntry(DataClass d, DataClass w, ExtensionClass e, ProfileSink& s)
       : dataLimit(d), waveLimit(w), extensionLimit(e), sink(s),
-        wavefrontDeps(0) {};
+        wavefrontDeps(1) {
+      wavefrontSelfDep.clear(std::memory_order_relaxed);
+    }
     SinkEntry(SinkEntry&& o)
       : dataLimit(o.dataLimit), waveLimit(o.waveLimit),
         extensionLimit(o.extensionLimit), sink(o.sink),
-        wavefrontDeps(0) {};
+        wavefrontDeps(o.wavefrontDeps.load(std::memory_order_relaxed)) {
+      wavefrontSelfDep.clear(std::memory_order_relaxed);
+    }
 
     DataClass dataLimit;
     DataClass waveLimit;
     ExtensionClass extensionLimit;
     std::reference_wrapper<ProfileSink> sink;
 
-    std::atomic<unsigned int> wavefrontDeps;  // Count
+    std::atomic<int> wavefrontDeps;  // Count
+    std::atomic_flag wavefrontSelfDep;
+
+    util::OnceFlag wavefrontRDepOnce;
     std::vector<std::size_t> wavefrontRDeps;  // Indices in sinks
+
+    std::array<util::OnceFlag, 5> wavefrontOnces;
 
     operator ProfileSink&() { return sink; }
     ProfileSink& operator()() { return sink; }

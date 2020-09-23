@@ -275,76 +275,54 @@ void ProfilePipeline::run() {
   {
     ANNOTATE_HAPPENS_AFTER(&start_arc);
 
-    DataClass currentWaves = unscheduledWaves;
+    DataClass currentWaves;
 
-    // Helper function for handling wavefront notifications
-    std::function<void(SinkEntry&)> sendWavefront = [&](SinkEntry& e) {
-      e().notifyWavefront(currentWaves);
-      e.waveLimit -= currentWaves;
-      if(!e.waveLimit.hasAny())
-        for(const auto& rd: e.wavefrontRDeps)
-          if(sinks[rd].wavefrontDeps.fetch_sub(1, std::memory_order_acquire) == 0)
-            sendWavefront(sinks[rd]);
+    // Notify a Sink for this wavefront, potentially recursing if needed.
+    std::function<void(SinkEntry&,std::size_t, bool)> notify =
+      [&](SinkEntry& e, std::size_t idx, bool removeDep) {
+        auto role = removeDep ? e.wavefrontDeps.fetch_sub(1, std::memory_order_acquire)-1
+                              : e.wavefrontDeps.load(std::memory_order_acquire);
+        if(role <= 0) {
+          // All deps are cleared, we can send a notification
+          e.wavefrontOnces[idx].call([&]{
+            e().notifyWavefront(currentWaves);
+          });
+          if(currentWaves.allOf(e.waveLimit)) {
+            // We can remove the reverse dependency links now
+            e.wavefrontRDepOnce.call_nowait([&]{
+              for(const auto& rd: e.wavefrontRDeps)
+                notify(sinks[rd], idx, true);
+            });
+          }
+        }
+      };
+
+    auto wave = [&](DataClass d, std::size_t idx, const std::vector<std::reference_wrapper<SinkEntry>>& sinks) {
+      if((d & scheduledWaves).hasAny()) {
+      #ifdef ENABLE_VG_ANNOTATIONS
+        char barrier_arc;
+      #endif
+        #pragma omp for schedule(dynamic)
+        for(std::size_t idx = 0; idx < sources.size(); ++idx) {
+          sources[idx].get().read(d);
+          ANNOTATE_HAPPENS_BEFORE(&barrier_arc);
+        }
+        ANNOTATE_HAPPENS_AFTER(&barrier_arc);
+      }
+      if((d & (scheduledWaves | unscheduledWaves)).hasAny()) {
+        currentWaves += d;
+        #pragma omp for schedule(dynamic) nowait
+        for(std::size_t i = 0; i < sinks.size(); ++i)
+          notify(sinks[i], idx, sinks[i].get().wavefrontSelfDep.test_and_set() == false);
+      }
     };
 
-    // First deliver an notification for the waves that will not be occuring.
-    #pragma omp for schedule(dynamic) nowait
-    for(std::size_t idx = 0; idx < sinkwaves.unscheduled.size(); ++idx)
-      sendWavefront(sinkwaves.unscheduled[idx]);
-
-    // Then handle the early wavefronts.
-    // TODO: Make this more of a task-loop structure
-    if(scheduledWaves.hasAttributes()) {
-      #pragma omp for schedule(dynamic)
-      for(std::size_t idx = 0; idx < sources.size(); ++idx) {
-        sources[idx].get().read(DataClass::attributes);
-        ANNOTATE_HAPPENS_BEFORE(&barrier_arc_1);
-      }
-      ANNOTATE_HAPPENS_AFTER(&barrier_arc_1);
-      currentWaves += DataClass::attributes;
-      #pragma omp for schedule(dynamic) nowait
-      for(std::size_t idx = 0; idx < sinkwaves.attributes.size(); ++idx)
-        sendWavefront(sinkwaves.attributes[idx]);
-    }
-
-    if(scheduledWaves.hasThreads()) {
-      #pragma omp for schedule(dynamic)
-      for(std::size_t idx = 0; idx < sources.size(); ++idx) {
-        sources[idx].get().read(DataClass::threads);
-        ANNOTATE_HAPPENS_BEFORE(&barrier_arc_4);
-      }
-      ANNOTATE_HAPPENS_AFTER(&barrier_arc_4);
-      currentWaves += DataClass::threads;
-      #pragma omp for schedule(dynamic) nowait
-      for(std::size_t idx = 0; idx < sinkwaves.threads.size(); ++idx)
-        sendWavefront(sinkwaves.threads[idx]);
-    }
-
-    if(scheduledWaves.hasReferences()) {
-      #pragma omp for schedule(dynamic)
-      for(std::size_t idx = 0; idx < sources.size(); ++idx) {
-        sources[idx].get().read(DataClass::references);
-        ANNOTATE_HAPPENS_BEFORE(&barrier_arc_2);
-      }
-      ANNOTATE_HAPPENS_AFTER(&barrier_arc_2);
-      currentWaves += DataClass::references;
-      #pragma omp for schedule(dynamic) nowait
-      for(std::size_t idx = 0; idx < sinkwaves.references.size(); ++idx)
-        sendWavefront(sinkwaves.references[idx]);
-    }
-
-    if(scheduledWaves.hasContexts()) {
-      #pragma omp for schedule(dynamic)
-      for(std::size_t idx = 0; idx < sources.size(); ++idx) {
-        sources[idx].get().read(DataClass::contexts);
-        ANNOTATE_HAPPENS_BEFORE(&barrier_arc_3);
-      }
-      ANNOTATE_HAPPENS_AFTER(&barrier_arc_3);
-      currentWaves += DataClass::contexts;
-      #pragma omp for schedule(dynamic) nowait
-      for(std::size_t idx = 0; idx < sinkwaves.contexts.size(); ++idx)
-        sendWavefront(sinkwaves.contexts[idx]);
-    }
+    // Issue all the waves that could possibly happen
+    wave(unscheduledWaves, 0, sinkwaves.unscheduled);
+    wave(DataClass::attributes, 1, sinkwaves.attributes);
+    wave(DataClass::references, 2, sinkwaves.references);
+    wave(DataClass::threads, 3, sinkwaves.threads);
+    wave(DataClass::contexts, 4, sinkwaves.contexts);
 
     // Sync up, to make sure all the notifications arrive before any of the writes.
     ANNOTATE_HAPPENS_BEFORE(&wavefront_barrier_arc);
