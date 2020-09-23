@@ -46,6 +46,8 @@
 
 #include "log.hpp"
 
+#include "mpi/core.hpp"
+
 #include <cstdlib>
 #include <iostream>
 
@@ -82,7 +84,12 @@ info::~info() {
   std::cerr << sbuf.str();
 }
 
-debug::debug(bool enable) : MessageBuffer(enable) { (*this) << "DEBUG: "; }
+debug::debug(bool enable) : MessageBuffer(enable) {
+  (*this) << "DEBUG";
+  if(mpi::World::size() > 0)
+    (*this) << " [" << mpi::World::rank() << "]";
+  (*this) << ": ";
+}
 debug::~debug() {
   (*this) << '\n';
   std::cerr << sbuf.str();
