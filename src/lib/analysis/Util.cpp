@@ -87,6 +87,7 @@ using std::string;
 #include <lib/prof-lean/hpcfmt.h>
 #include <lib/prof-lean/hpcrun-fmt.h>
 #include <lib/prof-lean/hpcrunflat-fmt.h>
+#include <lib/prof-lean/tracedb.h>
 
 #include <lib/support/PathFindMgr.hpp>
 #include <lib/support/PathReplacementMgr.hpp>
@@ -170,6 +171,8 @@ getProfileType(const std::string& filenm)
     ty = ProfType_SparseDBthread;
   }else if(strncmp(buf, HPCCCTSPARSE_FMT_Magic, HPCCCTSPARSE_FMT_MagicLen) == 0){ 
     ty = ProfType_SparseDBcct;
+  }else if(strncmp(buf, HPCTRACEDB_FMT_Magic, HPCTRACEDB_FMT_MagicLen) == 0){ 
+    ty = ProfType_TraceDB;
   }
 
   

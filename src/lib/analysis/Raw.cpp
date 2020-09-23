@@ -79,8 +79,10 @@ using std::string;
 #include <lib/prof-lean/hpcfmt.h>
 #include <lib/prof-lean/hpcrun-fmt.h>
 #include <lib/prof-lean/id-tuple.h>
+#include <lib/prof-lean/tracedb.h>
 #include <lib/prof/tms-format.h>
 #include <lib/prof/cms-format.h>
+
 
 #include <lib/support/diagnostics.h>
 
@@ -114,6 +116,9 @@ Analysis::Raw::writeAsText(/*destination,*/ const char* filenm, bool sm_easyToGr
   }
   else if (ty == ProfType_SparseDBcct){ //YUMENG
     writeAsText_sparseDBcct(filenm, sm_easyToGrep);
+  }
+  else if (ty == ProfType_TraceDB){ //YUMENG
+    writeAsText_tracedb(filenm);
   }
   else {
     DIAG_Die(DIAG_Unimplemented);
@@ -292,6 +297,64 @@ Analysis::Raw::writeAsText_sparseDBcct(const char* filenm, bool easygrep)
     throw;
   }
 }
+
+//YUMENG
+void
+Analysis::Raw::writeAsText_tracedb(const char* filenm)
+{
+  if (!filenm) { return; }
+
+  try {
+    FILE* fs = hpcio_fopen_r(filenm);
+    if (!fs) {
+      DIAG_Throw("error opening tracedb file '" << filenm << "'");
+    }
+
+    tracedb_hdr_t hdr;
+    int ret = tracedb_hdr_fread(&hdr, fs);
+    if (ret != HPCFMT_OK) {
+      DIAG_Throw("error reading hdr from tracedb file '" << filenm << "'");
+    }
+    tracedb_hdr_fprint(&hdr, stdout);
+
+    uint64_t num_t;
+    ret = hpcfmt_int8_fread(&num_t, fs);
+    if (ret != HPCFMT_OK) {
+      DIAG_Throw("error reading number of traces from tracedb file '" << filenm << "'");
+    }
+
+    trace_hdr_t* x;
+    ret = trace_hdrs_fread(&x, num_t,fs);
+    if (ret != HPCFMT_OK) {
+      DIAG_Throw("error reading trace hdrs from tracedb file '" << filenm << "'");
+    }
+    trace_hdrs_fprint(num_t, x, stdout);
+/*
+    for(uint i = 0; i<num_ctx; i++){
+      if(x[i].num_vals != 0){
+        cct_sparse_metrics_t csm;
+        csm.ctx_id = x[i].ctx_id;
+        csm.num_vals = x[i].num_vals;
+        csm.num_nzmids = x[i].num_nzmids;
+        ret = cms_sparse_metrics_fread(&csm,fs);
+        if (ret != HPCFMT_OK) {
+          DIAG_Throw("error reading cct data from sparse metrics file '" << filenm << "'");
+        }
+        cms_sparse_metrics_fprint(&csm,stdout, "  ", easygrep);
+        cms_sparse_metrics_free(&csm);
+      }
+      
+    }
+*/
+    trace_hdrs_free(&x);
+    hpcio_fclose(fs);
+  }
+  catch (...) {
+    DIAG_EMsg("While reading '" << filenm << "'...");
+    throw;
+  }
+}
+
 
 void
 Analysis::Raw::writeAsText_callpathMetricDB(const char* filenm)

@@ -110,7 +110,8 @@ MYSOURCES = \
 	splay-uint64.h splay-uint64.c \
 	elf-helper.h elf-helper.c \
 	\
-	id-tuple.h id-tuple.c
+	id-tuple.h id-tuple.c \
+	tracedb.h tracedb.c 
 
 MYCFLAGS = @HOST_CFLAGS@ $(HPC_IFLAGS) $(MBEDTLS_IFLAGS)  -I$(LIBELF_INC)
 

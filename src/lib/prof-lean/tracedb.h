@@ -1,13 +1,3 @@
-// -*-Mode: C++;-*-
-
-// * BeginRiceCopyright *****************************************************
-//
-// $HeadURL$
-// $Id$
-//
-// --------------------------------------------------------------------------
-// Part of HPCToolkit (hpctoolkit.org)
-//
 // Information about sources of support for research and development of
 // HPCToolkit is at 'hpctoolkit.org' and in 'README.Acknowledgments'.
 // --------------------------------------------------------------------------
@@ -46,82 +36,104 @@
 
 //***************************************************************************
 //
-// File:
-//   $HeadURL$
-//
 // Purpose:
-//   [The purpose of this file]
+//   Low-level types and functions for reading/writing thread.db
+//
+//   See thread.db figure.
 //
 // Description:
 //   [The set of functions, macros, etc. defined in the file]
 //
 //***************************************************************************
 
-#ifndef Analysis_Raw_Raw_hpp 
-#define Analysis_Raw_Raw_hpp
+#ifndef TRACEDB_FMT_H
+#define TRACEDB_FMT_H
 
 //************************* System Include Files ****************************
 
-#include <string>
+#include <stdbool.h>
+#include <limits.h>
 
 //*************************** User Include Files ****************************
 
-#include <include/uint.h> 
-#include <lib/prof-lean/hpcrun-fmt.h> 
-#include <lib/prof-lean/id-tuple.h>
-#include <lib/prof/tms-format.h> 
-#include <lib/prof/cms-format.h>
+#include <include/uint.h>
 
-//*************************** Forward Declarations ***************************
+#include "hpcio.h"
+#include "hpcio-buffer.h"
+#include "hpcfmt.h"
+#include "hpcrun-fmt.h"
 
-//****************************************************************************
+//*************************** Forward Declarations **************************
 
-namespace Analysis {
+#if defined(__cplusplus)
+extern "C" {
+#endif
 
-namespace Raw {
+//***************************************************************************
+// tracedb hdr
+//***************************************************************************
+#define HPCTRACEDB_FMT_Magic   "HPCPROF-tracedb___" //18 bytes
+#define HPCTRACEDB_FMT_Version 0                    //1  byte
+
+#define HPCTRACEDB_FMT_MagicLen   (sizeof(HPCTRACEDB_FMT_Magic) - 1)
+#define HPCTRACEDB_FMT_VersionLen 1 
+
+#define num_trace_SIZE 8
+#define HPCTRACEDB_FMT_HeaderLen  (HPCTRACEDB_FMT_MagicLen + HPCTRACEDB_FMT_VersionLen + num_trace_SIZE)
+
+typedef struct tracedb_hdr_t{
+  uint8_t version;
+}tracedb_hdr_t;
+
+int 
+tracedb_hdr_fwrite(FILE* fs);
+
+int
+tracedb_hdr_fread(tracedb_hdr_t* hdr, FILE* infs);
+
+int
+tracedb_hdr_fprint(tracedb_hdr_t* hdr, FILE* fs);
+
+//***************************************************************************
+// trace_hdr_t
+//***************************************************************************
+#define trace_hdr_SIZE 22
+
+typedef struct trace_hdr_t{
+  uint32_t prof_info_idx; 
+  uint16_t trace_idx;
+  uint64_t start;
+  uint64_t end;
+}trace_hdr_t;
+
+
+int 
+trace_hdr_fwrite(trace_hdr_t x, FILE* fs);
+
+int 
+trace_hdr_fread(trace_hdr_t* x, FILE* fs);
+
+int 
+trace_hdr_fprint(trace_hdr_t x, int i, FILE* fs);
+
+
+
+
+int 
+trace_hdrs_fwrite(uint64_t num_t,trace_hdr_t* x, FILE* fs);
+
+int 
+trace_hdrs_fread(trace_hdr_t** x, uint64_t num_t,FILE* fs);
+
+int 
+trace_hdrs_fprint(uint64_t num_t,trace_hdr_t* x, FILE* fs);
 
 void 
-writeAsText(/*destination,*/ const char* filenm, bool sm_easyToGrep);
-//YUMENG: second arg: if more flags, maybe build a struct to include all flags and pass the struct around
+trace_hdrs_free(trace_hdr_t** x);
 
-static inline void 
-writeAsText(/*destination,*/ const std::string& filenm)
-{ writeAsText(filenm.c_str()); }
+//***************************************************************************
+#if defined(__cplusplus)
+} /* extern "C" */
+#endif
 
-void
-writeAsText_callpath(/*destination,*/ const char* filenm, bool sm_easyToGrep);
-
-void
-writeAsText_sparseDBtmp(const char* filenm, bool sm_easyToGrep); //YUMENG
-
-bool 
-profileInfoOffsets_sorter(tms_profile_info_t const& lhs, tms_profile_info_t const& rhs);//YUMENG
-
-void
-sortProfileInfo_onOffsets(tms_profile_info_t* x, uint32_t num_prof);//YUMENG
-
-void
-writeAsText_sparseDBthread(const char* filenm, bool sm_easyToGrep); //YUMENG
-
-void
-writeAsText_sparseDBcct(const char* filenm, bool sm_easyToGrep); //YUMENG
-
-void
-writeAsText_tracedb(const char* filenm);
-
-void
-writeAsText_callpathMetricDB(/*destination,*/ const char* filenm);
-
-void
-writeAsText_callpathTrace(/*destination,*/ const char* filenm);
-
-void
-writeAsText_flat(/*destination,*/ const char* filenm);
-
-} // namespace Raw
-
-} // namespace Analysis
-
-//****************************************************************************
-
-#endif // Analysis_Raw_Raw_hpp
+#endif //TRACE_FMT_H
