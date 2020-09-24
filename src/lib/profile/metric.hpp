@@ -72,8 +72,8 @@ public:
   /// Set of identifiers unique to each Metric Scope that a Metric may have.
   struct ScopedIdentifiers final {
     unsigned int point;
-    unsigned int exclusive;
-    unsigned int inclusive;
+    unsigned int function;
+    unsigned int execution;
     unsigned int get(MetricScope s) const noexcept;
   };
 

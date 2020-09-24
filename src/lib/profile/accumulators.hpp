@@ -57,18 +57,20 @@ namespace hpctoolkit {
 /// rooted at a particular Context with Metric data.
 enum MetricScope {
   /// Encapsulates the current Context, and no other nodes. This references
-  /// exactly where the data arose, and is the smallest Scope.
+  /// exactly where the data arose, and is the smallest MetricScope.
   point,
 
-  /// Encapsulates the current Context and any direct children generated from
-  /// the same source code location. This represents the rough "cause" of the
-  /// data, and provides useful information on non-`point` Contexts.
-  exclusive,
+  /// Encapsulates the current Context and any decendants not connected by a
+  /// function-type Scope. This represents the cost of a function outside of
+  /// any child function calls.
+  /// Called "exclusive" in the Viewer.
+  function,
 
-  /// Encapsulates the current Context and its entire subtree. This represents
-  /// the entire execution contained within a single function call (or other
-  /// source code construct).
-  inclusive,
+  /// Encapsulates the current Context and all decendants. This represents
+  /// the entire execution spawned by a single source code construct, and is
+  /// the largest MetricScope.
+  /// Called "inclusive" in the Viewer.
+  execution,
 };
 
 /// Bitset-like object used as a set of Scope values.
@@ -95,7 +97,7 @@ public:
 /// Accumulator structure for the data implicitly bound to a Thread and Context.
 class MetricAccumulator final {
 public:
-  MetricAccumulator() : exclusive(0), inclusive(0) {};
+  MetricAccumulator() : function(0), execution(0) {};
 
   MetricAccumulator(const MetricAccumulator&) = delete;
   MetricAccumulator& operator=(const MetricAccumulator&) = delete;
@@ -114,14 +116,14 @@ private:
   void validate() const noexcept;
 
   friend class Metric;
-  std::atomic<double> exclusive;
-  double inclusive;
+  std::atomic<double> function;
+  double execution;
 };
 
 /// Accumulator structure for the Statistics implicitly bound to a Context.
 class StatisticAccumulator final {
 public:
-  StatisticAccumulator() : exclusive(0), inclusive(0) {};
+  StatisticAccumulator() : function(0), execution(0) {};
 
   StatisticAccumulator(const StatisticAccumulator&) = delete;
   StatisticAccumulator& operator=(const StatisticAccumulator&) = delete;
@@ -141,8 +143,8 @@ private:
 
   friend class Metric;
   // Currently only for :Sum Statistics
-  std::atomic<double> exclusive;
-  std::atomic<double> inclusive;
+  std::atomic<double> function;
+  std::atomic<double> execution;
 };
 
 }

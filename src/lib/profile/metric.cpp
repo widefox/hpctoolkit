@@ -60,54 +60,30 @@ static double atomic_add(std::atomic<double>& a, const double v) noexcept {
   return old;
 }
 
-static bool pullsExclusive(const Context& parent, const Context& child) {
-  switch(child.scope().type()) {
-  case Scope::Type::function:
-  case Scope::Type::inlined_function:
-  case Scope::Type::loop:
-    return false;
-  case Scope::Type::unknown:
-  case Scope::Type::point:
-    switch(parent.scope().type()) {
-    case Scope::Type::function:
-    case Scope::Type::inlined_function:
-    case Scope::Type::loop:
-      return true;
-    case Scope::Type::unknown:
-    case Scope::Type::point:
-    case Scope::Type::global:
-      return false;
-    }
-  case Scope::Type::global:
-    util::log::fatal{} << "Operation invalid for the global Context!";
-  }
-  std::abort();  // unreachable
-}
-
 unsigned int Metric::ScopedIdentifiers::get(MetricScope s) const noexcept {
   switch(s) {
   case MetricScope::point: return point;
-  case MetricScope::exclusive: return exclusive;
-  case MetricScope::inclusive: return inclusive;
+  case MetricScope::function: return function;
+  case MetricScope::execution: return execution;
   }
   util::log::fatal{} << "Invalid Metric::scope value!";
   std::abort();  // unreachable
 }
 
 MetricScopeSet Metric::scopes() const noexcept {
-  // For now, its always exclusive/inclusive
-  return MetricScopeSet(MetricScope::exclusive) + MetricScopeSet(MetricScope::inclusive);
+  // For now, its always function/execution
+  return MetricScopeSet(MetricScope::function) + MetricScopeSet(MetricScope::execution);
 }
 
 void StatisticAccumulator::add(MetricScope s, double v) noexcept {
   if(v == 0) util::log::warning{} << "Adding a 0-metric value!";
   switch(s) {
   case MetricScope::point: util::log::fatal{} << "TODO: Support point MetricScope!";
-  case MetricScope::exclusive:
-    atomic_add(exclusive, v);
+  case MetricScope::function:
+    atomic_add(function, v);
     return;
-  case MetricScope::inclusive:
-    atomic_add(inclusive, v);
+  case MetricScope::execution:
+    atomic_add(execution, v);
     return;
   }
   util::log::fatal{} << "Invalid MetricScope!";
@@ -115,7 +91,7 @@ void StatisticAccumulator::add(MetricScope s, double v) noexcept {
 
 void MetricAccumulator::add(double v) noexcept {
   if(v == 0) util::log::warning{} << "Adding a 0-metric value!";
-  atomic_add(exclusive, v);
+  atomic_add(function, v);
 }
 
 static stdshim::optional<double> opt0(double d) {
@@ -126,16 +102,16 @@ stdshim::optional<double> StatisticAccumulator::get(MetricScope s) const noexcep
   validate();
   switch(s) {
   case MetricScope::point: util::log::fatal{} << "TODO: Support point MetricScope!";
-  case MetricScope::exclusive: return opt0(exclusive.load(std::memory_order_relaxed));
-  case MetricScope::inclusive: return opt0(inclusive.load(std::memory_order_relaxed));
+  case MetricScope::function: return opt0(function.load(std::memory_order_relaxed));
+  case MetricScope::execution: return opt0(execution.load(std::memory_order_relaxed));
   };
   util::log::fatal{} << "Invalid MetricScope value!";
   std::abort();  // unreachable
 }
 
 void StatisticAccumulator::validate() const noexcept {
-  if(exclusive.load(std::memory_order_relaxed) != 0) return;
-  if(inclusive.load(std::memory_order_relaxed) != 0) return;
+  if(function.load(std::memory_order_relaxed) != 0) return;
+  if(execution.load(std::memory_order_relaxed) != 0) return;
   util::log::warning{} << "Returning a Statistic accumulator with no value!";
 }
 
@@ -149,16 +125,16 @@ stdshim::optional<double> MetricAccumulator::get(MetricScope s) const noexcept {
   validate();
   switch(s) {
   case MetricScope::point: util::log::fatal{} << "TODO: Support point Metric::Scope!";
-  case MetricScope::exclusive: return opt0(exclusive.load(std::memory_order_relaxed));
-  case MetricScope::inclusive: return opt0(inclusive);
+  case MetricScope::function: return opt0(function.load(std::memory_order_relaxed));
+  case MetricScope::execution: return opt0(execution);
   }
   util::log::fatal{} << "Invalid MetricScope value!";
   std::abort();  // unreachable
 }
 
 void MetricAccumulator::validate() const noexcept {
-  if(exclusive.load(std::memory_order_relaxed) != 0) return;
-  if(inclusive != 0) return;
+  if(function.load(std::memory_order_relaxed) != 0) return;
+  if(execution != 0) return;
   util::log::warning{} << "Returning a Metric accumulator with no value!";
 }
 
@@ -168,6 +144,34 @@ stdshim::optional<const MetricAccumulator&> Metric::getFor(const Thread::Tempora
   auto* md = cd->find(this);
   if(md == nullptr) return {};
   return *md;
+}
+
+static bool pullsFunction(const Context& parent, const Context& child) {
+  switch(child.scope().type()) {
+  // Function-type Scopes, and unknown (which could be a function)
+  case Scope::Type::function:
+  case Scope::Type::inlined_function:
+  case Scope::Type::unknown:
+    return false;
+  case Scope::Type::point:
+  case Scope::Type::loop:
+    switch(parent.scope().type()) {
+    // Function-type scopes, and unknown (which could be a function)
+    case Scope::Type::function:
+    case Scope::Type::inlined_function:
+    case Scope::Type::loop:
+    case Scope::Type::unknown:
+      return true;
+    case Scope::Type::point:
+    case Scope::Type::global:
+      return false;
+    }
+    break;
+  case Scope::Type::global:
+    util::log::fatal{} << "Operation invalid for the global Context!";
+    break;
+  }
+  std::abort();  // unreachable
 }
 
 void Metric::finalize(Thread::Temporary& t) noexcept {
@@ -204,7 +208,7 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
     md_t& data = t.data[c];
     // Handle the internal propagation first, so we don't get mixed up.
     for(auto& mx: data.iterate()) {
-      mx.second.inclusive = mx.second.exclusive.load(std::memory_order_relaxed);
+      mx.second.execution = mx.second.function.load(std::memory_order_relaxed);
     }
 
     auto ccit = children.find(c);
@@ -219,11 +223,11 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
       for(std::size_t i = 0; i < submds.size(); i++) {
         const Context* cc = ccit->second[i];
         const md_t& ccmd = submds[i];
-        const bool pullex = pullsExclusive(*c, *cc);
+        const bool pullex = pullsFunction(*c, *cc);
         for(const auto& mx: ccmd.citerate()) {
           auto& accum = data[mx.first];
-          if(pullex) atomic_add(accum.exclusive, mx.second.exclusive.load(std::memory_order_relaxed));
-          accum.inclusive += mx.second.inclusive;
+          if(pullex) atomic_add(accum.function, mx.second.function.load(std::memory_order_relaxed));
+          accum.execution += mx.second.execution;
         }
       }
     }
@@ -232,8 +236,8 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
     auto& cdata = const_cast<Context*>(c)->data;
     for(const auto& mx: data.citerate()) {
       auto& accum = cdata[mx.first];
-      atomic_add(accum.exclusive, mx.second.exclusive.load(std::memory_order_relaxed));
-      atomic_add(accum.inclusive, mx.second.inclusive);
+      atomic_add(accum.function, mx.second.function.load(std::memory_order_relaxed));
+      atomic_add(accum.execution, mx.second.execution);
     }
     return data;
   };

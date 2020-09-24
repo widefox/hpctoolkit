@@ -144,8 +144,8 @@ void IdPacker::Sink::notifyWavefront(DataClass ds) {
       const auto& ids = m().userdata[src.mscopeIdentifiers()];
       const auto& sc = m().scopes();
       pack(ct, (std::uint64_t)(sc.has(MetricScope::point) ? ids.point : -1));
-      pack(ct, (std::uint64_t)(sc.has(MetricScope::exclusive) ? ids.exclusive : -1));
-      pack(ct, (std::uint64_t)(sc.has(MetricScope::inclusive) ? ids.inclusive : -1));
+      pack(ct, (std::uint64_t)(sc.has(MetricScope::function) ? ids.function : -1));
+      pack(ct, (std::uint64_t)(sc.has(MetricScope::execution) ? ids.execution : -1));
       pack(ct, m().name());
     }
 
@@ -231,8 +231,8 @@ void IdUnpacker::unpack(ProfilePipeline::Source& sink) {
     auto id = ::unpack<std::uint64_t>(it);
     Metric::ScopedIdentifiers ids;
     ids.point = ::unpack<std::uint64_t>(it);
-    ids.exclusive = ::unpack<std::uint64_t>(it);
-    ids.inclusive = ::unpack<std::uint64_t>(it);
+    ids.function = ::unpack<std::uint64_t>(it);
+    ids.execution = ::unpack<std::uint64_t>(it);
     auto name = ::unpack<std::string>(it);
     metmap.insert({std::move(name), {id, ids}});
   }

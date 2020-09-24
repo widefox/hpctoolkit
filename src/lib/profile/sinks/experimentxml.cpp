@@ -173,15 +173,10 @@ void ExperimentXML::udFile::incr(ExperimentXML& exml) {
 
 ExperimentXML::udMetric::udMetric(const Metric& m, ExperimentXML& exml) {
   const auto& ids = m.userdata[exml.src.mscopeIdentifiers()];
-  inc_id = ids.inclusive;
-  ex_id = ids.exclusive;
-  // Every (for now, later will be most) metrics have an inclusive and
-  // exclusive side. So we write out two metrics as if that were still the
-  // case.
-  // A lot of this is still very indev as more data is ferried through the
-  // system as a whole.
-  if(!m.scopes().has(MetricScope::exclusive) || !m.scopes().has(MetricScope::inclusive))
-    util::log::fatal{} << "Metric isn't exclusive/inclusive!";
+  if(!m.scopes().has(MetricScope::function) || !m.scopes().has(MetricScope::execution))
+    util::log::fatal{} << "Metric isn't function/execution!";
+  inc_id = ids.execution;
+  ex_id = ids.function;
   std::ostringstream ss;
   ss << "<Metric i=\"" << inc_id << "\" o=\"" << inc_id << "\" "
                     "n=" << util::xmlquoted(m.name() + ":Sum (I)") << " "
@@ -439,13 +434,13 @@ void ExperimentXML::emitMetrics(const Context& c, bool ex) {
     auto& udm = mx.first->userdata[ud];
     const auto& v = mx.second;
     if(ex) {
-      auto vex = v.get(MetricScope::exclusive);
+      auto vex = v.get(MetricScope::function);
       if(vex)
         of << "<M n=\"" << udm.ex_id << "\" v=\""
           << std::scientific << *vex << std::defaultfloat
           << "\"/>\n";
     }
-    if(auto vinc = v.get(MetricScope::inclusive))
+    if(auto vinc = v.get(MetricScope::execution))
       of << "<M n=\"" << udm.inc_id << "\" v=\""
         << std::scientific << *vinc << std::defaultfloat
         << "\"/>\n";
