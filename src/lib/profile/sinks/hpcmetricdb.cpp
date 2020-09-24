@@ -53,6 +53,7 @@
 #include "experimentxml.hpp"
 #include "lib/prof-lean/hpcrun-fmt.h"
 
+#include <stack>
 #include <sstream>
 #include <iterator>
 #include <iomanip>
@@ -149,15 +150,20 @@ void HPCMetricDB::prepMetrics() noexcept {
 
 void HPCMetricDB::prepContexts() noexcept {
   std::map<unsigned int, std::reference_wrapper<const Context>> cs;
-  std::function<void(const Context&)> ctx = [&](const Context& c) {
+  std::stack<std::reference_wrapper<const Context>,
+             std::vector<std::reference_wrapper<const Context>>> stack;
+  stack.emplace(src.contexts());
+  while(!stack.empty()) {
+    const Context& c = stack.top();
+    stack.pop();
+
     auto id = c.userdata[src.identifier()];
     ctxMaxId = std::max(ctxMaxId, id);
     if(!cs.emplace(id, c).second)
       util::log::fatal() << "Duplicate Context identifier "
                          << c.userdata[src.identifier()] << "!";
-    for(const Context& cc: c.children().iterate()) ctx(cc);
-  };
-  ctx(src.contexts());
+    for(const Context& cc: c.children().iterate()) stack.emplace(cc);
+  }
 
   contexts.reserve(cs.size());
   for(const auto& ic: cs) contexts.emplace_back(ic.second);
