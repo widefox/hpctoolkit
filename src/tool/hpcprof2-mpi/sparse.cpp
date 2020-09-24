@@ -1115,7 +1115,7 @@ void SparseDB::writeThreadMajor(const int threads,
   // private variables:
   // profile_sizes: vector of profile's own size
   // prof_offsets:  vector of final global offset
-  // prof_idx_off_pairs:       vector of (profile's idx at prof_info section : the ptr to its id_tuple)  
+  // prof_idx_off_pairs: vector of (profile's idx at prof_info section : the ptr to its id_tuple)  
   // id_tuples_sec_size: number of bytes id_tuples section occupied
   //
 
@@ -1124,6 +1124,15 @@ void SparseDB::writeThreadMajor(const int threads,
                   MPI_MODE_CREATE | MPI_MODE_RDWR, MPI_INFO_NULL, &thread_major_f);
 
   id_tuples_sec_size = workIdTuplesSection(world_rank, world_size, threads, thread_major_f);
+
+  //TEMP: change prof_info_idx to thread's unique id to match trace.db, need a more integrated way after getting tuples
+  int i = 0;
+  for(const auto& tp: outputs.citerate()){
+    //if it's not summary
+    if(prof_idx_off_pairs[i].first != 0) prof_idx_off_pairs[i].first = tp.first->userdata[src.identifier()]+1;
+    i++;
+  }
+
   uint32_t total_prof = workProfSizesOffsets(world_rank, threads);
   assert(total_prof * TMS_prof_info_SIZE == prof_info_sec_size);
 

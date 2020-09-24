@@ -131,7 +131,7 @@ void HPCTraceDB2::notifyTimepoint(const Thread& t, const Context& c, std::chrono
         ud.trace_hdr.end
       };
       assert((hdr.start != (uint64_t)INVALID_HDR) | (hdr.end != (uint64_t)INVALID_HDR));
-      uint64_t off = ud.trace_hdr.prof_info_idx * trace_hdr_SIZE + HPCTRACEDB_FMT_HeaderLen;
+      uint64_t off = (ud.trace_hdr.prof_info_idx - 1) * trace_hdr_SIZE + HPCTRACEDB_FMT_HeaderLen;
       std::fseek(ud.trace_file, off, SEEK_SET);
       trace_hdr_fwrite(hdr, ud.trace_file);
     }
@@ -199,7 +199,7 @@ std::string HPCTraceDB2::exmlTag() {
         " db-glob=\"*." << HPCRUN_TraceFnmSfx << "\""
         " db-min-time=\"" << min.load(std::memory_order_relaxed).count() << "\""
         " db-max-time=\"" << max.load(std::memory_order_relaxed).count() << "\""
-        " db-header-sz=\"" << HPCTRACEDB_FMT_HeaderLen << "\""
+        " db-header-sz=\"" << HPCTRACE_FMT_HeaderLen << "\""
         " u=\"1000000000\"/>\n";
   return ss.str();
 }
@@ -211,7 +211,7 @@ void HPCTraceDB2::write() {};
 // trace_hdr
 //***************************************************************************
 HPCTraceDB2::traceHdr::traceHdr(const Thread& t, HPCTraceDB2& tdb)
-  : prof_info_idx(t.userdata[tdb.src.identifier()]) , 
+  : prof_info_idx(t.userdata[tdb.src.identifier()] + 1) , 
     trace_idx(0), start(INVALID_HDR), end(INVALID_HDR) {}
 
 uint64_t HPCTraceDB2::getTotalNumTraces() {
