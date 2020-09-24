@@ -161,6 +161,8 @@ std::vector<uint8_t>::const_iterator Packed::unpackMetrics(iter_t it, const ctx_
     for(Metric& m: metrics) {
       double v;
       if((v = unpack<double>(it)) != 0)
+        accum.add(m, MetricScope::point, v);
+      if((v = unpack<double>(it)) != 0)
         accum.add(m, MetricScope::function, v);
       if((v = unpack<double>(it)) != 0)
         accum.add(m, MetricScope::execution, v);

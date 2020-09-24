@@ -72,27 +72,24 @@ unsigned int Metric::ScopedIdentifiers::get(MetricScope s) const noexcept {
 }
 
 MetricScopeSet Metric::scopes() const noexcept {
-  // For now, its always function/execution
-  return MetricScopeSet(MetricScope::function) + MetricScopeSet(MetricScope::execution);
+  // For now, its always point/function/execution
+  return MetricScopeSet(MetricScope::point) +
+    MetricScopeSet(MetricScope::function) + MetricScopeSet(MetricScope::execution);
 }
 
 void StatisticAccumulator::add(MetricScope s, double v) noexcept {
   if(v == 0) util::log::warning{} << "Adding a 0-metric value!";
   switch(s) {
-  case MetricScope::point: util::log::fatal{} << "TODO: Support point MetricScope!";
-  case MetricScope::function:
-    atomic_add(function, v);
-    return;
-  case MetricScope::execution:
-    atomic_add(execution, v);
-    return;
+  case MetricScope::point: atomic_add(point, v); return;
+  case MetricScope::function: atomic_add(function, v); return;
+  case MetricScope::execution: atomic_add(execution, v); return;
   }
   util::log::fatal{} << "Invalid MetricScope!";
 }
 
 void MetricAccumulator::add(double v) noexcept {
   if(v == 0) util::log::warning{} << "Adding a 0-metric value!";
-  atomic_add(function, v);
+  atomic_add(point, v);
 }
 
 static stdshim::optional<double> opt0(double d) {
@@ -102,7 +99,7 @@ static stdshim::optional<double> opt0(double d) {
 stdshim::optional<double> StatisticAccumulator::get(MetricScope s) const noexcept {
   validate();
   switch(s) {
-  case MetricScope::point: util::log::fatal{} << "TODO: Support point MetricScope!";
+  case MetricScope::point: return opt0(point.load(std::memory_order_relaxed));
   case MetricScope::function: return opt0(function.load(std::memory_order_relaxed));
   case MetricScope::execution: return opt0(execution.load(std::memory_order_relaxed));
   };
@@ -111,6 +108,7 @@ stdshim::optional<double> StatisticAccumulator::get(MetricScope s) const noexcep
 }
 
 void StatisticAccumulator::validate() const noexcept {
+  if(point.load(std::memory_order_relaxed) != 0) return;
   if(function.load(std::memory_order_relaxed) != 0) return;
   if(execution.load(std::memory_order_relaxed) != 0) return;
   util::log::warning{} << "Returning a Statistic accumulator with no value!";
@@ -125,8 +123,8 @@ stdshim::optional<const StatisticAccumulator&> Metric::getFor(const Context& c) 
 stdshim::optional<double> MetricAccumulator::get(MetricScope s) const noexcept {
   validate();
   switch(s) {
-  case MetricScope::point: util::log::fatal{} << "TODO: Support point Metric::Scope!";
-  case MetricScope::function: return opt0(function.load(std::memory_order_relaxed));
+  case MetricScope::point: return opt0(point.load(std::memory_order_relaxed));
+  case MetricScope::function: return opt0(function);
   case MetricScope::execution: return opt0(execution);
   }
   util::log::fatal{} << "Invalid MetricScope value!";
@@ -134,7 +132,8 @@ stdshim::optional<double> MetricAccumulator::get(MetricScope s) const noexcept {
 }
 
 void MetricAccumulator::validate() const noexcept {
-  if(function.load(std::memory_order_relaxed) != 0) return;
+  if(point.load(std::memory_order_relaxed) != 0) return;
+  if(function != 0) return;
   if(execution != 0) return;
   util::log::warning{} << "Returning a Metric accumulator with no value!";
 }
@@ -235,7 +234,8 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
     md_t& data = t.data[&c];
     // Handle the internal propagation first, so we don't get mixed up.
     for(auto& mx: data.iterate()) {
-      mx.second.execution = mx.second.function.load(std::memory_order_relaxed);
+      mx.second.execution = mx.second.function
+                          = mx.second.point.load(std::memory_order_relaxed);
     }
 
     // Go through our children and sum into our bits
@@ -245,7 +245,7 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
       const bool pullfunc = pullsFunction(c, cc);
       for(const auto& mx: ccmd.citerate()) {
         auto& accum = data[mx.first];
-        if(pullfunc) atomic_add(accum.function, mx.second.function.load(std::memory_order_relaxed));
+        if(pullfunc) accum.function += mx.second.function;
         accum.execution += mx.second.execution;
       }
     }
@@ -254,7 +254,8 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
     auto& cdata = const_cast<Context&>(c).data;
     for(const auto& mx: data.citerate()) {
       auto& accum = cdata[mx.first];
-      atomic_add(accum.function, mx.second.function.load(std::memory_order_relaxed));
+      atomic_add(accum.point, mx.second.point.load(std::memory_order_relaxed));
+      atomic_add(accum.function, mx.second.function);
       atomic_add(accum.execution, mx.second.execution);
     }
 

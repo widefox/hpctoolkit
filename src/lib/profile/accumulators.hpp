@@ -97,7 +97,7 @@ public:
 /// Accumulator structure for the data implicitly bound to a Thread and Context.
 class MetricAccumulator final {
 public:
-  MetricAccumulator() : function(0), execution(0) {};
+  MetricAccumulator() : point(0), function(0), execution(0) {};
 
   MetricAccumulator(const MetricAccumulator&) = delete;
   MetricAccumulator& operator=(const MetricAccumulator&) = delete;
@@ -116,14 +116,15 @@ private:
   void validate() const noexcept;
 
   friend class Metric;
-  std::atomic<double> function;
+  std::atomic<double> point;
+  double function;
   double execution;
 };
 
 /// Accumulator structure for the Statistics implicitly bound to a Context.
 class StatisticAccumulator final {
 public:
-  StatisticAccumulator() : function(0), execution(0) {};
+  StatisticAccumulator() : point(0), function(0), execution(0) {};
 
   StatisticAccumulator(const StatisticAccumulator&) = delete;
   StatisticAccumulator& operator=(const StatisticAccumulator&) = delete;
@@ -143,6 +144,7 @@ private:
 
   friend class Metric;
   // Currently only for :Sum Statistics
+  std::atomic<double> point;
   std::atomic<double> function;
   std::atomic<double> execution;
 };

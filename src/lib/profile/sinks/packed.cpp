@@ -136,9 +136,11 @@ void Packed::packMetrics(std::vector<std::uint8_t>& out) noexcept {
     pack(out, (std::uint64_t)c.userdata[src.identifier()]);
     for(const Metric& m: metrics) {
       if(auto v = m.getFor(c)) {
+        pack(out, (double)v->get(MetricScope::point).value_or(0));
         pack(out, (double)v->get(MetricScope::function).value_or(0));
         pack(out, (double)v->get(MetricScope::execution).value_or(0));
       } else {
+        pack(out, (double)0);
         pack(out, (double)0);
         pack(out, (double)0);
       }
