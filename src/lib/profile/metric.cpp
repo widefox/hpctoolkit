@@ -49,6 +49,7 @@
 #include "context.hpp"
 #include "attributes.hpp"
 
+#include <stack>
 #include <thread>
 #include <ostream>
 
@@ -201,47 +202,65 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
       newContexts = std::move(next);
     }
   }
+  if(global == nullptr) return;  // Apparently there's nothing to propagate
 
   // Now that the critical subtree is built, recursively propagate up.
   using md_t = util::locked_unordered_map<const Metric*, MetricAccumulator>;
-  std::function<const md_t&(const Context*)> propagate = [&](const Context* c) -> const md_t&{
-    md_t& data = t.data[c];
+  struct frame_t {
+    frame_t(const Context& c) : ctx(c) {};
+    frame_t(const Context& c, std::vector<const Context*>& v)
+      : ctx(c), here(v.cbegin()), end(v.cend()) {};
+    const Context& ctx;
+    std::vector<const Context*>::const_iterator here;
+    std::vector<const Context*>::const_iterator end;
+    std::vector<std::pair<std::reference_wrapper<const Context>,
+                          std::reference_wrapper<const md_t>>> submds;
+  };
+  std::stack<frame_t, std::vector<frame_t>> stack;
+
+  // Post-order in-memory tree traversal
+  stack.emplace(*global, children.at(global));
+  while(!stack.empty()) {
+    if(stack.top().here != stack.top().end) {
+      // This frame still has children to handle
+      const Context* c = *stack.top().here;
+      auto ccit = children.find(c);
+      ++stack.top().here;
+      if(ccit == children.end()) stack.emplace(*c);
+      else stack.emplace(*c, ccit->second);
+      continue;  // We'll come back eventually
+    }
+
+    const Context& c = stack.top().ctx;
+    md_t& data = t.data[&c];
     // Handle the internal propagation first, so we don't get mixed up.
     for(auto& mx: data.iterate()) {
       mx.second.execution = mx.second.function.load(std::memory_order_relaxed);
     }
 
-    auto ccit = children.find(c);
-    if(ccit != children.end()) {
-      // First recurse and ensure the values for our children are prepped.
-      // Remember the pointer for each child's metric data.
-      std::vector<std::reference_wrapper<const md_t>> submds;
-      submds.reserve(ccit->second.size());
-      for(const Context* cc: ccit->second) submds.push_back(propagate(cc));
-
-      // Then go through each and sum into our bits
-      for(std::size_t i = 0; i < submds.size(); i++) {
-        const Context* cc = ccit->second[i];
-        const md_t& ccmd = submds[i];
-        const bool pullex = pullsFunction(*c, *cc);
-        for(const auto& mx: ccmd.citerate()) {
-          auto& accum = data[mx.first];
-          if(pullex) atomic_add(accum.function, mx.second.function.load(std::memory_order_relaxed));
-          accum.execution += mx.second.execution;
-        }
+    // Go through our children and sum into our bits
+    for(std::size_t i = 0; i < stack.top().submds.size(); i++) {
+      const Context& cc = stack.top().submds[i].first;
+      const md_t& ccmd = stack.top().submds[i].second;
+      const bool pullfunc = pullsFunction(c, cc);
+      for(const auto& mx: ccmd.citerate()) {
+        auto& accum = data[mx.first];
+        if(pullfunc) atomic_add(accum.function, mx.second.function.load(std::memory_order_relaxed));
+        accum.execution += mx.second.execution;
       }
     }
 
     // Now that our bits are stable, accumulate back into the Statistics
-    auto& cdata = const_cast<Context*>(c)->data;
+    auto& cdata = const_cast<Context&>(c).data;
     for(const auto& mx: data.citerate()) {
       auto& accum = cdata[mx.first];
       atomic_add(accum.function, mx.second.function.load(std::memory_order_relaxed));
       atomic_add(accum.execution, mx.second.execution);
     }
-    return data;
-  };
-  propagate(global);
+
+    stack.pop();
+    if(!stack.empty()) stack.top().submds.emplace_back(c, data);
+  }
 }
 
 std::size_t std::hash<Metric::Settings>::operator()(const Metric::Settings &s) const noexcept {
