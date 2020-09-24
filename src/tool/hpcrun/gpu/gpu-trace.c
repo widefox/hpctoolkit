@@ -368,9 +368,11 @@ gpu_compute_profile_name
 
   id_tuple_push_back(&id_tuple, IDTUPLE_NODE, gethostid());
 
+#if 0
   if (tag.device_id != IDTUPLE_INVALID) {
     id_tuple_push_back(&id_tuple, IDTUPLE_GPUDEVICE, tag.device_id);
   }
+#endif
 
   int rank = hpcrun_get_rank();
   if (rank >= 0) id_tuple_push_back(&id_tuple, IDTUPLE_RANK, rank);
