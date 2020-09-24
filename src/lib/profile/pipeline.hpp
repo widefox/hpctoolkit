@@ -96,7 +96,8 @@ protected:
     SinkEntry(SinkEntry&& o)
       : dataLimit(o.dataLimit), waveLimit(o.waveLimit),
         extensionLimit(o.extensionLimit), sink(o.sink),
-        wavefrontDeps(o.wavefrontDeps.load(std::memory_order_relaxed)) {
+        wavefrontDeps(o.wavefrontDeps.load(std::memory_order_relaxed)),
+        wavefrontRDeps(std::move(o.wavefrontRDeps)) {
       wavefrontSelfDep.clear(std::memory_order_relaxed);
     }
 
