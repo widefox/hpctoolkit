@@ -204,8 +204,10 @@ ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
   tags = ss.str();
 
   std::ostringstream ss2;
-  ss2 << "<MetricDB i=\"" << m.userdata[exml.src.identifier()] << "\""
-                  " n=" << util::xmlquoted(m.name()) << "/>\n";
+  ss2 << "<MetricDB i=\"" << inc_id << "\""
+                  " n=" << util::xmlquoted(m.name()+" (I)") << "/>\n"
+         "<MetricDB i=\"" << ex_id << "\""
+                  " n=" << util::xmlquoted(m.name()+" (E)") << "/>\n";
   tag = ss2.str();
 }
 
