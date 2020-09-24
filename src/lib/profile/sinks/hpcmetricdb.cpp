@@ -107,14 +107,14 @@ void HPCMetricDB::notifyPipeline() noexcept {
 }
 
 std::string HPCMetricDB::exmlTag() {
-  auto nmets = src.metrics().size() * 2;
+  auto nmets = src.metrics().size() * 3;
   if(nmets == 0) return "<MetricDBTable/>";
   std::ostringstream ss;
   ss << "<MetricDBTable>";
 
   // These have to appear in the same order as the ids, for whatever reason.
   // So we collect the string pointers into a vector first.
-  std::vector<const std::string*> strs(src.metrics().size() * 2, nullptr);
+  std::vector<const std::string*> strs(src.metrics().size() * 3, nullptr);
   for(const auto& m: src.metrics().iterate()) {
     auto& ud = m().userdata[ud_metric];
     const auto& ids = m().userdata[src.mscopeIdentifiers()];
@@ -122,7 +122,8 @@ std::string HPCMetricDB::exmlTag() {
     strs.at(ids.execution) = &ud.inc_open;
   }
   for(const auto& sp: strs)
-    ss << *sp << " db-num-metrics=\"" << nmets << "\"/>";
+    if(sp)
+      ss << *sp << " db-num-metrics=\"" << nmets << "\"/>";
 
   ss << "</MetricDBTable>";
   return ss.str();
