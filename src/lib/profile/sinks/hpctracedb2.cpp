@@ -76,20 +76,12 @@ HPCTraceDB2::HPCTraceDB2(const stdshim::filesystem::path& p)
 }
 
 HPCTraceDB2::udThread::udThread(const Thread& t, HPCTraceDB2& tdb)
-  : uds(tdb.uds), file(nullptr), has_trace(false),
+  : uds(tdb.uds), has_trace(false),
     minTime(std::chrono::nanoseconds::max()),
     maxTime(std::chrono::nanoseconds::min()),
+    trace_file(nullptr),
     trace_hdr(traceHdr(t, tdb)),
-    tmcntr(0) {
-  std::ostringstream ss;
-  ss << std::setfill('0') << "experiment"
-        "-" << std::setw(6) << t.attributes.mpirank().value_or(0)
-     << "-" << std::setw(3) << t.attributes.threadid().value()
-     << "-" << std::setw(8) << std::hex << t.attributes.hostid().value() << std::dec
-     << "-" << t.attributes.procid().value()
-     << "-0." << HPCRUN_TraceFnmSfx;
-  path = tdb.dir / ss.str();
-}
+    tmcntr(0) {}
 
 void HPCTraceDB2::notifyWavefront(DataClass){
   //assign value to trace_hdrs_size
@@ -99,21 +91,16 @@ void HPCTraceDB2::notifyWavefront(DataClass){
   //calculate the offsets for later stored in start and end
   std::vector<uint64_t> trace_offs = calcStartEnd();
   
-  //create the hdrs
+  //assign the values of the hdrs
   assignHdrs(trace_offs);
 
-  //open the trace.db for writing
+  //open the trace.db for writing, and write magic string, version number and number of tracelines
   if(mpi::World::rank() == 0) {
       std::FILE* trace_f = std::fopen(trace_p.c_str(), "wb");
       if(!trace_f) util::log::fatal() << "Unable to open trace.db file for output!";
       tracedb_hdr_fwrite(trace_f);
       hpcfmt_int8_fwrite(num_traces, trace_f);
       std::fclose(trace_f);
-  }
-
-  for(const auto& t:src.threads().iterate()){
-      auto& ud = t->userdata[uds.thread];
-      printf("(%d: %d-%d)", ud.trace_hdr.prof_info_idx, ud.trace_hdr.start, ud.trace_hdr.end);
   }
 
 }
@@ -128,34 +115,25 @@ void HPCTraceDB2::notifyTimepoint(const Thread& t, const Context& c, std::chrono
     has_traces.exchange(true, std::memory_order_relaxed);
     ud.has_trace = true;
     if(!dir.empty()) {
+      //open the file
       ud.trace_file = std::fopen(trace_p.c_str(), "rb+");
       if(!ud.trace_file){
         char buf[1024];
         char* err = strerror_r(errno, buf, sizeof buf);
         util::log::fatal() << "Unable to open trace file for output: " << err << "!";
       } 
-      //new version
+    
+      //write the hdr
       trace_hdr_t hdr = {
         ud.trace_hdr.prof_info_idx,
         ud.trace_hdr.trace_idx,
         ud.trace_hdr.start,
         ud.trace_hdr.end
       };
-      long off = ud.trace_hdr.prof_info_idx * trace_hdr_SIZE + HPCTRACEDB_FMT_HeaderLen;
-      if(ud.trace_hdr.start == -1) printf("HERE\n");
-      //printf("(%d: %d, %d-%d)", ud.trace_hdr.prof_info_idx, off, ud.trace_hdr.start, ud.trace_hdr.end);
+      assert((hdr.start != (uint64_t)INVALID_HDR) | (hdr.end != (uint64_t)INVALID_HDR));
+      uint64_t off = ud.trace_hdr.prof_info_idx * trace_hdr_SIZE + HPCTRACEDB_FMT_HeaderLen;
       std::fseek(ud.trace_file, off, SEEK_SET);
       trace_hdr_fwrite(hdr, ud.trace_file);
-      
-      
-      //old version, keep for compare correctness now
-      ud.file = std::fopen(ud.path.c_str(), "wb");
-      if(!ud.file) {
-        char buf[1024];
-        char* err = strerror_r(errno, buf, sizeof buf);
-        util::log::fatal() << "Unable to open trace file for output: " << err << "!";
-      }
-      hpctrace_fmt_hdr_fwrite({0}, ud.file);
     }
   }
 
@@ -166,16 +144,20 @@ void HPCTraceDB2::notifyTimepoint(const Thread& t, const Context& c, std::chrono
     c.userdata[src.identifier()],  // Point in the CCT
     0  // MetricID (for datacentric, I guess)
   };
-  //if(!dir.empty())
-    //hpctrace_fmt_datum_fwrite(&datum, {0}, ud.file);
-
-  
+  if(!dir.empty()){
+    uint64_t off = ud.trace_hdr.start + ud.tmcntr * timepoint_SIZE;
+    assert(off < ud.trace_hdr.end);
+    std::fseek(ud.trace_file, off, SEEK_SET);
+    hpctrace_fmt_datum_fwrite(&datum, {0}, ud.trace_file);
+    ud.tmcntr++;
+  }
+    
 }
 
 void HPCTraceDB2::notifyThreadFinal(const Thread::Temporary& tt) {
   auto& ud = tt.thread().userdata[uds.thread];
-  if(ud.file) std::fclose(ud.file);
-  ud.file = nullptr;
+  if(ud.trace_file) std::fclose(ud.trace_file);
+  ud.trace_file = nullptr;
 }
 
 void HPCTraceDB2::notifyPipeline() noexcept {
@@ -217,7 +199,7 @@ std::string HPCTraceDB2::exmlTag() {
         " db-glob=\"*." << HPCRUN_TraceFnmSfx << "\""
         " db-min-time=\"" << min.load(std::memory_order_relaxed).count() << "\""
         " db-max-time=\"" << max.load(std::memory_order_relaxed).count() << "\""
-        " db-header-sz=\"" << HPCTRACE_FMT_HeaderLen << "\""
+        " db-header-sz=\"" << HPCTRACEDB_FMT_HeaderLen << "\""
         " u=\"1000000000\"/>\n";
   return ss.str();
 }
@@ -229,10 +211,8 @@ void HPCTraceDB2::write() {};
 // trace_hdr
 //***************************************************************************
 HPCTraceDB2::traceHdr::traceHdr(const Thread& t, HPCTraceDB2& tdb)
-  : prof_info_idx(t.userdata[tdb.src.identifier()]) , trace_idx(0), start(-1) {}
-
-HPCTraceDB2::traceHdr::traceHdr()
-  : prof_info_idx(INVALID_HDR) , trace_idx(0) {}
+  : prof_info_idx(t.userdata[tdb.src.identifier()]) , 
+    trace_idx(0), start(INVALID_HDR), end(INVALID_HDR) {}
 
 uint64_t HPCTraceDB2::getTotalNumTraces() {
   uint64_t rank_num_traces = src.threads().size();

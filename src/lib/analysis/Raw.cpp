@@ -168,17 +168,26 @@ Analysis::Raw::writeAsText_sparseDBtmp(const char* filenm, bool sm_easyToGrep)
   }
 }
 
-//YUMENG
 bool 
 Analysis::Raw::profileInfoOffsets_sorter(tms_profile_info_t const& lhs, tms_profile_info_t const& rhs) {
     return lhs.offset< rhs.offset;
 }
 
-//YUMENG
+bool 
+Analysis::Raw::traceHdr_sorter(trace_hdr_t const& lhs, trace_hdr_t const& rhs) {
+    return lhs.start< rhs.start;
+}
+
 void
 Analysis::Raw::sortProfileInfo_onOffsets(tms_profile_info_t* x, uint32_t num_prof)
 {
     std::sort(x,x+num_prof,&profileInfoOffsets_sorter);
+}
+
+void
+Analysis::Raw::sortTraceHdrs_onStarts(trace_hdr_t* x, uint64_t num_t)
+{
+    std::sort(x,x+num_t,&traceHdr_sorter);
 }
 
 //YUMENG
@@ -329,23 +338,20 @@ Analysis::Raw::writeAsText_tracedb(const char* filenm)
       DIAG_Throw("error reading trace hdrs from tracedb file '" << filenm << "'");
     }
     trace_hdrs_fprint(num_t, x, stdout);
-/*
-    for(uint i = 0; i<num_ctx; i++){
-      if(x[i].num_vals != 0){
-        cct_sparse_metrics_t csm;
-        csm.ctx_id = x[i].ctx_id;
-        csm.num_vals = x[i].num_vals;
-        csm.num_nzmids = x[i].num_nzmids;
-        ret = cms_sparse_metrics_fread(&csm,fs);
-        if (ret != HPCFMT_OK) {
-          DIAG_Throw("error reading cct data from sparse metrics file '" << filenm << "'");
-        }
-        cms_sparse_metrics_fprint(&csm,stdout, "  ", easygrep);
-        cms_sparse_metrics_free(&csm);
+
+    sortTraceHdrs_onStarts(x, num_t); 
+    for(uint i = 0; i<num_t; i++){
+      uint64_t start = x[i].start;
+      uint64_t end = x[i].end;
+      hpctrace_fmt_datum_t* trace_data;
+      ret = tracedb_data_fread(&trace_data, (end-start)/timepoint_SIZE, {0}, fs);
+      if (ret != HPCFMT_OK) {
+        DIAG_Throw("error reading trace data from tracedb file '" << filenm << "'");
       }
-      
+      tracedb_data_fprint(trace_data, (end-start)/timepoint_SIZE, x[i].prof_info_idx, {0}, stdout);
+      tracedb_data_free(&trace_data);
     }
-*/
+
     trace_hdrs_free(&x);
     hpcio_fclose(fs);
   }

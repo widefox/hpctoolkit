@@ -103,7 +103,6 @@ private:
   class traceHdr {
   public:
     traceHdr(const Thread&, HPCTraceDB2& tdb);
-    traceHdr();
     ~traceHdr() = default;
 
     uint32_t prof_info_idx;
@@ -127,8 +126,6 @@ private:
     ~udThread() = default;
 
     struct uds& uds;
-    stdshim::filesystem::path path;
-    std::FILE* file;
     bool has_trace;
     std::chrono::nanoseconds minTime;
     std::chrono::nanoseconds maxTime;
@@ -148,16 +145,13 @@ private:
   //***************************************************************************
   // trace_hdr
   //***************************************************************************
-  #define timepoint_SIZE 12
   #define INVALID_HDR    -1
 
-  util::locked_unordered_map<uint32_t, traceHdr> trace_hdrs;
   uint64_t trace_hdrs_size;
 
   uint64_t getTotalNumTraces(); 
   std::vector<uint64_t> calcStartEnd();
   void assignHdrs(const std::vector<uint64_t>& trace_offs);
-
 
   template <typename T>
   void exscan(std::vector<T>& data);

@@ -132,6 +132,21 @@ void
 trace_hdrs_free(trace_hdr_t** x);
 
 //***************************************************************************
+// hpctrace_fmt_datum_t in tracedb
+//***************************************************************************
+#define timepoint_SIZE 12
+
+int
+tracedb_data_fread(hpctrace_fmt_datum_t** x, uint64_t num_datum, hpctrace_hdr_flags_t flags,FILE* fs);
+
+int
+tracedb_data_fprint(hpctrace_fmt_datum_t* x, uint64_t num_datum, uint32_t prof_info_idx, 
+                    hpctrace_hdr_flags_t flags,FILE* fs);
+
+void
+tracedb_data_free(hpctrace_fmt_datum_t** x);
+
+//***************************************************************************
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

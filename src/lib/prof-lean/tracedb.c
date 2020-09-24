@@ -206,3 +206,41 @@ trace_hdrs_free(trace_hdr_t** x)
   free(*x);
   *x = NULL;
 }
+
+
+//***************************************************************************
+// hpctrace_fmt_datum_t in tracedb (for one profile's trace)
+//***************************************************************************
+int
+tracedb_data_fread(hpctrace_fmt_datum_t** x, uint64_t num_datum, hpctrace_hdr_flags_t flags,FILE* fs)
+{
+  *x = (hpctrace_fmt_datum_t *) malloc(num_datum * sizeof(hpctrace_fmt_datum_t));
+  
+  for (uint64_t i = 0; i < num_datum; ++i) {
+    hpctrace_fmt_datum_fread(*x+i, flags, fs);
+  }
+
+  //*x = trace_data;
+  return HPCFMT_OK;
+
+}
+
+int
+tracedb_data_fprint(hpctrace_fmt_datum_t* x, uint64_t num_datum, uint32_t prof_info_idx, hpctrace_hdr_flags_t flags,FILE* fs)
+{
+  fprintf(fs,"[Trace %d:\n", prof_info_idx);
+
+  for (uint64_t i = 0; i < num_datum; ++i) {
+    printf("  ");
+    hpctrace_fmt_datum_fprint(&(x[i]), flags, fs);
+  }
+  fprintf(fs,"]\n");
+  return HPCFMT_OK;
+}
+
+void
+tracedb_data_free(hpctrace_fmt_datum_t** x)
+{
+  free(*x);
+  *x = NULL;
+}
