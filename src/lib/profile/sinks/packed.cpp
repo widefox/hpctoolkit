@@ -111,19 +111,7 @@ void Packed::packReferences(std::vector<std::uint8_t>& out) noexcept {
 }
 
 void Packed::packContexts(std::vector<std::uint8_t>& out) noexcept {
-  // Mostly pre-order in-memory tree traversal (with reversed children)
-  std::stack<const Context*, std::vector<const Context*>> stack;
-  stack.emplace(&src.contexts());
-  while(!stack.empty()) {
-    if(stack.top() == nullptr) {
-      // Post-order
-      pack(out, (std::uint64_t)0xFEF1F0F3ULL << 32);
-      stack.pop();
-      continue;
-    }
-    const Context& c = *stack.top();
-    stack.top() = nullptr;  // For the post-order
-
+  src.contexts().citerate([&](const Context& c){
     if(c.scope().type() == Scope::Type::point) {
       // Format: [module id] [offset] children... [sentinal]
       auto mo = c.scope().point_data();
@@ -135,9 +123,9 @@ void Packed::packContexts(std::vector<std::uint8_t>& out) noexcept {
     } else if(c.scope().type() == Scope::Type::global) {
       // Format: children... [sentinal]
     } else util::log::fatal() << "Unhandled Scope type encountered in Packed!";
-    for(const auto& cc: c.children().iterate())
-      stack.emplace(&cc());
-  }
+  }, [&](const Context& c){
+    pack(out, (std::uint64_t)0xFEF1F0F3ULL << 32);
+  });
 }
 
 void Packed::packMetrics(std::vector<std::uint8_t>& out) noexcept {
@@ -145,13 +133,7 @@ void Packed::packMetrics(std::vector<std::uint8_t>& out) noexcept {
   auto start = out.size();
   std::uint64_t cnt = 0;
   pack(out, cnt);
-  std::stack<std::reference_wrapper<const Context>,
-             std::vector<std::reference_wrapper<const Context>>> stack;
-  stack.emplace(src.contexts());
-  while(!stack.empty()) {
-    const Context& c = stack.top();
-    stack.pop();
-
+  src.contexts().citerate([&](const Context& c){
     pack(out, (std::uint64_t)c.userdata[src.identifier()]);
     for(const Metric& m: metrics) {
       if(auto v = m.getFor(c)) {
@@ -165,8 +147,7 @@ void Packed::packMetrics(std::vector<std::uint8_t>& out) noexcept {
       }
     }
     cnt++;
-    for(const auto& cc: c.children().iterate()) stack.emplace(cc());
-  }
+  }, nullptr);
   // Skip back and overwrite the beginning.
   std::vector<std::uint8_t> tmp;
   pack(tmp, cnt);

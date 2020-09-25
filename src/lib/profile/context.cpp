@@ -67,31 +67,68 @@ Context::~Context() noexcept {
   // C++ generates a recursive algorithm for this by default
   // So we replace it with a post-order tree traversal
   try {
-    struct frame_t {
-      frame_t(Context& c)
-        : ctx(c), iter(c.children_p->iterate()),
-          here(iter.begin()), end(iter.end()) {};
-      Context& ctx;
-      using iter_t = decltype(children_p->iterate());
-      iter_t iter;
-      decltype(iter.begin()) here;
-      decltype(iter.end()) end;
-    };
-    std::stack<frame_t, std::vector<frame_t>> stack;
-    if(children_p) stack.emplace(*this);
-    while(!stack.empty()) {
-      if(stack.top().here != stack.top().end) {
-        // We have more children to handle
-        Context& c = *stack.top().here++;
-        if(c.children_p) stack.emplace(c);
-        continue;
-      }
-
-      Context& c = stack.top().ctx;
-      stack.pop();
-      c.children_p.reset(nullptr);
-    }
+    iterate(nullptr, [](Context& c) { c.children_p.reset(nullptr); });
   } catch(...) {};  // If we run into errors, just let the recursion handle it.
+}
+
+void Context::iterate(const std::function<void(Context&)>& pre,
+                      const std::function<void(Context&)>& post) {
+  struct frame_t {
+    frame_t(Context& c)
+      : ctx(c), iter(c.children_p->iterate()),
+        here(iter.begin()), end(iter.end()) {};
+    Context& ctx;
+    using iter_t = decltype(children_p->iterate());
+    iter_t iter;
+    decltype(iter.begin()) here;
+    decltype(iter.end()) end;
+  };
+  std::stack<frame_t, std::vector<frame_t>> stack;
+  if(pre) pre(*this);
+  if(children_p) stack.emplace(*this);
+  while(!stack.empty()) {
+    if(stack.top().here != stack.top().end) {
+      // We have more children to handle
+      Context& c = *stack.top().here++;
+      if(pre) pre(c);
+      if(c.children_p) stack.emplace(c);
+      continue;
+    }
+
+    Context& c = stack.top().ctx;
+    stack.pop();
+    if(post) post(c);
+  }
+}
+
+void Context::citerate(const std::function<void(const Context&)>& pre,
+                       const std::function<void(const Context&)>& post) const {
+  struct frame_t {
+    frame_t(const Context& c)
+      : ctx(c), iter(c.children_p->citerate()),
+        here(iter.begin()), end(iter.end()) {};
+    const Context& ctx;
+    using iter_t = decltype(children_p->citerate());
+    iter_t iter;
+    decltype(iter.begin()) here;
+    decltype(iter.end()) end;
+  };
+  std::stack<frame_t, std::vector<frame_t>> stack;
+  if(pre) pre(*this);
+  if(children_p) stack.emplace(*this);
+  while(!stack.empty()) {
+    if(stack.top().here != stack.top().end) {
+      // We have more children to handle
+      const Context& c = *stack.top().here++;
+      if(pre) pre(c);
+      if(c.children_p) stack.emplace(c);
+      continue;
+    }
+
+    const Context& c = stack.top().ctx;
+    stack.pop();
+    if(post) post(c);
+  }
 }
 
 std::pair<Context&,bool> Context::ensure(Scope&& s) {

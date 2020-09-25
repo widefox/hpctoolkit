@@ -93,6 +93,13 @@ public:
   const util::locked_unordered_map<const Metric*, StatisticAccumulator>&
   statistics() const noexcept { return data; }
 
+  /// Traverse the subtree rooted at this Context.
+  // MT: Safe (const), Unstable (before `contexts` wavefront)
+  void iterate(const std::function<void(Context&)>& pre,
+               const std::function<void(Context&)>& post);
+  void citerate(const std::function<void(const Context&)>& pre,
+                const std::function<void(const Context&)>& post) const;
+
 private:
   std::unique_ptr<children_t> children_p;
 

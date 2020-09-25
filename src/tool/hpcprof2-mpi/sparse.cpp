@@ -88,21 +88,13 @@ void SparseDB::notifyWavefront(DataClass ds) noexcept {
 
 void SparseDB::prepContexts() noexcept {
   std::map<unsigned int, std::reference_wrapper<const Context>> cs;
-  std::stack<std::reference_wrapper<const Context>,
-             std::vector<std::reference_wrapper<const Context>>> stack;
-  stack.emplace(src.contexts());
-  while(!stack.empty()) {
-    const Context& c = stack.top();
-    stack.pop();
-
+  src.contexts().citerate([&](const Context& c){
     auto id = c.userdata[src.identifier()];
     ctxMaxId = std::max(ctxMaxId, id);
     if(!cs.emplace(id, c).second)
       util::log::fatal() << "Duplicate Context identifier "
                          << c.userdata[src.identifier()] << "!";
-    for(const Context& cc: c.children().iterate())
-      stack.emplace(cc);
-  }
+  }, nullptr);
 
   contexts.reserve(cs.size());
   for(const auto& ic: cs) contexts.emplace_back(ic.second);
