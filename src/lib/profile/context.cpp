@@ -49,7 +49,9 @@
 #include "module.hpp"
 #include "metric.hpp"
 
+#include <stack>
 #include <stdexcept>
+#include <vector>
 
 using namespace hpctoolkit;
 
@@ -60,6 +62,37 @@ Context::Context(Context&& c)
   : userdata(std::move(c.userdata), std::ref(*this)),
     children_p(new children_t()),
     u_parent(c.direct_parent()), u_scope(c.scope()) {};
+
+Context::~Context() noexcept {
+  // C++ generates a recursive algorithm for this by default
+  // So we replace it with a post-order tree traversal
+  try {
+    struct frame_t {
+      frame_t(Context& c)
+        : ctx(c), iter(c.children_p->iterate()),
+          here(iter.begin()), end(iter.end()) {};
+      Context& ctx;
+      using iter_t = decltype(children_p->iterate());
+      iter_t iter;
+      decltype(iter.begin()) here;
+      decltype(iter.end()) end;
+    };
+    std::stack<frame_t, std::vector<frame_t>> stack;
+    if(children_p) stack.emplace(*this);
+    while(!stack.empty()) {
+      if(stack.top().here != stack.top().end) {
+        // We have more children to handle
+        Context& c = *stack.top().here++;
+        if(c.children_p) stack.emplace(c);
+        continue;
+      }
+
+      Context& c = stack.top().ctx;
+      stack.pop();
+      c.children_p.reset(nullptr);
+    }
+  } catch(...) {};  // If we run into errors, just let the recursion handle it.
+}
 
 std::pair<Context&,bool> Context::ensure(Scope&& s) {
   auto x = children_p->emplace(userdata.base(), this, std::move(s));

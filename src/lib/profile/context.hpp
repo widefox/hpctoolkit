@@ -64,7 +64,7 @@ public:
   Context(ud_t::struct_t& rs) : userdata(rs, std::ref(*this)) {};
   Context(ud_t::struct_t& rs, const Scope& l) : Context(rs, nullptr, l) {};
   Context(ud_t::struct_t& rs, Scope&& l) : Context(rs, nullptr, l) {};
-  ~Context() = default;
+  ~Context() noexcept;
 
 private:
   using children_t = util::locked_unordered_uniqued_set<Context>;
