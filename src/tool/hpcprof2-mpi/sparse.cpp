@@ -1124,7 +1124,7 @@ void SparseDB::writeThreadMajor(const int threads,
 
   id_tuples_sec_size = workIdTuplesSection(world_rank, world_size, threads, thread_major_f);
 
-  //TEMP: change prof_info_idx to thread's unique id to match trace.db, need a more integrated way after getting tuples
+  //TEMP: change prof_info_idx to thread's unique id to match trace.db, need a more integrated way
   int i = 0;
   for(const auto& tp: outputs.citerate()){
     //if it's not summary

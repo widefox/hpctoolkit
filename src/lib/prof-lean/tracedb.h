@@ -78,7 +78,7 @@ extern "C" {
 #define HPCTRACEDB_FMT_MagicLen   (sizeof(HPCTRACEDB_FMT_Magic) - 1)
 #define HPCTRACEDB_FMT_VersionLen 1 
 
-#define num_trace_SIZE 8
+#define num_trace_SIZE 4
 #define HPCTRACEDB_FMT_HeaderLen  (HPCTRACEDB_FMT_MagicLen + HPCTRACEDB_FMT_VersionLen + num_trace_SIZE)
 
 typedef struct tracedb_hdr_t{
@@ -120,13 +120,13 @@ trace_hdr_fprint(trace_hdr_t x, int i, FILE* fs);
 
 
 int 
-trace_hdrs_fwrite(uint64_t num_t,trace_hdr_t* x, FILE* fs);
+trace_hdrs_fwrite(uint32_t num_t,trace_hdr_t* x, FILE* fs);
 
 int 
-trace_hdrs_fread(trace_hdr_t** x, uint64_t num_t,FILE* fs);
+trace_hdrs_fread(trace_hdr_t** x, uint32_t num_t,FILE* fs);
 
 int 
-trace_hdrs_fprint(uint64_t num_t,trace_hdr_t* x, FILE* fs);
+trace_hdrs_fprint(uint32_t num_t,trace_hdr_t* x, FILE* fs);
 
 void 
 trace_hdrs_free(trace_hdr_t** x);

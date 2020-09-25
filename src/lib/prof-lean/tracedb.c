@@ -167,20 +167,20 @@ trace_hdr_fprint(trace_hdr_t x, int i, FILE* fs)
 
 
 int 
-trace_hdrs_fwrite(uint64_t num_t,trace_hdr_t* x, FILE* fs)
+trace_hdrs_fwrite(uint32_t num_t,trace_hdr_t* x, FILE* fs)
 {
-  for (uint64_t i = 0; i < num_t; ++i) {
+  for (uint32_t i = 0; i < num_t; ++i) {
     trace_hdr_fwrite(x[i], fs);
   }
   return HPCFMT_OK;
 }
 
 int 
-trace_hdrs_fread(trace_hdr_t** x, uint64_t num_t,FILE* fs)
+trace_hdrs_fread(trace_hdr_t** x, uint32_t num_t,FILE* fs)
 {
   trace_hdr_t * trace_hdrs = (trace_hdr_t *) malloc(num_t * sizeof(trace_hdr_t));
 
-  for (uint64_t i = 0; i < num_t; ++i) {
+  for (uint32_t i = 0; i < num_t; ++i) {
     trace_hdr_fread(&(trace_hdrs[i]), fs);
   }
 
@@ -189,11 +189,11 @@ trace_hdrs_fread(trace_hdr_t** x, uint64_t num_t,FILE* fs)
 }
 
 int 
-trace_hdrs_fprint(uint64_t num_t,trace_hdr_t* x, FILE* fs)
+trace_hdrs_fprint(uint32_t num_t,trace_hdr_t* x, FILE* fs)
 {
-  fprintf(fs,"[Trace hdrs for %ld traces\n", num_t);
+  fprintf(fs,"[Trace hdrs for %d traces\n", num_t);
 
-  for (uint64_t i = 0; i < num_t; ++i) {
+  for (uint32_t i = 0; i < num_t; ++i) {
     trace_hdr_fprint(x[i], i, fs);
   }
   fprintf(fs,"]\n");

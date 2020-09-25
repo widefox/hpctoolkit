@@ -185,7 +185,7 @@ Analysis::Raw::sortProfileInfo_onOffsets(tms_profile_info_t* x, uint32_t num_pro
 }
 
 void
-Analysis::Raw::sortTraceHdrs_onStarts(trace_hdr_t* x, uint64_t num_t)
+Analysis::Raw::sortTraceHdrs_onStarts(trace_hdr_t* x, uint32_t num_t)
 {
     std::sort(x,x+num_t,&traceHdr_sorter);
 }
@@ -326,8 +326,8 @@ Analysis::Raw::writeAsText_tracedb(const char* filenm)
     }
     tracedb_hdr_fprint(&hdr, stdout);
 
-    uint64_t num_t;
-    ret = hpcfmt_int8_fread(&num_t, fs);
+    uint32_t num_t;
+    ret = hpcfmt_int4_fread(&num_t, fs);
     if (ret != HPCFMT_OK) {
       DIAG_Throw("error reading number of traces from tracedb file '" << filenm << "'");
     }

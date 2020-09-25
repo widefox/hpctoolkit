@@ -105,7 +105,7 @@ void
 sortProfileInfo_onOffsets(tms_profile_info_t* x, uint32_t num_prof);
 
 void
-sortTraceHdrs_onStarts(trace_hdr_t* x, uint64_t num_t);
+sortTraceHdrs_onStarts(trace_hdr_t* x, uint32_t num_t);
 
 void
 writeAsText_sparseDBthread(const char* filenm, bool sm_easyToGrep);
