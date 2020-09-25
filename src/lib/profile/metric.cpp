@@ -179,7 +179,7 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
   // about ones that have decendants with actual data. So we construct a
   // temporary subtree with all the bits.
   const Context* global = nullptr;
-  std::unordered_map<const Context*, std::vector<const Context*>> children;
+  std::unordered_map<const Context*, std::unordered_set<const Context*>> children;
   {
     std::vector<const Context*> newContexts;
     newContexts.reserve(t.data.size());
@@ -193,9 +193,10 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
           global = cp;
           continue;
         }
-        auto x = children.emplace(cp->direct_parent(), std::vector<const Context*>{cp});
+        auto x = children.emplace(cp->direct_parent(),
+                                  std::unordered_set<const Context*>{});
         if(x.second) next.push_back(cp->direct_parent());
-        else x.first->second.push_back(cp);
+        x.first->second.emplace(cp);
       }
       next.shrink_to_fit();
       newContexts = std::move(next);
@@ -207,11 +208,11 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
   using md_t = util::locked_unordered_map<const Metric*, MetricAccumulator>;
   struct frame_t {
     frame_t(const Context& c) : ctx(c) {};
-    frame_t(const Context& c, std::vector<const Context*>& v)
+    frame_t(const Context& c, std::unordered_set<const Context*>& v)
       : ctx(c), here(v.cbegin()), end(v.cend()) {};
     const Context& ctx;
-    std::vector<const Context*>::const_iterator here;
-    std::vector<const Context*>::const_iterator end;
+    std::unordered_set<const Context*>::const_iterator here;
+    std::unordered_set<const Context*>::const_iterator end;
     std::vector<std::pair<std::reference_wrapper<const Context>,
                           std::reference_wrapper<const md_t>>> submds;
   };
