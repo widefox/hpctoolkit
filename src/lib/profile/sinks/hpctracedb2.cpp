@@ -95,14 +95,39 @@ void HPCTraceDB2::notifyWavefront(DataClass){
   assignHdrs(trace_offs);
 
   //open the trace.db for writing, and write magic string, version number and number of tracelines
+  std::FILE* trace_f = nullptr;
   if(mpi::World::rank() == 0) {
-      std::FILE* trace_f = std::fopen(trace_p.c_str(), "wb");
-      if(!trace_f) util::log::fatal() << "Unable to open trace.db file for output!";
-      tracedb_hdr_fwrite(trace_f);
-      hpcfmt_int4_fwrite(num_traces, trace_f);
-      std::fclose(trace_f);
+    trace_f = std::fopen(trace_p.c_str(), "wb");
+    if(!trace_f) util::log::fatal() << "Unable to open trace.db file for output!";
+    tracedb_hdr_fwrite(trace_f);
+    hpcfmt_int4_fwrite(num_traces, trace_f);
   }
 
+  // Ensure the file is truncated by rank 0 before proceeding.
+  mpi::bcast((std::uint8_t)0, 0);
+
+  // Write out the headers for threads that have no timepoints
+  for(const auto& t : src.threads().iterate()) {
+    auto& hdr = t->userdata[uds.thread].trace_hdr;
+    if(hdr.start == hdr.end) {
+      if(!trace_f) {
+        trace_f = std::fopen(trace_p.c_str(), "rb+");
+        if(!trace_f) util::log::fatal() << "Unable to open trace.db file for output!";
+      }
+
+      trace_hdr_t thdr = {
+        hdr.prof_info_idx,
+        hdr.trace_idx,
+        hdr.start,
+        hdr.end
+      };
+      uint64_t off = (hdr.prof_info_idx - 1) * trace_hdr_SIZE + HPCTRACEDB_FMT_HeaderLen;
+      std::fseek(trace_f, off, SEEK_SET);
+      trace_hdr_fwrite(thdr, trace_f);
+    }
+  }
+
+  if(trace_f) std::fclose(trace_f);
 }
 
 void HPCTraceDB2::notifyThread(const Thread& t) {
@@ -222,9 +247,9 @@ std::vector<uint64_t> HPCTraceDB2::calcStartEnd() {
   std::vector<uint64_t> trace_sizes;
   uint64_t total_size = 0;
   for(const auto& t : src.threads().iterate()){
-      uint64_t trace_sz = t->attributes.timepointCnt().value() * timepoint_SIZE;
-      trace_sizes.emplace_back(trace_sz);
-      total_size += trace_sz;
+    uint64_t trace_sz = t->attributes.timepointCnt().value_or(0) * timepoint_SIZE;
+    trace_sizes.emplace_back(trace_sz);
+    total_size += trace_sz;
   }
 
   //get the offset of this rank's traces section
