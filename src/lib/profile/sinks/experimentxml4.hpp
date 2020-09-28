@@ -57,7 +57,7 @@
 
 namespace hpctoolkit::sinks {
 
-class HPCTraceDB;
+class HPCTraceDB2;
 
 /// ProfileSink for the current experiment.xml format. Just so we can spit
 /// something out.
@@ -66,7 +66,7 @@ public:
   ~ExperimentXML4() = default;
 
   /// Constructor, with a reference to the output database directory.
-  ExperimentXML4(const stdshim::filesystem::path&, bool, HPCTraceDB*);
+  ExperimentXML4(const stdshim::filesystem::path&, bool, HPCTraceDB2*);
 
   /// Write out as much data as possible. See ProfileSink::write.
   void write() override;
@@ -89,7 +89,7 @@ private:
   stdshim::filesystem::path dir;
   std::ofstream of;
   std::atomic<unsigned int> next_id;
-  HPCTraceDB* tracedb;
+  HPCTraceDB2* tracedb;
   bool include_sources;
 
   void emit(const Context& c);

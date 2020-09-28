@@ -196,10 +196,8 @@ std::string HPCTraceDB2::exmlTag() {
   std::ostringstream ss;
   ss << "<TraceDB"
         " i=\"0\""
-        " db-glob=\"*." << HPCRUN_TraceFnmSfx << "\""
         " db-min-time=\"" << min.load(std::memory_order_relaxed).count() << "\""
         " db-max-time=\"" << max.load(std::memory_order_relaxed).count() << "\""
-        " db-header-sz=\"" << HPCTRACE_FMT_HeaderLen << "\""
         " u=\"1000000000\"/>\n";
   return ss.str();
 }

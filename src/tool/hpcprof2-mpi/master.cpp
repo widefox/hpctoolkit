@@ -220,7 +220,7 @@ int rank0(ProfArgs&& args) {
       tdb = make_unique_x<sinks::HPCTraceDB2>(args.output);
     sdb = make_unique_x<SparseDB>(args.output);
     auto exml = make_unique_x<sinks::ExperimentXML4>(args.output, args.include_sources,
-                                                     nullptr);
+                                                     tdb.get());
     pipelineB << std::move(tdb) << mpiDep >> mpiDep << std::move(exml);
     if(sdb) pipelineB << *sdb << mpiDep;
 

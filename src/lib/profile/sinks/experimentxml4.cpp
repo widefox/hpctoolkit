@@ -327,7 +327,7 @@ ExperimentXML4::udContext::udContext(const Context& c, ExperimentXML4& exml)
 
 // ExperimentXML4 bits
 
-ExperimentXML4::ExperimentXML4(const fs::path& out, bool srcs, HPCTraceDB* db)
+ExperimentXML4::ExperimentXML4(const fs::path& out, bool srcs, HPCTraceDB2* db)
   : ProfileSink(), dir(out), of(), next_id(0x7FFFFFFF), tracedb(db),
     include_sources(srcs), file_unknown(*this), next_procid(2),
     proc_unknown_proc(0), proc_partial_proc(1), next_cid(0x7FFFFFFF) {
