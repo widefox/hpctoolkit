@@ -562,6 +562,17 @@ SparseDB::intPairs2Tuples(const std::vector<std::pair<uint16_t, uint64_t>>& all_
 }
 
 
+template<class A, class B>
+static MPI_Datatype createPairType(MPI_Datatype aty, MPI_Datatype bty) {
+  using realtype = std::pair<A, B>;
+  std::array<int, 2> cnts = {1, 1};
+  std::array<MPI_Datatype, 2> types = {aty, bty};
+  std::array<MPI_Aint, 2> offsets = {offsetof(realtype, first), offsetof(realtype, second)};
+  MPI_Datatype outtype;
+  MPI_Type_create_struct(2, cnts.data(), offsets.data(), types.data(), &outtype);
+  MPI_Type_commit(&outtype);
+  return outtype;
+}
 
 //---------------------------------------------------------------------------
 // profile id tuples - organize(communication,sorting,etc)
@@ -637,8 +648,7 @@ void SparseDB::scatterProfIdxOffset(const std::vector<tms_id_tuple_t>& tuples,
   }
 
   //create a new Datatype for prof_info_idx and offset
-  std::vector<MPI_Datatype> types{MPI_UINT32_T, MPI_UINT64_T};
-  MPI_Datatype IdxOffType = createTupleType(types);
+  MPI_Datatype IdxOffType = createPairType<uint32_t, uint64_t>(MPI_UINT32_T, MPI_UINT64_T);
 
   MPI_Scatterv(idx_off_buffer.data(), all_rank_tuples_sizes.data(), all_rank_tuples_disps.data(), \
     IdxOffType, prof_idx_off_pairs.data(), num_prof, IdxOffType, 0, MPI_COMM_WORLD);
@@ -773,8 +783,7 @@ uint64_t SparseDB::workIdTuplesSection(const int world_rank,
   //assign sparseInputs based on outputs
   assignSparseInputs(world_rank);
 
-  std::vector<MPI_Datatype> types {MPI_UINT16_T, MPI_UINT64_T};
-  MPI_Datatype IntPairType = createTupleType(types);
+  MPI_Datatype IntPairType = createPairType<uint16_t, uint64_t>(MPI_UINT16_T, MPI_UINT64_T);
 
   std::vector<tms_id_tuple_t> tuples = getMyIdTuples();
   std::vector<std::pair<uint16_t, uint64_t>> pairs = tuples2IntPairs(tuples);
