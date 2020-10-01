@@ -179,8 +179,9 @@ private:
   // profile id tuples - format conversion with ThreadAttribute and IntPair
   //---------------------------------------------------------------------------
   #define not_assigned (uint)-1
+  #define RANK_SPOT    (uint16_t)65535
 
-  tms_id_tuple_t buildIdTuple(const hpctoolkit::ThreadAttributes& ta, const int rank);
+  tms_id_tuple_t buildIdTuple(const hpctoolkit::Thread* t, const int rank);
 
   tms_id_tuple_t buildSmryIdTuple();
 
@@ -209,6 +210,8 @@ private:
                             const int threads);
 
   void sortIdTuples(std::vector<tms_id_tuple_t>& all_tuples);
+
+  void sortIdTuplesOnProfInfoIdx(std::vector<tms_id_tuple_t>& all_tuples);
 
   void assignIdTuplesIdx(std::vector<tms_id_tuple_t>& all_tuples,
                          const int threads);

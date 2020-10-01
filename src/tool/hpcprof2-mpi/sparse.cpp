@@ -436,9 +436,10 @@ HPCPROF-tmsdb_____
 // profile id tuples - format conversion with ThreadAttribute and IntPair
 //---------------------------------------------------------------------------
 //builds a new ID tuple from ThreadAttributes
-tms_id_tuple_t SparseDB::buildIdTuple(const hpctoolkit::ThreadAttributes& ta,
+tms_id_tuple_t SparseDB::buildIdTuple(const hpctoolkit::Thread* t,
                                       const int rank)
 {
+  auto& ta = t->attributes;
   id_tuple_t idtuple;
   idtuple.length = ta.idTuple().size();
   // TODO: Fix the types so that we don't need a const_cast here
@@ -447,7 +448,7 @@ tms_id_tuple_t SparseDB::buildIdTuple(const hpctoolkit::ThreadAttributes& ta,
   tms_id_tuple_t tuple;
   tuple.idtuple = idtuple;
   tuple.rank = rank;
-  tuple.prof_info_idx = not_assigned; 
+  tuple.prof_info_idx = t->userdata[src.identifier()] + 1; 
   tuple.all_at_root_idx = not_assigned;
 
   return tuple;
@@ -471,7 +472,7 @@ tms_id_tuple_t SparseDB::buildSmryIdTuple()
   tms_id_tuple_t tuple;
   tuple.idtuple = idtuple;
   tuple.rank = 0; //summary tuple is always at root rank
-  tuple.prof_info_idx = not_assigned; 
+  tuple.prof_info_idx = 0; //summary tuple is always the 0th profile
   tuple.all_at_root_idx = not_assigned;
 
   return tuple;
@@ -481,7 +482,7 @@ tms_id_tuple_t SparseDB::buildSmryIdTuple()
 void SparseDB::assignSparseInputs(int world_rank)
 {
   for(const auto& tp : outputs.citerate()){
-    tms_id_tuple_t tuple = buildIdTuple(tp.first->attributes, world_rank);
+    tms_id_tuple_t tuple = buildIdTuple(tp.first, world_rank);
     if(tuple.idtuple.length == 0) continue; //skip this profile
     sparseInputs.emplace_back(tuple, tp.second.string());
   }
@@ -513,8 +514,9 @@ std::vector<std::pair<uint16_t, uint64_t>>
 SparseDB::tuples2IntPairs(const std::vector<tms_id_tuple_t>& all_tuples)
 {
   std::vector<std::pair<uint16_t, uint64_t>> pairs;
+  pairs.emplace_back(RANK_SPOT, (uint64_t)all_tuples[0].rank);
   for(auto& tuple : all_tuples){
-    pairs.emplace_back(tuple.idtuple.length, (uint64_t)tuple.rank);
+    pairs.emplace_back(tuple.idtuple.length, (uint64_t)tuple.prof_info_idx);
     auto& idtuple = tuple.idtuple;
     for(uint i = 0; i < idtuple.length; i++){
       pairs.emplace_back(idtuple.ids[i].kind, idtuple.ids[i].index);
@@ -532,25 +534,29 @@ SparseDB::intPairs2Tuples(const std::vector<std::pair<uint16_t, uint64_t>>& all_
   std::vector<tms_id_tuple_t> tuples;
   uint i = 0;
   uint idx = 0;
-  uint cur_rank = 0; //root rank
+  uint cur_rank = -1; 
   while(i < all_pairs.size()){
     std::pair<uint16_t, uint64_t> p = all_pairs[i];
-    id_tuple_t it;
-    tms_id_tuple_t t;
-    it.length = p.first;
-    t.rank = p.second;
-    if(t.rank != cur_rank){
-      cur_rank = t.rank;
+
+    if(p.first == RANK_SPOT){
+      assert(p.second != cur_rank);
+      cur_rank = p.second;
+      i++;
+      continue;
     }
 
+    id_tuple_t it;
+    it.length = p.first;
     it.ids = (tms_id_t*)malloc(it.length * sizeof(tms_id_t));
     for(uint j = 0; j < it.length; j++){
       it.ids[j].kind = all_pairs[i+j+1].first;
       it.ids[j].index = all_pairs[i+j+1].second;
     }
 
+    tms_id_tuple_t t;
+    t.rank = cur_rank;
     t.all_at_root_idx = idx;
-    t.prof_info_idx = not_assigned;
+    t.prof_info_idx = p.second;
     t.idtuple = it;
     
     tuples.emplace_back(t);
@@ -685,6 +691,22 @@ void SparseDB::sortIdTuples(std::vector<tms_id_tuple_t>& all_tuples)
 }
 
 
+//sort a vector of id_tuples based on prof_info_idx
+void SparseDB::sortIdTuplesOnProfInfoIdx(std::vector<tms_id_tuple_t>& all_tuples)
+{
+  struct {
+    bool operator()(tms_id_tuple_t a, 
+                    tms_id_tuple_t b) const
+    {   
+      return a.prof_info_idx < b.prof_info_idx;
+    }   
+  }tupleComp;
+  
+  std::sort(all_tuples.begin(), all_tuples.end(), tupleComp);
+}
+
+
+
 //assign the prof_info_idx of each tuple (index in prof_info section of thread.db)
 void SparseDB::assignIdTuplesIdx(std::vector<tms_id_tuple_t>& all_tuples,
                                  const int threads)
@@ -794,8 +816,7 @@ uint64_t SparseDB::workIdTuplesSection(const int world_rank,
   uint64_t id_tuples_section_size;
   if(world_rank == 0) {
     all_rank_tuples = intPairs2Tuples(all_rank_pairs);
-    sortIdTuples(all_rank_tuples);
-    assignIdTuplesIdx(all_rank_tuples, threads);
+    sortIdTuplesOnProfInfoIdx(all_rank_tuples);
     prof_info_sec_size = all_rank_tuples.size() * TMS_prof_info_SIZE;
     all_tuple_ptrs = getIdTuplesOff(all_rank_tuples, threads);
 
@@ -1134,12 +1155,13 @@ void SparseDB::writeThreadMajor(const int threads,
   id_tuples_sec_size = workIdTuplesSection(world_rank, world_size, threads, thread_major_f);
 
   //TEMP: change prof_info_idx to thread's unique id to match trace.db, need a more integrated way
+  /*
   int i = 0;
   for(const auto& tp: outputs.citerate()){
     //if it's not summary
     if(prof_idx_off_pairs[i].first != 0) prof_idx_off_pairs[i].first = tp.first->userdata[src.identifier()]+1;
     i++;
-  }
+  }*/
 
   uint32_t total_prof = workProfSizesOffsets(world_rank, threads);
   assert(total_prof * TMS_prof_info_SIZE == prof_info_sec_size);
@@ -2395,7 +2417,7 @@ void SparseDB::merge(int threads, bool debug) {
   std::vector<std::set<uint16_t>> ctx_nzmids(ctxcnt,empty);
   writeThreadMajor(threads,world_rank,world_size, ctx_nzval_cnts,ctx_nzmids);
   writeCCTMajor(ctx_nzval_cnts,ctx_nzmids, ctxcnt, world_rank, world_size, threads);
-  
+
   if(!debug) {
     MPI_Barrier(MPI_COMM_WORLD);
     for(const auto& tp: outputs.citerate())
