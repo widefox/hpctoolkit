@@ -282,17 +282,20 @@ void ProfilePipeline::run() {
       [&](SinkEntry& e, std::size_t idx, bool removeDep) {
         auto role = removeDep ? e.wavefrontDeps.fetch_sub(1, std::memory_order_acquire)-1
                               : e.wavefrontDeps.load(std::memory_order_acquire);
-        if(role <= 0) {
-          // All deps are cleared, we can send a notification
-          e.wavefrontOnces[idx].call([&]{
-            e().notifyWavefront(currentWaves);
-          });
+        if(role <= 0) {  // All deps are cleared, we can send a notification
+          {
+            // Generate an ordering, and ensure we only deliver if new data is present
+            std::unique_lock<std::mutex> l(e.wavefrontStatusLock);
+            if(e.wavefrontStatus.allOf(currentWaves & e.waveLimit)) return;
+            e.wavefrontStatus |= currentWaves & e.waveLimit;
+          }
+          // Deliver our version of the notification, potentially out of order.
+          e().notifyWavefront(currentWaves);
+
           if(currentWaves.allOf(e.waveLimit)) {
             // We can remove the reverse dependency links now
-            e.wavefrontRDepOnce.call_nowait([&]{
-              for(const auto& rd: e.wavefrontRDeps)
-                notify(sinks[rd], idx, true);
-            });
+            for(const auto& rd: e.wavefrontRDeps)
+              notify(sinks[rd], idx, true);
           }
         }
       };
@@ -313,7 +316,7 @@ void ProfilePipeline::run() {
         currentWaves += d;
         #pragma omp for schedule(dynamic) nowait
         for(std::size_t i = 0; i < sinks.size(); ++i)
-          notify(sinks[i], idx, sinks[i].get().wavefrontSelfDep.test_and_set() == false);
+          notify(sinks[i], idx, false);
       }
     };
 

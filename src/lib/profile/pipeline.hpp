@@ -90,16 +90,12 @@ protected:
   struct SinkEntry {
     SinkEntry(DataClass d, DataClass w, ExtensionClass e, ProfileSink& s)
       : dataLimit(d), waveLimit(w), extensionLimit(e), sink(s),
-        wavefrontDeps(1) {
-      wavefrontSelfDep.clear(std::memory_order_relaxed);
-    }
+        wavefrontDeps(0) {};
     SinkEntry(SinkEntry&& o)
       : dataLimit(o.dataLimit), waveLimit(o.waveLimit),
         extensionLimit(o.extensionLimit), sink(o.sink),
         wavefrontDeps(o.wavefrontDeps.load(std::memory_order_relaxed)),
-        wavefrontRDeps(std::move(o.wavefrontRDeps)) {
-      wavefrontSelfDep.clear(std::memory_order_relaxed);
-    }
+        wavefrontRDeps(std::move(o.wavefrontRDeps)) {};
 
     DataClass dataLimit;
     DataClass waveLimit;
@@ -107,12 +103,10 @@ protected:
     std::reference_wrapper<ProfileSink> sink;
 
     std::atomic<int> wavefrontDeps;  // Count
-    std::atomic_flag wavefrontSelfDep;
-
-    util::OnceFlag wavefrontRDepOnce;
     std::vector<std::size_t> wavefrontRDeps;  // Indices in sinks
 
-    std::array<util::OnceFlag, 5> wavefrontOnces;
+    std::mutex wavefrontStatusLock;
+    DataClass wavefrontStatus;
 
     operator ProfileSink&() { return sink; }
     ProfileSink& operator()() { return sink; }
