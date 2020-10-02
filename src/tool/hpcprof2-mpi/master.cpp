@@ -46,6 +46,7 @@
 
 #include "lib/profile/util/vgannotations.hpp"
 
+#include "tree.hpp"
 #include "sparse.hpp"
 #include "../hpcprof2/args.hpp"
 
@@ -93,28 +94,11 @@ int rank0(ProfArgs&& args) {
     mpi::scatter(std::move(paths), 0);
   }
 
+  // Set up our reduction tree with our fellow peers
+  RankTree tree{std::max<std::size_t>(args.threads, 2)};
+
   // When time, gather up the data from all our friends and emit it.
-  struct Receiver : public sources::Packed {
-    int peer;
-    bool done;
-    Receiver(int p) : peer(p), done(false) {};
-    DataClass provides() const noexcept override {
-      return data::references + data::attributes + data::contexts
-             + data::timepoints;
-    }
-    void read(const DataClass&) override {
-      if(done) return;
-      auto block = mpi::receive_vector<std::uint8_t>(peer, 1);
-      iter_t it = block.begin();
-      it = unpackAttributes(it);
-      it = unpackReferences(it);
-      it = unpackContexts(it);
-      if(sink.limit().hasTimepoints()) it = unpackTimepoints(it);
-      done = true;
-    }
-  };
-  for(std::size_t peer = 1; peer < mpi::World::size(); peer++)
-    pipelineB << make_unique_x<Receiver>(peer);
+  Receiver::append(pipelineB, tree);
 
   // Load in the Finalizers for Structfiles.
   for(auto& sp: args.structs) pipelineB << std::move(sp.first);
@@ -174,23 +158,7 @@ int rank0(ProfArgs&& args) {
 
   // The workers will come back to us with the metric data, so we have to be
   // ready to accept it.
-  struct MetricReciever : public sources::Packed {
-    ctx_map_t& cmap;
-    int peer;
-    bool done;
-    MetricReciever(int p, ctx_map_t& c) : cmap(c), peer(p), done(false) {};
-    DataClass provides() const noexcept override { return data::attributes + data::metrics; }
-    void read(const DataClass& d) override {
-      if(!d.hasMetrics() || done) return;
-      auto block = mpi::receive_vector<std::uint8_t>(peer, 3);
-      iter_t it = block.begin();
-      it = unpackAttributes(it);
-      it = unpackMetrics(it, cmap);
-      done = true;
-    }
-  };
-  for(std::size_t peer = 1; peer < mpi::World::size(); peer++)
-    pipelineB << make_unique_x<MetricReciever>(peer, cmap);
+  MetricReceiver::append(pipelineB, tree, cmap);
 
   // Finally, eventually we get to actually write stuff out.
   std::unique_ptr<SparseDB> sdb;

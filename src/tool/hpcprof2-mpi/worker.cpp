@@ -46,6 +46,7 @@
 
 #include "lib/profile/util/vgannotations.hpp"
 
+#include "tree.hpp"
 #include "sparse.hpp"
 #include "../hpcprof2/args.hpp"
 
@@ -95,24 +96,16 @@ int rankN(ProfArgs&& args) {
 
   std::size_t threadIdOffset;
 
+  // Prep our role in the massive reduction tree
+  std::vector<std::uint8_t> stash;
+  RankTree tree{std::max<std::size_t>(args.threads, 2)};
+
   // Fire off the first Pipeline, let rank 0 know all about our data.
   {
-    struct Sender : public sinks::Packed {
-      ExtensionClass requires() const noexcept override { return {}; }
-      DataClass accepts() const noexcept override {
-        return data::attributes + data::references + data::contexts
-               + data::metrics + data::timepoints;
-      }
-      void write() override {
-        std::vector<std::uint8_t> block;
-        packAttributes(block);
-        packReferences(block);
-        packContexts(block);
-        packTimepoints(block);
-        mpi::send(block, 0, 1);
-      }
-    } sender;
+    Sender sender{tree, stash};
     pipelineB1 << sender;
+
+    Receiver::append(pipelineB1, tree);
 
     struct ThreadIDUniquer : public ProfileSink {
       ThreadIDUniquer(std::size_t& t) : threadIdOffset(t) {};
@@ -154,19 +147,19 @@ int rankN(ProfArgs&& args) {
     } tidfinal{threadIdOffset};
     pipelineB2 << tidfinal;
 
-    // When we're done, we need to send the final metrics up to rank 0
-    struct MetricSender : public sinks::Packed {
-      DataClass accepts() const noexcept override {
-        return data::attributes + data::contexts + data::metrics;
-      }
-      void write() override {
-        std::vector<std::uint8_t> block;
-        packAttributes(block);
-        packMetrics(block);
-        mpi::send(block, 0, 3);
-      }
-    } msender;
+    // When we're done, we need to send the final metrics up towards rank 0
+    MetricSender msender{tree};
     pipelineB2 << msender;
+
+    // For unpacking metrics, we need to be able to map the IDs back to their
+    // Contexts. This does the magic for us.
+    sources::Packed::ctx_map_t cmap;
+    sources::Packed::ContextTracker ctracker(cmap);
+    pipelineB2 << ctracker;
+
+    // Our children will come back to us with the metric data, so we have to be
+    // ready to accept it.
+    MetricReceiver::append(pipelineB2, tree, cmap, stash);
 
     ProfilePipeline::WavefrontOrdering mpiDep;
 
