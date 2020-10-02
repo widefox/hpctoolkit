@@ -144,6 +144,23 @@ public:
   bool operator==(const DataClass& o) const noexcept { return mask == o.mask; }
   bool operator!=(const DataClass& o) const noexcept { return !(operator==(o)); }
 
+  // Debug printing
+  template<class C, class T>
+  friend std::basic_ostream<C,T>& operator<<(std::basic_ostream<C,T>& os,
+                                             const DataClass& d) {
+    os << '[';
+    if(d.hasAttributes()) os << 'A';
+    if(d.hasThreads()) os << 'T';
+    if(d.hasReferences()) os << 'R';
+    if(d.hasContexts()) os << 'C';
+    if(d.anyOf(attributes | threads | references | contexts)
+       && d.anyOf(metrics | timepoints)) os << ' ';
+    if(d.hasMetrics()) os << 'm';
+    if(d.hasTimepoints()) os << 't';
+    os << ']';
+    return os;
+  }
+
 private:
   constexpr DataClass(unsigned long long v) : mask(v) {};
   std::bitset<6> mask;
@@ -239,6 +256,22 @@ public:
   // Comparison operations
   bool operator==(const ExtensionClass& o) const noexcept { return mask == o.mask; }
   bool operator!=(const ExtensionClass& o) const noexcept { return !(operator==(o)); }
+
+  // Debug printing
+  template<class C, class T>
+  friend std::basic_ostream<C,T>& operator<<(std::basic_ostream<C,T>& os,
+                                             const ExtensionClass& e) {
+    os << '[';
+    if(e.hasIdentifier()) os << 'i';
+    if(e.hasMScopeIdentifiers()) os << 'm';
+    if(e.anyOf(identifier | mscopeIdentifiers)
+       && e.anyOf(classification | resolvedPath)) os << ' ';
+    if(e.hasClassification()) os << 'c';
+    if(e.hasResolvedPath()) os << 'r';
+    os << ']';
+    return os;
+  }
+
 private:
   constexpr ExtensionClass(unsigned long long v) : mask(v) {};
   std::bitset<4> mask;
