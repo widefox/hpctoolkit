@@ -52,14 +52,12 @@
 #include "lib/profile/pipeline.hpp"
 #include "lib/profile/source.hpp"
 #include "lib/profile/packedids.hpp"
-#include "lib/profile/sinks/lambda.hpp"
 #include "lib/profile/sinks/packed.hpp"
 #include "lib/profile/sinks/hpctracedb.hpp"
 #include "lib/profile/sinks/hpctracedb2.hpp"
 #include "lib/profile/sinks/hpcmetricdb.hpp"
 #include "lib/profile/finalizers/denseids.hpp"
 #include "lib/profile/finalizers/directclassification.hpp"
-#include "lib/profile/finalizers/lambda.hpp"
 #include "lib/profile/transformer.hpp"
 #include "lib/profile/util/log.hpp"
 #include "lib/profile/mpi/all.hpp"
@@ -116,10 +114,15 @@ int rankN(ProfArgs&& args) {
     } sender;
     pipelineB1 << sender;
 
-    sinks::Lambda tidsink(data::threads, {},
-                          [&threadIdOffset](ProfilePipeline::Sink& src) {
-      threadIdOffset = mpi::exscan(src.threads().size(), mpi::Op::sum()).value();
-    });
+    struct ThreadIDUniquer : public ProfileSink {
+      ThreadIDUniquer(std::size_t& t) : threadIdOffset(t) {};
+      ExtensionClass requires() const noexcept override { return {}; }
+      DataClass accepts() const noexcept override { return data::threads; }
+      void write() override {
+        threadIdOffset = mpi::exscan(src.threads().size(), mpi::Op::sum()).value();
+      }
+      std::size_t& threadIdOffset;
+    } tidsink{threadIdOffset};
     pipelineB1 << tidsink;
 
     ProfilePipeline pipeline(std::move(pipelineB1), args.threads);
@@ -140,10 +143,15 @@ int rankN(ProfArgs&& args) {
     pipelineB2 << eunpacker << funpacker;
 
     // Adjust the Thread ids to be unique among the team.
-    finalizers::Lambda tidfinal(ExtensionClass::identifier,
-      [threadIdOffset](ProfilePipeline::Source&, const Thread&, unsigned int& id) {
+    struct ThreadIDAdjuster : public ProfileFinalizer {
+      ThreadIDAdjuster(std::size_t t) : threadIdOffset(t) {};
+      ExtensionClass provides() const noexcept override { return extensions::identifier; }
+      ExtensionClass requires() const noexcept override { return {}; }
+      void thread(const Thread&, unsigned int& id) override {
         id += threadIdOffset;
-      });
+      }
+      std::size_t threadIdOffset;
+    } tidfinal{threadIdOffset};
     pipelineB2 << tidfinal;
 
     // When we're done, we need to send the final metrics up to rank 0

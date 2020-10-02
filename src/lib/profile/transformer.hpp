@@ -88,44 +88,6 @@ protected:
   ProfilePipeline::Source sink;
 };
 
-/// Convenience subclass for using lambdas as the methods.
-struct LambdaTransformer final : public ProfileTransformer {
-  LambdaTransformer() = default;
-  ~LambdaTransformer() = default;
-
-  std::function<Module&(ProfilePipeline::Source&, Module&)> f_module;
-  Module& module(Module& m) override {
-    return f_module ? f_module(sink, m) : m;
-  }
-  void set(std::function<Module&(ProfilePipeline::Source&, Module&)>&& f) {
-    f_module = std::move(f);
-  }
-
-  std::function<File&(ProfilePipeline::Source&, File&)> f_file;
-  File& file(File& f) override {
-    return f_file ? f_file(sink, f) : f;
-  }
-  void set(std::function<File&(ProfilePipeline::Source&, File&)>&& f) {
-    f_file = std::move(f);
-  }
-
-  std::function<Metric&(ProfilePipeline::Source&, Metric&)> f_metric;
-  Metric& metric(Metric& m) override {
-    return f_metric ? f_metric(sink, m) : m;
-  }
-  void set(std::function<Metric&(ProfilePipeline::Source&, Metric&)>&& f) {
-    f_metric = std::move(f);
-  }
-
-  std::function<Context&(ProfilePipeline::Source&, Context&, Scope&)> f_context;
-  Context& context(Context& c, Scope& s) override {
-    return f_context ? f_context(sink, c, s) : c;
-  }
-  void set(std::function<Context&(ProfilePipeline::Source&, Context&, Scope&)>&& f) {
-    f_context = std::move(f);
-  }
-};
-
 /// Transformer for expanding `module` Contexts with Classification data.
 struct ClassificationTransformer : public ProfileTransformer {
   ClassificationTransformer() = default;

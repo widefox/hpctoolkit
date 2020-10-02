@@ -53,7 +53,6 @@
 #include "lib/profile/packedids.hpp"
 #include "lib/profile/source.hpp"
 #include "lib/profile/sources/packed.hpp"
-#include "lib/profile/sinks/lambda.hpp"
 #include "lib/profile/sinks/experimentxml.hpp"
 #include "lib/profile/sinks/experimentxml4.hpp"
 #include "lib/profile/sinks/hpctracedb.hpp"
