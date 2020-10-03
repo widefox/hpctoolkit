@@ -236,10 +236,10 @@ ProfilePipeline::ProfilePipeline(Settings&& b, std::size_t team_sz)
 
   // Now we can connect the input without losing any information.
   std::size_t idx = 0;
-  for(ProfileSource& ms: sources) {
-    auto data = ms.provides();
-    ms.bindPipeline(Source(*this, data, ExtensionClass::all(), sourceLocals[idx]));
-    scheduled |= data;
+  for(auto& ms: sources) {
+    ms.dataLimit = ms().provides();
+    ms().bindPipeline(Source(*this, ms.dataLimit, ExtensionClass::all(), sourceLocals[idx]));
+    scheduled |= ms.dataLimit;
     idx++;
   }
   scheduled &= all_requested;
@@ -262,82 +262,92 @@ ProfilePipeline::ProfilePipeline(Settings&& b, std::size_t team_sz)
 void ProfilePipeline::run() {
 #if ENABLE_VG_ANNOTATIONS == 1
   char start_arc;
-  char barrier_arc_1;
-  char barrier_arc_2;
-  char barrier_arc_3;
-  char barrier_arc_4;
   char barrier_arc;
-  char wavefront_barrier_arc;
   char end_arc;
 #endif
+
+  std::array<std::atomic<std::size_t>, 4> countdowns;
+  for(auto& c: countdowns) c.store(sources.size(), std::memory_order_relaxed);
+
   ANNOTATE_HAPPENS_BEFORE(&start_arc);
   #pragma omp parallel num_threads(team_size)
   {
     ANNOTATE_HAPPENS_AFTER(&start_arc);
 
-    DataClass currentWaves;
+    // Function to notify a Sink for this wavefront, potentially recursing if needed.
+    std::function<void(SinkEntry&, DataClass)> notify =
+      [&](SinkEntry& e, DataClass newwaves) {
+        auto deps = e.wavefrontDeps.load(std::memory_order_acquire);
 
-    // Notify a Sink for this wavefront, potentially recursing if needed.
-    std::function<void(SinkEntry&,std::size_t, bool)> notify =
-      [&](SinkEntry& e, std::size_t idx, bool removeDep) {
-        auto role = removeDep ? e.wavefrontDeps.fetch_sub(1, std::memory_order_acquire)-1
-                              : e.wavefrontDeps.load(std::memory_order_acquire);
-        if(role <= 0) {  // All deps are cleared, we can send a notification
-          {
-            // Generate an ordering, and ensure we only deliver if new data is present
-            std::unique_lock<std::mutex> l(e.wavefrontStatusLock);
-            if(e.wavefrontStatus.allOf(currentWaves & e.waveLimit)) return;
-            e.wavefrontStatus |= currentWaves & e.waveLimit;
-          }
-          // Deliver our version of the notification, potentially out of order.
-          e().notifyWavefront(currentWaves);
+        // Update this Sink's view of the current wave status, check if we care.
+        DataClass allwaves;
+        {
+          std::unique_lock<std::mutex> l(e.wavefrontStatusLock);
+          e.wavefrontFullStatus |= newwaves & e.waveLimit;
 
-          if(currentWaves.allOf(e.waveLimit)) {
-            // We can remove the reverse dependency links now
-            for(const auto& rd: e.wavefrontRDeps)
-              notify(sinks[rd], idx, true);
-          }
+          // Skip if we already delivered the current waveset
+          if(e.wavefrontStatus.allOf(e.wavefrontFullStatus)) return;
+
+          // If the deps weren't complete, we can't do anything more, so exit
+          if(deps > 0) return;
+
+          // We intend to deliver all the waves that have passed so far.
+          allwaves = e.wavefrontStatus |= e.wavefrontFullStatus;
+        }
+
+        // Deliver a notification, potentially out of order
+        e().notifyWavefront(allwaves);
+
+        // If the Sink has had all of its waves, we can undo the rdeps
+        if(allwaves.allOf(e.waveLimit)) {
+          e.wavefrontRDepOnce.call_nowait([&]{
+            for(const auto& rd: e.wavefrontRDeps) {
+              sinks[rd].wavefrontDeps.fetch_sub(1, std::memory_order_release);
+              notify(sinks[rd], newwaves);
+            }
+          });
         }
       };
 
+    // First issue a wavefront with just the unscheduled waves
+    #pragma omp for schedule(dynamic) nowait
+    for(std::size_t i = 0; i < sinkwaves.unscheduled.size(); ++i)
+      notify(sinkwaves.unscheduled[i], unscheduledWaves);
+
+    // The rest of the waves have the same general format
     auto wave = [&](DataClass d, std::size_t idx, const std::vector<std::reference_wrapper<SinkEntry>>& sinks) {
-      if((d & scheduledWaves).hasAny()) {
-      #ifdef ENABLE_VG_ANNOTATIONS
-        char barrier_arc;
-      #endif
-        #pragma omp for schedule(dynamic)
-        for(std::size_t idx = 0; idx < sources.size(); ++idx) {
-          sources[idx].get().read(d);
-          ANNOTATE_HAPPENS_BEFORE(&barrier_arc);
+      if(!(d & scheduledWaves).hasAny()) return;
+      #pragma omp for schedule(dynamic) nowait
+      for(std::size_t i = 0; i < sources.size(); ++i) {
+        {
+          std::unique_lock<std::mutex> l(sources[i].lock);
+          DataClass req = (sources[i]().finalizeRequest(d) - sources[i].read)
+                          & sources[i].dataLimit;
+          sources[i].read |= req;
+          if(req.hasAny()) sources[i]().read(req);
         }
-        ANNOTATE_HAPPENS_AFTER(&barrier_arc);
-      }
-      if((d & (scheduledWaves | unscheduledWaves)).hasAny()) {
-        currentWaves += d;
-        #pragma omp for schedule(dynamic) nowait
-        for(std::size_t i = 0; i < sinks.size(); ++i)
-          notify(sinks[i], idx, false);
+        if(countdowns[idx].fetch_sub(1, std::memory_order_acq_rel)-1 == 0) {
+          for(SinkEntry& e: sinks) notify(e, d);
+        }
       }
     };
-
-    // Issue all the waves that could possibly happen
-    wave(unscheduledWaves, 0, sinkwaves.unscheduled);
-    wave(DataClass::attributes, 1, sinkwaves.attributes);
-    wave(DataClass::references, 2, sinkwaves.references);
-    wave(DataClass::threads, 3, sinkwaves.threads);
-    wave(DataClass::contexts, 4, sinkwaves.contexts);
-
-    // Sync up, to make sure all the notifications arrive before any of the writes.
-    ANNOTATE_HAPPENS_BEFORE(&wavefront_barrier_arc);
-    #pragma omp barrier
-    ANNOTATE_HAPPENS_AFTER(&wavefront_barrier_arc);
+    wave(DataClass::attributes, 0, sinkwaves.attributes);
+    wave(DataClass::references, 1, sinkwaves.references);
+    wave(DataClass::threads, 2, sinkwaves.threads);
+    wave(DataClass::contexts, 3, sinkwaves.contexts);
 
     // Now for the finishing wave
-    #pragma omp for schedule(dynamic)
-    for(std::size_t idx = 0; idx < sources.size(); ++idx) {
-      sources[idx].get().read(scheduled - scheduledWaves);
+    #pragma omp for schedule(dynamic) nowait
+    for(std::size_t i = 0; i < sources.size(); ++i) {
+      {
+        std::unique_lock<std::mutex> l(sources[i].lock);
+        DataClass req = (sources[i]().finalizeRequest(scheduled - scheduledWaves)
+                         - sources[i].read) & sources[i].dataLimit;
+        sources[i].read |= req;
+        if(req.hasAny()) sources[i]().read(req);
+      }
 
-      auto& sl = sourceLocals[idx];
+      auto& sl = sourceLocals[i];
       // Done first to set the stage for the Sinks to do things.
       for(auto& t: sl.threads) Metric::finalize(t);
       // Let the Sinks know that the Threads have finished.
@@ -346,10 +356,11 @@ void ProfilePipeline::run() {
           for(const auto& t: sl.threads) s().notifyThreadFinal(t);
       // Clean up the Source-local data.
       sl.threads.clear();
-
-      ANNOTATE_HAPPENS_BEFORE(&barrier_arc);
     }
-    // Implicit Barrier
+
+    // Make sure everything has been read before we write anything.
+    ANNOTATE_HAPPENS_BEFORE(&barrier_arc);
+    #pragma omp barrier
     ANNOTATE_HAPPENS_AFTER(&barrier_arc);
 
     // Let the Sinks finish up their writing

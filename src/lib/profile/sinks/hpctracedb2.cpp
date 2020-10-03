@@ -83,7 +83,10 @@ HPCTraceDB2::udThread::udThread(const Thread& t, HPCTraceDB2& tdb)
     trace_hdr(traceHdr(t, tdb)),
     tmcntr(0) {}
 
-void HPCTraceDB2::notifyWavefront(DataClass){
+void HPCTraceDB2::notifyWavefront(DataClass d){
+  if(!d.hasThreads()) return;
+  auto wd_sem = threadsReady.signal();
+
   //assign value to trace_hdrs_size
   uint32_t num_traces = getTotalNumTraces();
   trace_hdrs_size = num_traces * trace_hdr_SIZE;
@@ -135,6 +138,7 @@ void HPCTraceDB2::notifyThread(const Thread& t) {
 }
 
 void HPCTraceDB2::notifyTimepoint(const Thread& t, const Context& c, std::chrono::nanoseconds tm) {
+  threadsReady.wait();
   auto& ud = t.userdata[uds.thread];
   if(!ud.has_trace) {
     has_traces.exchange(true, std::memory_order_relaxed);

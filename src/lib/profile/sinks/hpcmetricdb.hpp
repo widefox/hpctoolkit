@@ -95,13 +95,11 @@ private:
   stdshim::filesystem::path dir;
 
   std::vector<std::pair<bool, const Metric*>> metrics;
-  util::OnceFlag metricPrep;
-  void prepMetrics() noexcept;
+  util::Once metricWavefront;
 
   std::vector<std::reference_wrapper<const Context>> contexts;
   unsigned int ctxMaxId;
-  util::OnceFlag contextPrep;
-  void prepContexts() noexcept;
+  util::Once contextWavefront;
 
   struct udMetric {
     udMetric(const Metric&, HPCMetricDB&);

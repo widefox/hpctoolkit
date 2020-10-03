@@ -147,8 +147,7 @@ private:
 
   std::vector<std::reference_wrapper<const hpctoolkit::Context>> contexts;
   unsigned int ctxMaxId;
-  hpctoolkit::util::OnceFlag contextPrep;
-  void prepContexts() noexcept;
+  hpctoolkit::util::Once contextWavefront;
 
   hpctoolkit::util::locked_unordered_map<const hpctoolkit::Thread*,
     hpctoolkit::stdshim::filesystem::path> outputs;

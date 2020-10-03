@@ -131,35 +131,31 @@ std::string HPCMetricDB::exmlTag() {
 }
 
 void HPCMetricDB::notifyWavefront(DataClass ds) noexcept {
-  if(ds.hasAttributes())
-    metricPrep.call_nowait([this]{ prepMetrics(); });
-  if(ds.hasContexts())
-    contextPrep.call_nowait([this]{ prepContexts(); });
-}
-
-void HPCMetricDB::prepMetrics() noexcept {
-  for(const Metric& m: src.metrics().iterate()) {
-    const auto& ids = m.userdata[src.mscopeIdentifiers()];
-    auto max = std::max(ids.function, ids.execution);
-    if(max >= metrics.size()) metrics.resize(max+1, {false, nullptr});
-    metrics.at(ids.function) = {true, &m};
-    metrics.at(ids.execution) = {false, &m};
+  if(ds.hasAttributes() && metrics.empty()) {
+    auto sig = metricWavefront.signal();
+    for(const Metric& m: src.metrics().iterate()) {
+      const auto& ids = m.userdata[src.mscopeIdentifiers()];
+      auto max = std::max(ids.function, ids.execution);
+      if(max >= metrics.size()) metrics.resize(max+1, {false, nullptr});
+      metrics.at(ids.function) = {true, &m};
+      metrics.at(ids.execution) = {false, &m};
+    }
+    metrics.shrink_to_fit();
   }
-  metrics.shrink_to_fit();
-}
+  if(ds.hasContexts() && contexts.empty()) {
+    auto sig = contextWavefront.signal();
+    std::map<unsigned int, std::reference_wrapper<const Context>> cs;
+    src.contexts().citerate([&](const Context& c){
+      auto id = c.userdata[src.identifier()];
+      ctxMaxId = std::max(ctxMaxId, id);
+      if(!cs.emplace(id, c).second)
+        util::log::fatal() << "Duplicate Context identifier "
+                           << c.userdata[src.identifier()] << "!";
+    }, nullptr);
 
-void HPCMetricDB::prepContexts() noexcept {
-  std::map<unsigned int, std::reference_wrapper<const Context>> cs;
-  src.contexts().citerate([&](const Context& c){
-    auto id = c.userdata[src.identifier()];
-    ctxMaxId = std::max(ctxMaxId, id);
-    if(!cs.emplace(id, c).second)
-      util::log::fatal() << "Duplicate Context identifier "
-                         << c.userdata[src.identifier()] << "!";
-  }, nullptr);
-
-  contexts.reserve(cs.size());
-  for(const auto& ic: cs) contexts.emplace_back(ic.second);
+    contexts.reserve(cs.size());
+    for(const auto& ic: cs) contexts.emplace_back(ic.second);
+  }
 }
 
 void HPCMetricDB::notifyThreadFinal(const Thread::Temporary& tt) {
@@ -184,8 +180,8 @@ void HPCMetricDB::notifyThreadFinal(const Thread::Temporary& tt) {
   }
 
   // Make sure we have the Metric and Context lists sorted out
-  metricPrep.call([this]{ prepMetrics(); });
-  contextPrep.call([this]{ prepContexts(); });
+  metricWavefront.wait();
+  contextWavefront.wait();
 
   // Write the header, so we know where to start. Each Context takes up two
   // "nodes," and then node 0 is skipped to match EXML ids.

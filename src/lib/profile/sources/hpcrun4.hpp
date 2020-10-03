@@ -71,6 +71,7 @@ public:
   void read(const DataClass&) override;
 
   DataClass provides() const noexcept override;
+  DataClass finalizeRequest(const DataClass&) const noexcept override;
 
 private:
   // Transfer of attributes from header-open time to read-time.

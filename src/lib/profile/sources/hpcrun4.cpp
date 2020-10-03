@@ -145,6 +145,14 @@ DataClass Hpcrun4::provides() const noexcept {
   return ret;
 }
 
+DataClass Hpcrun4::finalizeRequest(const DataClass& d) const noexcept {
+  DataClass o = d;
+  if(o.hasMetrics()) o += attributes + contexts + threads;
+  if(o.hasTimepoints()) o += contexts;
+  if(o.hasContexts()) o += references;
+  return o;
+}
+
 bool Hpcrun4::setupTrace() noexcept {
   std::FILE* file = std::fopen(tracepath.c_str(), "rb");
   if(!file) return false;
@@ -181,7 +189,7 @@ void Hpcrun4::read(const DataClass& needed) {
     sink.attributes(std::move(attrs));
     attrsValid = false;
   }
-  if(needed.anyOf(threads|DataClass::metrics) && sink.limit().hasThreads() && tattrsValid) {
+  if(needed.hasThreads() && tattrsValid) {
     thread = &sink.thread(std::move(tattrs));
     tattrsValid = false;
   }
@@ -189,7 +197,7 @@ void Hpcrun4::read(const DataClass& needed) {
   // Most likely we need something. So just resume the file.
   hpcrun_sparse_resume(file, path.c_str());
 
-  if(needed.anyOf(attributes|DataClass::metrics) && sink.limit().hasAttributes()) {
+  if(needed.hasAttributes()) {
     int id;
     metric_desc_t m;
     metric_aux_info_t maux;
@@ -204,7 +212,7 @@ void Hpcrun4::read(const DataClass& needed) {
     }
     if(id < 0) util::log::fatal() << "Hpcrun4: Error reading metric entry!";
   }
-  if(needed.anyOf(references|contexts) && sink.limit().hasReferences()) {
+  if(needed.hasReferences()) {
     int id;
     loadmap_entry_t lm;
     while((id = hpcrun_sparse_next_lm(file, &lm)) > 0) {
@@ -213,7 +221,7 @@ void Hpcrun4::read(const DataClass& needed) {
     }
     if(id < 0) util::log::fatal() << "Hpcrun4: Error reading load module entry!";
   }
-  if(needed.anyOf(contexts)) {
+  if(needed.hasContexts()) {
     int id;
     hpcrun_fmt_cct_node_t n;
     while((id = hpcrun_sparse_next_context(file, &n)) > 0) {

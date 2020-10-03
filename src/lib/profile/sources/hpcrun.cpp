@@ -141,6 +141,13 @@ DataClass HpcrunFSv2::provides() const noexcept {
   return ret;
 }
 
+DataClass HpcrunFSv2::finalizeRequest(const DataClass& d) const noexcept {
+  DataClass o = d;
+  if(o.hasMetrics()) o += attributes + threads;
+  if(o.hasContexts()) o += references;
+  return o;
+}
+
 bool HpcrunFSv2::setupTrace() noexcept {
   std::FILE* file = std::fopen(tracepath.c_str(), "rb");
   if(!file) return false;

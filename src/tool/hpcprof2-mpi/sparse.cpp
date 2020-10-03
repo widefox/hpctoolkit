@@ -81,12 +81,10 @@ SparseDB::SparseDB(stdshim::filesystem::path&& p) : dir(std::move(p)), ctxMaxId(
     stdshim::filesystem::create_directory(dir);
 }
 
-void SparseDB::notifyWavefront(DataClass ds) noexcept {
-  if(ds.hasContexts())
-    contextPrep.call_nowait([this]{ prepContexts(); });
-}
+void SparseDB::notifyWavefront(DataClass d) noexcept {
+  if(!d.hasContexts()) return;
+  auto sig = contextWavefront.signal();
 
-void SparseDB::prepContexts() noexcept {
   std::map<unsigned int, std::reference_wrapper<const Context>> cs;
   src.contexts().citerate([&](const Context& c){
     auto id = c.userdata[src.identifier()];
@@ -104,14 +102,7 @@ void SparseDB::prepContexts() noexcept {
 
 void SparseDB::notifyThreadFinal(const Thread::Temporary& tt) {
   const auto& t = tt.thread();
-
-  // Make sure the Context list is ready to go
-  contextPrep.call([this]{ prepContexts(); });
-
-  // Prep a quick-access Metric list, so we know what to ping.
-  // TODO: Do this better with the Statistics update.
-  std::vector<std::reference_wrapper<const Metric>> metrics;
-  for(const Metric& m: src.metrics().iterate()) metrics.emplace_back(m);
+  contextWavefront.wait();
 
   // Allocate the blobs needed for the final output
   std::vector<hpcrun_metricVal_t> values;
@@ -152,7 +143,6 @@ void SparseDB::notifyThreadFinal(const Thread::Temporary& tt) {
 
   // Put together the sparse_metrics structure
   hpcrun_fmt_sparse_metrics_t sm;
-  //sm.tid = t.attributes.threadid().value_or(0);
   sm.id_tuple.length = 0; //always 0 here
   sm.num_vals = values.size();
   sm.num_cct_nodes = contexts.size();
@@ -189,14 +179,6 @@ void SparseDB::write()
   int world_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
   if(world_rank != 0) return;
-
-  // Make sure the Context list is ready to go
-  contextPrep.call([this]{ prepContexts(); });
-
-  // Prep a quick-access Metric list, so we know what to ping.
-  // TODO: Do this better with the Statistics update.
-  std::vector<std::reference_wrapper<const Metric>> metrics;
-  for(const Metric& m: src.metrics().iterate()) metrics.emplace_back(m);
 
   // Allocate the blobs needed for the final output
   std::vector<hpcrun_metricVal_t> values;

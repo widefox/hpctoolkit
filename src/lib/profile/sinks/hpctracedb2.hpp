@@ -98,6 +98,8 @@ private:
 
   void mmupdate(std::chrono::nanoseconds min, std::chrono::nanoseconds max);
 
+  util::Once threadsReady;
+
   struct uds;
 
   class traceHdr {

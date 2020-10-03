@@ -81,7 +81,20 @@ protected:
   ~ProfilePipelineBase() = default;
 
   // All the Sources. These don't have callbacks, so they can be together.
-  std::vector<std::reference_wrapper<ProfileSource>> sources;
+  struct SourceEntry {
+    SourceEntry(ProfileSource& s) : source(s) {};
+    SourceEntry(SourceEntry&& o) : source(std::move(o.source)) {};
+
+    DataClass dataLimit;
+
+    std::mutex lock;
+    std::reference_wrapper<ProfileSource> source;
+    DataClass read;
+
+    operator ProfileSource&() { return source; }
+    ProfileSource& operator()() { return source; }
+  };
+  std::vector<SourceEntry> sources;
 
   // All the transformers. These don't register limits, so they can be together.
   std::vector<std::reference_wrapper<ProfileTransformer>> transformers;
@@ -103,10 +116,12 @@ protected:
     std::reference_wrapper<ProfileSink> sink;
 
     std::atomic<int> wavefrontDeps;  // Count
+    util::OnceFlag wavefrontRDepOnce;
     std::vector<std::size_t> wavefrontRDeps;  // Indices in sinks
 
     std::mutex wavefrontStatusLock;
     DataClass wavefrontStatus;
+    DataClass wavefrontFullStatus;
 
     operator ProfileSink&() { return sink; }
     ProfileSink& operator()() { return sink; }

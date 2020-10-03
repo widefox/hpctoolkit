@@ -93,6 +93,9 @@ public:
     return data::references + data::attributes + data::contexts
            + data::timepoints;
   }
+  hpctoolkit::DataClass finalizeRequest(const hpctoolkit::DataClass& d) const noexcept override {
+    return d;
+  }
   void read(const hpctoolkit::DataClass&) override;
 
   static void append(hpctoolkit::ProfilePipeline::Settings&, RankTree&);
@@ -127,6 +130,9 @@ public:
   ~MetricReceiver() = default;
 
   hpctoolkit::DataClass provides() const noexcept override;
+  hpctoolkit::DataClass finalizeRequest(const hpctoolkit::DataClass& d) const noexcept override {
+    return d;
+  }
   void read(const hpctoolkit::DataClass& d) override;
 
   static void append(hpctoolkit::ProfilePipeline::Settings&, RankTree&, ctx_map_t&);

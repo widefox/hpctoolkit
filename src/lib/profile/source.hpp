@@ -87,6 +87,12 @@ public:
   // MT: Externally Synchronized
   virtual void read(const DataClass&);
 
+  /// In many cases there are dependencies between data reads, due to the nature
+  /// of the conversion. This call allows a Source to adjust its request input
+  /// based on the dependencies it requires. Note that tracking of previously
+  /// requested data is done automatically, so keep this simple and constant.
+  virtual DataClass finalizeRequest(const DataClass&) const noexcept = 0;
+
 protected:
   /// Destination for read data. Since Sources may have various needs and orders
   /// for their outputs, they need constant access to a "sink" for whatever they

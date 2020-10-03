@@ -69,6 +69,8 @@ public:
 
   DataClass provides() const noexcept override;
 
+  DataClass finalizeRequest(const DataClass& d) const noexcept override;
+
 private:
   bool setupTrace() noexcept;
 
