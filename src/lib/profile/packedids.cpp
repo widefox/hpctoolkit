@@ -65,7 +65,7 @@ static void pack(std::vector<std::uint8_t>& out, const std::uint64_t v) noexcept
     out.push_back((v >> shift) & 0xff);
 }
 
-IdPacker::IdPacker() : ctxcnt(0) {}
+IdPacker::IdPacker() : stripcnt(0), buffersize(0) {};
 
 Context& IdPacker::Classifier::context(Context& c, Scope& s) {
   std::vector<std::reference_wrapper<Context>> v;
@@ -75,49 +75,67 @@ Context& IdPacker::Classifier::context(Context& c, Scope& s) {
   // and let the anti-recursion keep us from spinning out of control.
   v.emplace_back(sink.context(cc, s));
 
+  // Check that we haven't handled this particular Context already
+  auto& strip = v.back().get().userdata[shared.udOnce];
+  if(strip.once.test_and_set(std::memory_order_acquire)) return cc;
+  shared.stripcnt.fetch_add(1, std::memory_order_relaxed);
+
+  // Nab a pseudo-random buffer to fill with our data
+  auto hash = std::hash<Context*>{}(&c) ^ std::hash<Scope>{}(s);
+  static_assert(std::numeric_limits<decltype(hash)>::radix == 2, "Non-binary architecture?");
+  unsigned char idx = hash & 0xff;
+  for(int i = 8; i < std::numeric_limits<decltype(hash)>::digits; i += 8)
+    idx ^= (hash >> i) & 0xff;
+
+  auto& buffer = shared.stripbuffers[idx].second;
+  std::unique_lock<std::mutex> lock(shared.stripbuffers[idx].first);
+  auto oldsz = buffer.size();
+
   // Now we can write the entry for out friends to work with.
   // Format: [parent id] (Scope) [cnt] ([type] [child id])...
-  std::unique_lock<std::mutex> l(shared.ctxtree_m);
-  if(shared.ctxseen[&c].emplace(s).second) {
-    auto cid = c.userdata[sink.identifier()];
-    pack(shared.ctxtree, (std::uint64_t)cid);
-    if(s.type() == Scope::Type::point) {
-      // Format: [module id] [offset]
-      auto mo = s.point_data();
-      pack(shared.ctxtree, (std::uint64_t)mo.first.userdata[sink.identifier()]);
-      pack(shared.ctxtree, (std::uint64_t)mo.second);
-    } else if(s.type() == Scope::Type::unknown) {
-      // Format: [magic]
-      pack(shared.ctxtree, (std::uint64_t)0xF0F1F2F3ULL << 32);
-    } else
-      util::log::fatal{} << "PackedIds can't handle non-point Contexts!";
-    pack(shared.ctxtree, (std::uint64_t)v.size());
-    for(Context& ct: v) {
-      switch(ct.scope().type()) {
-      case Scope::Type::global:
-        util::log::fatal{} << "Global Contexts shouldn't come out of expansion!";
-        break;
-      case Scope::Type::unknown:
-      case Scope::Type::point:
-        shared.ctxtree.emplace_back(0);
-        break;
-      case Scope::Type::function:
-      case Scope::Type::inlined_function:
-        shared.ctxtree.emplace_back(1);
-        break;
-      case Scope::Type::loop:
-        shared.ctxtree.emplace_back(2);
-        break;
-      }
-      pack(shared.ctxtree, (std::uint64_t)ct.userdata[sink.identifier()]);
+  auto cid = c.userdata[sink.identifier()];
+  pack(buffer, (std::uint64_t)cid);
+  if(s.type() == Scope::Type::point) {
+    // Format: [module id] [offset]
+    auto mo = s.point_data();
+    pack(buffer, (std::uint64_t)mo.first.userdata[sink.identifier()]);
+    pack(buffer, (std::uint64_t)mo.second);
+  } else if(s.type() == Scope::Type::unknown) {
+    // Format: [magic]
+    pack(buffer, (std::uint64_t)0xF0F1F2F3ULL << 32);
+  } else
+    util::log::fatal{} << "PackedIds can't handle non-point Contexts!";
+  pack(buffer, (std::uint64_t)v.size());
+  for(Context& ct: v) {
+    switch(ct.scope().type()) {
+    case Scope::Type::global:
+      util::log::fatal{} << "Global Contexts shouldn't come out of expansion!";
+      break;
+    case Scope::Type::unknown:
+    case Scope::Type::point:
+      buffer.emplace_back(0);
+      break;
+    case Scope::Type::function:
+    case Scope::Type::inlined_function:
+      buffer.emplace_back(1);
+      break;
+    case Scope::Type::loop:
+      buffer.emplace_back(2);
+      break;
     }
-    shared.ctxcnt += 1;
+    pack(buffer, (std::uint64_t)ct.userdata[sink.identifier()]);
   }
+
+  shared.buffersize.fetch_add(buffer.size() - oldsz, std::memory_order_relaxed);
 
   return cc;
 }
 
 IdPacker::Sink::Sink(IdPacker& s) : shared(s) {};
+
+void IdPacker::Sink::notifyPipeline() noexcept {
+  shared.udOnce = src.structs().context.add<ctxonce>(std::ref(*this));
+}
 
 void IdPacker::Sink::notifyWavefront(DataClass ds) {
   if(ds.hasReferences() && ds.hasContexts()) {  // This is it!
@@ -134,8 +152,10 @@ void IdPacker::Sink::notifyWavefront(DataClass ds) {
     pack(ct, (std::uint64_t)mods.size());
     for(auto& s: mods) pack(ct, std::move(s));
 
-    pack(ct, (std::uint64_t)shared.ctxcnt);
-    ct.insert(ct.end(), shared.ctxtree.begin(), shared.ctxtree.end());
+    pack(ct, (std::uint64_t)shared.stripcnt.load(std::memory_order_relaxed));
+    ct.reserve(ct.size() + shared.buffersize.load(std::memory_order_relaxed));
+    for(const auto& ls: shared.stripbuffers)
+      ct.insert(ct.end(), ls.second.begin(), ls.second.end());
 
     // Format: ... [met cnt] ([id] [p id] [ex id] [inc id] [name])...
     pack(ct, (std::uint64_t)src.metrics().size());

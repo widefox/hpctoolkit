@@ -84,6 +84,7 @@ public:
       return DataClass::references + DataClass::contexts + DataClass::attributes;
     }
 
+    void notifyPipeline() noexcept override;
     void notifyWavefront(DataClass) override;
     void write() override {};
 
@@ -95,10 +96,17 @@ public:
   };
 
 private:
-  std::mutex ctxtree_m;
-  std::unordered_map<Context*, std::unordered_set<Scope>> ctxseen;
-  std::size_t ctxcnt;
-  std::vector<uint8_t> ctxtree;
+  std::atomic<std::size_t> stripcnt;
+  struct ctxonce {
+    ctxonce(const Context&, Sink&) {
+      once.clear(std::memory_order_relaxed);
+    }
+    std::atomic_flag once;
+  };
+  Context::ud_t::typed_member_t<ctxonce> udOnce;
+
+  std::atomic<std::size_t> buffersize;
+  std::array<std::pair<std::mutex, std::vector<uint8_t>>, 256> stripbuffers;
 };
 
 class IdUnpacker final {
