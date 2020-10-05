@@ -146,12 +146,13 @@ am__objects_1 = stdshim/libHPCprofile_la-shared_mutex.lo \
 	stdshim/libHPCprofile_la-futex-detail.lo \
 	util/libHPCprofile_la-ragged_vector.lo \
 	util/libHPCprofile_la-once.lo util/libHPCprofile_la-xml.lo \
-	util/libHPCprofile_la-log.lo libHPCprofile_la-pipeline.lo \
-	libHPCprofile_la-source.lo libHPCprofile_la-context.lo \
-	libHPCprofile_la-scope.lo libHPCprofile_la-metric.lo \
-	libHPCprofile_la-module.lo libHPCprofile_la-attributes.lo \
-	libHPCprofile_la-dataclass.lo libHPCprofile_la-sink.lo \
-	libHPCprofile_la-packedids.lo \
+	util/libHPCprofile_la-log.lo \
+	util/libHPCprofile_la-file-posix.lo \
+	libHPCprofile_la-pipeline.lo libHPCprofile_la-source.lo \
+	libHPCprofile_la-context.lo libHPCprofile_la-scope.lo \
+	libHPCprofile_la-metric.lo libHPCprofile_la-module.lo \
+	libHPCprofile_la-attributes.lo libHPCprofile_la-dataclass.lo \
+	libHPCprofile_la-sink.lo libHPCprofile_la-packedids.lo \
 	sources/libHPCprofile_la-hpcrun.lo \
 	sources/libHPCprofile_la-packed.lo \
 	sources/libHPCprofile_la-hpcrun4.lo \
@@ -561,6 +562,7 @@ MYSOURCES = \
 	stdshim/shared_mutex.cpp stdshim/atomic.cpp stdshim/futex-detail.c \
 	\
 	util/ragged_vector.cpp util/once.cpp util/xml.cpp util/log.cpp \
+	util/file-posix.cpp \
 	\
 	pipeline.cpp source.cpp context.cpp scope.cpp metric.cpp \
 	module.cpp attributes.cpp dataclass.cpp sink.cpp packedids.cpp \
@@ -680,6 +682,8 @@ util/libHPCprofile_la-xml.lo: util/$(am__dirstamp) \
 	util/$(DEPDIR)/$(am__dirstamp)
 util/libHPCprofile_la-log.lo: util/$(am__dirstamp) \
 	util/$(DEPDIR)/$(am__dirstamp)
+util/libHPCprofile_la-file-posix.lo: util/$(am__dirstamp) \
+	util/$(DEPDIR)/$(am__dirstamp)
 sources/$(am__dirstamp):
 	@$(MKDIR_P) sources
 	@: > sources/$(am__dirstamp)
@@ -782,6 +786,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@stdshim/$(DEPDIR)/libHPCprofile_la-atomic.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@stdshim/$(DEPDIR)/libHPCprofile_la-futex-detail.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@stdshim/$(DEPDIR)/libHPCprofile_la-shared_mutex.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@util/$(DEPDIR)/libHPCprofile_la-file-posix.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@util/$(DEPDIR)/libHPCprofile_la-log.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@util/$(DEPDIR)/libHPCprofile_la-once.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@util/$(DEPDIR)/libHPCprofile_la-ragged_vector.Plo@am__quote@
@@ -883,6 +888,13 @@ util/libHPCprofile_la-log.lo: util/log.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='util/log.cpp' object='util/libHPCprofile_la-log.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libHPCprofile_la_CXXFLAGS) $(CXXFLAGS) -c -o util/libHPCprofile_la-log.lo `test -f 'util/log.cpp' || echo '$(srcdir)/'`util/log.cpp
+
+util/libHPCprofile_la-file-posix.lo: util/file-posix.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libHPCprofile_la_CXXFLAGS) $(CXXFLAGS) -MT util/libHPCprofile_la-file-posix.lo -MD -MP -MF util/$(DEPDIR)/libHPCprofile_la-file-posix.Tpo -c -o util/libHPCprofile_la-file-posix.lo `test -f 'util/file-posix.cpp' || echo '$(srcdir)/'`util/file-posix.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) util/$(DEPDIR)/libHPCprofile_la-file-posix.Tpo util/$(DEPDIR)/libHPCprofile_la-file-posix.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='util/file-posix.cpp' object='util/libHPCprofile_la-file-posix.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libHPCprofile_la_CXXFLAGS) $(CXXFLAGS) -c -o util/libHPCprofile_la-file-posix.lo `test -f 'util/file-posix.cpp' || echo '$(srcdir)/'`util/file-posix.cpp
 
 libHPCprofile_la-pipeline.lo: pipeline.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libHPCprofile_la_CXXFLAGS) $(CXXFLAGS) -MT libHPCprofile_la-pipeline.lo -MD -MP -MF $(DEPDIR)/libHPCprofile_la-pipeline.Tpo -c -o libHPCprofile_la-pipeline.lo `test -f 'pipeline.cpp' || echo '$(srcdir)/'`pipeline.cpp

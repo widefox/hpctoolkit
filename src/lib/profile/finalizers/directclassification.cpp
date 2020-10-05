@@ -142,6 +142,9 @@ void DirectClassification::module(const Module& m, Classification& c) {
     return;
   }
 
+  close(fd);
+  return;
+
   Elf* elf = elf_begin(fd, HPC_ELF_C_READ, nullptr);
   if(elf == nullptr) {
     close(fd);

@@ -51,6 +51,7 @@
 #include <lib/profile/stdshim/filesystem.hpp>
 #include <lib/profile/util/once.hpp>
 #include <lib/profile/util/locked_unordered.hpp>
+#include <lib/profile/util/file.hpp>
 
 #include <lib/prof-lean/hpcrun-fmt.h>
 #include <lib/prof-lean/id-tuple.h>
@@ -123,11 +124,11 @@ public:
   //***************************************************************************
   // Work with bytes  - YUMENG
   //***************************************************************************
-  int writeAsByte4(uint32_t val, MPI_File fh, MPI_Offset off);
-  int writeAsByte8(uint64_t val, MPI_File fh, MPI_Offset off);
-  int writeAsByteX(std::vector<char>& val, size_t size, MPI_File fh, MPI_Offset off);
-  int readAsByte4(uint32_t& val, MPI_File fh, MPI_Offset off);
-  int readAsByte8(uint64_t& val, MPI_File fh, MPI_Offset off);
+  int writeAsByte4(uint32_t val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
+  int writeAsByte8(uint64_t val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
+  int writeAsByteX(std::vector<char>& val, size_t size, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
+  int readAsByte4(uint32_t& val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
+  int readAsByte8(uint64_t& val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
   void interpretByte2(uint16_t& val, const char *input);
   void interpretByte4(uint32_t& val, const char *input);
   void interpretByte8(uint64_t& val, const char *input);
@@ -141,9 +142,6 @@ public:
 private:
   hpctoolkit::stdshim::filesystem::path dir;
   std::size_t ctxcnt;
-  void merge0(int, MPI_File&, const std::vector<std::pair<hpctoolkit::ThreadAttributes,
-    hpctoolkit::stdshim::filesystem::path>>&);
-  void mergeN(int, MPI_File&);
 
   std::vector<std::reference_wrapper<const hpctoolkit::Context>> contexts;
   unsigned int ctxMaxId;
@@ -228,12 +226,13 @@ private:
 
   std::vector<char> convertTuple2Bytes(const tms_id_tuple_t& tuple);
 
-  size_t writeAllIdTuples(const std::vector<tms_id_tuple_t>& all_tuples, MPI_File fh);
+  size_t writeAllIdTuples(const std::vector<tms_id_tuple_t>& all_tuples,
+                          const hpctoolkit::util::File& fh);
 
   uint64_t workIdTuplesSection(const int world_rank,
                                const int world_size,
                                const int threads,
-                               MPI_File fh);
+                               const hpctoolkit::util::File& fh);
 
   //---------------------------------------------------------------------------
   // get profile's size and corresponding offsets
@@ -288,21 +287,21 @@ private:
                                        
   void writeOneProfInfo(const std::vector<char>& info_bytes, 
                         const uint32_t prof_info_idx,
-                        const MPI_File fh);
+                        hpctoolkit::util::File::Instance& fh);
 
   void writeOneProfileData(const std::vector<char>& bytes, 
                            const uint64_t offset, 
                            const uint32_t prof_info_idx,
-                           const MPI_File fh);
+                           hpctoolkit::util::File::Instance& fh);
 
   void writeOneProfile(const std::pair<tms_id_tuple_t, std::string>& tupleFn,
                        const MPI_Offset my_prof_offset, 
                        const std::pair<uint32_t,uint64_t>& prof_idx_off_pair,
                        std::vector<uint64_t>& ctx_nzval_cnts,
                        std::vector<std::set<uint16_t>>& ctx_nzmids,
-                       MPI_File fh);
+                       hpctoolkit::util::File::Instance& fh);
 
-  void writeProfiles(const MPI_File fh, 
+  void writeProfiles(const hpctoolkit::util::File& fh,
                      const int threads,
                      std::vector<uint64_t>& cct_local_sizes,
                      std::vector<std::set<uint16_t>>& ctx_nzmids);
@@ -356,7 +355,7 @@ private:
                             tms_profile_info_t& pi);
 
   void readProfileInfo(const int threads, 
-                       const MPI_File fh,
+                       const hpctoolkit::util::File& fh,
                        std::vector<tms_profile_info_t>& prof_info);
 
 
@@ -369,7 +368,7 @@ private:
   void interpretOneCtxIdIdxPair(const char *input,
                                 TMS_CtxIdIdxPair& ctx_pair);
                         
-  int readCtxIdIdxPairs(const MPI_File fh, 
+  int readCtxIdIdxPairs(hpctoolkit::util::File::Instance& fh,
                         const MPI_Offset off, 
                         std::vector<TMS_CtxIdIdxPair>& ctx_id_idx_pairs);
 
@@ -390,12 +389,12 @@ private:
   int getMyCtxIdIdxPairs(const tms_profile_info_t& prof_info,
                          const std::vector<uint32_t>& ctx_ids,
                          const std::vector<TMS_CtxIdIdxPair>& prof_ctx_pairs,
-                         const MPI_File fh,
+                         hpctoolkit::util::File::Instance& fh,
                          //std::map<uint32_t, uint64_t>& my_ctx_pairs);
                          std::vector<std::pair<uint32_t, uint64_t>>& my_ctx_pairs);
 
   std::vector<std::vector<TMS_CtxIdIdxPair>> 
-  getProfileCtxIdIdxPairs(const MPI_File fh,
+  getProfileCtxIdIdxPairs(const hpctoolkit::util::File& fh,
                           const int threads,
                           const std::vector<tms_profile_info_t>& prof_info);
 
@@ -417,7 +416,7 @@ private:
                         //std::map<uint32_t, uint64_t>& my_ctx_pairs,
                         std::vector<std::pair<uint32_t, uint64_t>>& my_ctx_pairs,
                         const tms_profile_info_t& prof_info,
-                        const MPI_File fh,
+                        hpctoolkit::util::File::Instance& fh,
                         std::vector<char>& bytes);
 
   MetricValBlock createNewMetricValBlock(const hpcrun_metricVal_t val, 
@@ -455,13 +454,6 @@ private:
                              std::vector<std::pair<uint32_t, uint64_t>>& my_ctx_pairs,
                              CtxMetricBlock& cmb);
 
-  
-  void readOneProfile(const std::vector<uint32_t>& ctx_ids, 
-                      const tms_profile_info_t& prof_info,
-                      const std::vector<TMS_CtxIdIdxPair>& prof_ctx_pairs,
-                      const MPI_File fh,
-                      std::map<uint32_t, CtxMetricBlock>& ctx_met_blocks);
-
 
   //---------------------------------------------------------------------------
   // read and interpret ALL profies 
@@ -481,7 +473,7 @@ private:
                     const std::vector<tms_profile_info_t>& prof_info,
                     int threads,
                     const std::vector<std::vector<TMS_CtxIdIdxPair>>& all_prof_ctx_pairs,
-                    MPI_File fh,
+                    const hpctoolkit::util::File& fh,
                     std::map<uint32_t, CtxMetricBlock>& ctx_met_blocks);                    
 
 
@@ -534,7 +526,7 @@ private:
                     const std::vector<uint64_t>& ctx_off,
                     const CtxMetricBlock& cmb,
                     const int threads,
-                    MPI_File ofh);
+                    hpctoolkit::util::File::Instance& ofh);
 
   //---------------------------------------------------------------------------
   // read and write for all contexts in this rank's list
@@ -545,8 +537,8 @@ private:
                      const std::vector<uint64_t>& ctx_off, 
                      const int threads, 
                      const std::vector<std::vector<TMS_CtxIdIdxPair>>& all_prof_ctx_pairs,
-                     const MPI_File fh, 
-                     MPI_File ofh);
+                     const hpctoolkit::util::File& fh,
+                     const hpctoolkit::util::File& ofh);
 
 
   void rwAllCtxGroup(const std::vector<uint32_t>& my_ctxs, 
@@ -554,8 +546,8 @@ private:
                      const std::vector<uint64_t>& ctx_off, 
                      const int threads,
                      const std::vector<std::vector<TMS_CtxIdIdxPair>>& all_prof_ctx_pairs,
-                     const MPI_File fh, 
-                     MPI_File ofh);
+                     const hpctoolkit::util::File& fh,
+                     const hpctoolkit::util::File& ofh);
 
 };
 

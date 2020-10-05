@@ -144,7 +144,7 @@ am__dirstamp = $(am__leading_dot)dirstamp
 am__objects_1 = hpcprof2_mpi-main.$(OBJEXT) \
 	hpcprof2_mpi-master.$(OBJEXT) hpcprof2_mpi-worker.$(OBJEXT) \
 	hpcprof2_mpi-tree.$(OBJEXT) hpcprof2_mpi-sparse.$(OBJEXT) \
-	hpcprof2_mpi-sparse-mpi.$(OBJEXT) hpcprof2_mpi-mpi.$(OBJEXT) \
+	hpcprof2_mpi-mpi.$(OBJEXT) \
 	../hpcprof2/hpcprof2_mpi-args.$(OBJEXT)
 am_hpcprof2_mpi_OBJECTS = $(am__objects_1)
 hpcprof2_mpi_OBJECTS = $(am_hpcprof2_mpi_OBJECTS)
@@ -521,7 +521,7 @@ EXT_LIBS = lib/hpctoolkit/ext-libs
 @OPT_DYNINST_LIBDW_FALSE@MY_ELF_DWARF = -L$(LIBDWARF_LIB) -ldwarf -L$(LIBELF_LIB) -lelf
 @OPT_DYNINST_LIBDW_TRUE@MY_ELF_DWARF = -L$(LIBELF_LIB) -ldw -lelf
 MYSOURCES = \
-	main.cpp master.cpp worker.cpp tree.cpp sparse.cpp sparse-mpi.cpp \
+	main.cpp master.cpp worker.cpp tree.cpp sparse.cpp \
 	mpi.cpp ../hpcprof2/args.cpp
 
 MYCFLAGS = @HOST_CFLAGS@ $(HPC_IFLAGS) @BINUTILS_IFLAGS@ \
@@ -671,7 +671,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hpcprof2_mpi-main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hpcprof2_mpi-master.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hpcprof2_mpi-mpi.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hpcprof2_mpi-sparse-mpi.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hpcprof2_mpi-sparse.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hpcprof2_mpi-tree.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hpcprof2_mpi-worker.Po@am__quote@
@@ -769,20 +768,6 @@ hpcprof2_mpi-sparse.obj: sparse.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='sparse.cpp' object='hpcprof2_mpi-sparse.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(hpcprof2_mpi_CXXFLAGS) $(CXXFLAGS) -c -o hpcprof2_mpi-sparse.obj `if test -f 'sparse.cpp'; then $(CYGPATH_W) 'sparse.cpp'; else $(CYGPATH_W) '$(srcdir)/sparse.cpp'; fi`
-
-hpcprof2_mpi-sparse-mpi.o: sparse-mpi.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(hpcprof2_mpi_CXXFLAGS) $(CXXFLAGS) -MT hpcprof2_mpi-sparse-mpi.o -MD -MP -MF $(DEPDIR)/hpcprof2_mpi-sparse-mpi.Tpo -c -o hpcprof2_mpi-sparse-mpi.o `test -f 'sparse-mpi.cpp' || echo '$(srcdir)/'`sparse-mpi.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/hpcprof2_mpi-sparse-mpi.Tpo $(DEPDIR)/hpcprof2_mpi-sparse-mpi.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='sparse-mpi.cpp' object='hpcprof2_mpi-sparse-mpi.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(hpcprof2_mpi_CXXFLAGS) $(CXXFLAGS) -c -o hpcprof2_mpi-sparse-mpi.o `test -f 'sparse-mpi.cpp' || echo '$(srcdir)/'`sparse-mpi.cpp
-
-hpcprof2_mpi-sparse-mpi.obj: sparse-mpi.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(hpcprof2_mpi_CXXFLAGS) $(CXXFLAGS) -MT hpcprof2_mpi-sparse-mpi.obj -MD -MP -MF $(DEPDIR)/hpcprof2_mpi-sparse-mpi.Tpo -c -o hpcprof2_mpi-sparse-mpi.obj `if test -f 'sparse-mpi.cpp'; then $(CYGPATH_W) 'sparse-mpi.cpp'; else $(CYGPATH_W) '$(srcdir)/sparse-mpi.cpp'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/hpcprof2_mpi-sparse-mpi.Tpo $(DEPDIR)/hpcprof2_mpi-sparse-mpi.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='sparse-mpi.cpp' object='hpcprof2_mpi-sparse-mpi.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(hpcprof2_mpi_CXXFLAGS) $(CXXFLAGS) -c -o hpcprof2_mpi-sparse-mpi.obj `if test -f 'sparse-mpi.cpp'; then $(CYGPATH_W) 'sparse-mpi.cpp'; else $(CYGPATH_W) '$(srcdir)/sparse-mpi.cpp'; fi`
 
 hpcprof2_mpi-mpi.o: mpi.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(hpcprof2_mpi_CXXFLAGS) $(CXXFLAGS) -MT hpcprof2_mpi-mpi.o -MD -MP -MF $(DEPDIR)/hpcprof2_mpi-mpi.Tpo -c -o hpcprof2_mpi-mpi.o `test -f 'mpi.cpp' || echo '$(srcdir)/'`mpi.cpp
