@@ -76,7 +76,7 @@ File::File(stdshim::filesystem::path path, bool create) noexcept
     std::fclose(f);
   } else {
     bool ok = mpi::bcast<int>(0);
-    if(!ok) util::log::fatal{} << "Error opening file " << udF(data)->path;
+    if(!ok) util::log::fatal{} << "Rank 0 failed to open file " << udF(data)->path;
   }
 }
 
@@ -118,9 +118,9 @@ void File::Instance::writeat(std::uint_fast64_t offset, std::size_t size, const 
   auto cnt = std::fwrite(buf, 1, size, udI(data)->filep);
   if(cnt < size) {
     if(ferror(udI(data)->filep))
-      util::log::fatal{} << "Error during read: I/O error";
+      util::log::fatal{} << "Error during write: I/O error";
     else
-      util::log::fatal{} << "Error during read: EOF after " << cnt
-                         << " bytes (of " << size << " byte read)";
+      util::log::fatal{} << "Error during write: EOF after " << cnt
+                         << " bytes (of " << size << " byte write)";
   }
 }
