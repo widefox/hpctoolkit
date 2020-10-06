@@ -49,6 +49,9 @@
 #include "../util/log.hpp"
 #include "lib/prof-lean/hpcrun-fmt.h"
 
+// TODO: Remove this after catching the develop commits
+#define HPCRUN_FMT_NV_traceOrdered "trace-time-ordered"
+
 using namespace hpctoolkit;
 using namespace sources;
 using namespace literals::data;
@@ -56,7 +59,8 @@ using namespace literals::data;
 Hpcrun4::Hpcrun4(const stdshim::filesystem::path& fn)
   : ProfileSource(), attrsValid(true), tattrsValid(true), thread(nullptr),
     path(fn), partial_node_id(0), unknown_node_id(0),
-    tracepath(fn.parent_path() / fn.stem().concat(".hpctrace")) {
+    tracepath(fn.parent_path() / fn.stem().concat(".hpctrace")),
+    trace_sort(false) {
   // Try to open up the file. Errors handled inside somewhere.
   file = hpcrun_sparse_open(path.c_str());
   if(file == nullptr) throw std::logic_error("Unable to open file!");
@@ -93,7 +97,9 @@ Hpcrun4::Hpcrun4(const stdshim::filesystem::path& fn)
       hostid = std::strtol(v, nullptr, 16);
     else if(k == HPCRUN_FMT_NV_pid)
       tattrs.procid(std::strtol(v, nullptr, 10));
-    else if(k != HPCRUN_FMT_NV_traceMinTime
+    else if(k == HPCRUN_FMT_NV_traceOrdered) {
+      if(std::string(v) == "1") trace_sort = true;
+    } else if(k != HPCRUN_FMT_NV_traceMinTime
             && k != HPCRUN_FMT_NV_traceMaxTime) {
       util::log::warning()
       << "Unknown file attribute in " << path.string() << ":\n"
@@ -298,6 +304,8 @@ void Hpcrun4::read(const DataClass& needed) {
   hpcrun_sparse_pause(file);
 
   if(needed.hasTimepoints() && !tracepath.empty()) {
+    std::vector<std::pair<std::chrono::nanoseconds, std::reference_wrapper<Context>>> tps;
+
     std::FILE* f = std::fopen(tracepath.c_str(), "rb");
     std::fseek(f, trace_off, SEEK_SET);
     hpctrace_fmt_datum_t tpoint;
@@ -309,12 +317,29 @@ void Hpcrun4::read(const DataClass& needed) {
       auto it = nodes.find(tpoint.cpId);
       if(it != nodes.end()) {
         std::chrono::nanoseconds tp(HPCTRACE_FMT_GET_TIME(tpoint.comp));
-        if(thread)
-          sink.timepoint(*thread, it->second, tp);
-        else
-          sink.timepoint(it->second, tp);
+        if(trace_sort)
+          tps.emplace_back(tp, it->second);
+        else {
+          if(thread)
+            sink.timepoint(*thread, it->second, tp);
+          else
+            sink.timepoint(it->second, tp);
+        }
       }
     }
     std::fclose(f);
+
+    if(trace_sort) {
+      std::sort(tps.begin(), tps.end(),
+        [](const decltype(tps)::value_type& a, const decltype(tps)::value_type& b) -> bool {
+          return a.first < b.first;
+        });
+      for(const auto& tp: tps) {
+        if(thread)
+          sink.timepoint(*thread, tp.second, tp.first);
+        else
+          sink.timepoint(tp.second, tp.first);
+      }
+    }
   }
 }

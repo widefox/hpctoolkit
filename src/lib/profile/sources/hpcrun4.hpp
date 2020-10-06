@@ -99,6 +99,7 @@ private:
   // Path to the tracefile, and offset of the actual data blob.
   stdshim::filesystem::path tracepath;
   long trace_off;
+  bool trace_sort;
 
   // We're all friends here.
   friend std::unique_ptr<ProfileSource> ProfileSource::create_for(const stdshim::filesystem::path&);
