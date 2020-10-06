@@ -76,8 +76,7 @@ Context& IdPacker::Classifier::context(Context& c, Scope& s) {
   v.emplace_back(sink.context(cc, s));
 
   // Check that we haven't handled this particular Context already
-  auto& strip = v.back().get().userdata[shared.udOnce];
-  if(strip.once.test_and_set(std::memory_order_acquire)) return cc;
+  if(!c.userdata[shared.udOnce].seen.emplace(s).second) return cc;
   shared.stripcnt.fetch_add(1, std::memory_order_relaxed);
 
   // Nab a pseudo-random buffer to fill with our data
@@ -264,7 +263,11 @@ Context& IdUnpacker::Expander::context(Context& c, Scope& s) {
   util::call_once(shared.once, [this]{ shared.unpack(sink); });
   Context* cp = &c;
   bool first = true;
-  for(const auto& next: shared.exmap.at(c.userdata[sink.identifier()]).at(s)) {
+  auto x = shared.exmap.find(c.userdata[sink.identifier()]);
+  if(x == shared.exmap.end()) util::log::fatal{} << "No data for context id " << c.userdata[sink.identifier()];
+  auto y = x->second.find(s);
+  if(y == x->second.end()) util::log::fatal{} << "No data for scope " << s.point_data().second << " from context " << c.userdata[sink.identifier()];
+  for(const auto& next: y->second) {
     if(!first) cp = &sink.context(*cp, s);
     s = next;
     first = false;

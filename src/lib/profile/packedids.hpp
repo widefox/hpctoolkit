@@ -98,10 +98,8 @@ public:
 private:
   std::atomic<std::size_t> stripcnt;
   struct ctxonce {
-    ctxonce(const Context&, Sink&) {
-      once.clear(std::memory_order_relaxed);
-    }
-    std::atomic_flag once;
+    ctxonce(const Context&, Sink&) {};
+    util::locked_unordered_set<Scope> seen;
   };
   Context::ud_t::typed_member_t<ctxonce> udOnce;
 
