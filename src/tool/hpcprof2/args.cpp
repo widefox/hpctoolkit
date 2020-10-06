@@ -379,18 +379,12 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
   }
 
   // Now that the arguments have been munged, we can do the inputs.
+  std::vector<stdshim::filesystem::path> files;
   for(int idx = optind; idx < argc; idx++) {
     fs::path p(argv[idx]);
     if(fs::is_directory(p)) {
-      bool any = false;
-      for(const auto& de: fs::directory_iterator(p)) {
-        auto s = ProfileSource::create_for(de);
-        if(s) { any = true; sources.emplace_back(std::move(s), de.path()); }
-      }
-      if(!any) {
-        std::cerr << "ERROR: No recognized profiles in " << p << "! Aborting!\n";
-        std::exit(1);
-      }
+      for(const auto& de: fs::directory_iterator(p))
+        files.emplace_back(de.path());
       // Also check for a structs/ directory for extra structfiles.
       fs::path sp = p / "structs";
       if(fs::exists(sp)) {
@@ -402,14 +396,20 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
           ProfArgs::structs.emplace_back(std::move(c), de);
         }
       }
-    } else {
+    } else files.emplace_back(p);
+  }
+
+  #pragma omp parallel num_threads(threads)
+  {
+    decltype(sources) my_sources;
+    #pragma omp for
+    for(std::size_t i = 0; i < files.size(); i++) {
+      auto& p = files[i];
       auto s = ProfileSource::create_for(p);
-      if(!s) {
-        std::cerr << "ERROR: Invalid profile " << p << "!\n";
-        std::exit(1);
-      }
-      sources.emplace_back(std::move(s), p);
+      if(s) my_sources.emplace_back(std::move(s), std::move(p));
     }
+    #pragma omp critical
+    for(auto& sp: my_sources) sources.emplace_back(std::move(sp));
   }
 
   if(sources.empty()) {
