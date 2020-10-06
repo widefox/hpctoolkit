@@ -71,13 +71,10 @@ File::File(stdshim::filesystem::path path, bool create) noexcept
   if(mpi::World::rank() == 0) {
     // Check that the file exists, or clear and create if we need to.
     FILE* f = std::fopen(udF(data)->path.c_str(), create ? "w" : "r");
-    bool ok = mpi::bcast((int)(f == nullptr ? 0 : 1), 0);
-    if(!ok) util::log::fatal{} << "Error opening file " << udF(data)->path;
+    if(!f) util::log::fatal{} << "Error opening file " << udF(data)->path;
     std::fclose(f);
-  } else {
-    bool ok = mpi::bcast<int>(0);
-    if(!ok) util::log::fatal{} << "Rank 0 failed to open file " << udF(data)->path;
   }
+  mpi::bcast((uint8_t)0, 0);
 }
 
 struct InstanceUD {
