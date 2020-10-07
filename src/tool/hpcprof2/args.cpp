@@ -469,16 +469,30 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
   std::size_t limit = totalcnt / mpi::World::size();
   std::uint32_t avail = sources.size() < limit+1 ? limit+1 - sources.size() : 0;
   std::vector<std::string> extra;
-  for(std::size_t i = sources.size()-1; i > limit; i--) {
-    assert(i == sources.size()-1);
-    extra.emplace_back(std::move(sources.back().second).string());
-    sources.pop_back();
+  if(sources.size() > 0) {
+    for(std::size_t i = sources.size()-1; i > limit; i--) {
+      assert(i == sources.size()-1);
+      extra.emplace_back(std::move(sources.back().second).string());
+      sources.pop_back();
+    }
   }
+  util::log::debug{true} << "Have " << avail << " total slots left, " << extra.size() << " extras";
   auto avails = mpi::gather(avail, 0);
   auto extras = mpi::gather(std::move(extra), 0);
 
   // Allocate extra strings to ranks with available slots.
   if(avails && extras) {
+    std::size_t numextra = 0;
+    std::size_t numnearavail = 0;
+    std::size_t numavail = 0;
+    for(std::size_t r = 0; r < mpi::World::size(); r++) {
+      numextra += extras.value()[r].size();
+      if(avails.value()[r] > 1) numnearavail += avails.value()[r]-1;
+      numavail += avails.value()[r];
+      util::log::debug{true} << "Rank " << r << " has " << avails.value()[r] << " slots, " << extras.value()[r].size() << " extras";
+    }
+    util::log::debug{true} << "To allocate " << numextra << " into " << numavail << " (near " << numnearavail << ") slots";
+
     std::vector<std::vector<std::string>> allocations(mpi::World::size());
     std::size_t next = 0;
     bool nearfull = false;
