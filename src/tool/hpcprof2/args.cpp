@@ -49,7 +49,7 @@
 #include "lib/profile/source.hpp"
 #include "lib/profile/finalizers/struct.hpp"
 #include "include/hpctoolkit-config.h"
-#include "lib/profile/mpi/bcast.hpp"
+#include "lib/profile/mpi/all.hpp"
 
 #include <getopt.h>
 #include <iostream>
@@ -378,45 +378,133 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
     output = mpi::bcast(output.string(), 0);
   }
 
-  // Now that the arguments have been munged, we can do the inputs.
-  std::vector<stdshim::filesystem::path> files;
-  for(int idx = optind; idx < argc; idx++) {
-    fs::path p(argv[idx]);
-    if(fs::is_directory(p)) {
-      for(const auto& de: fs::directory_iterator(p))
-        files.emplace_back(de.path());
-      // Also check for a structs/ directory for extra structfiles.
-      fs::path sp = p / "structs";
-      if(fs::exists(sp)) {
-        for(const auto& de: fs::directory_iterator(sp)) {
-          std::unique_ptr<ProfileFinalizer> c;
-          try {
-            c.reset(new finalizers::StructFile(de));
-          } catch(...) { continue; }
-          ProfArgs::structs.emplace_back(std::move(c), de);
+  // Gather up all the potential inputs, and distribute them across the ranks
+  std::vector<std::pair<stdshim::filesystem::path, std::size_t>> files;
+  {
+    std::vector<std::string> files_s;
+    if(mpi::World::rank() == 0) {
+      std::vector<std::vector<std::string>> allfiles(mpi::World::size());
+      std::size_t peer = 0;
+      for(int idx = optind; idx < argc; idx++) {
+        fs::path p(argv[idx]);
+        if(fs::is_directory(p)) {
+          for(const auto& de: fs::directory_iterator(p)) {
+            allfiles[peer].emplace_back(de.path().string());
+            peer = (peer + 1) % allfiles.size();
+          }
+          // Also check for a structs/ directory for extra structfiles.
+          fs::path sp = p / "structs";
+          if(fs::exists(sp)) {
+            for(const auto& de: fs::directory_iterator(sp)) {
+              std::unique_ptr<ProfileFinalizer> c;
+              try {
+                c.reset(new finalizers::StructFile(de));
+              } catch(...) { continue; }
+              ProfArgs::structs.emplace_back(std::move(c), de);
+            }
+          }
+        } else {
+          allfiles[peer].emplace_back(p.string());
+          peer = (peer + 1) % allfiles.size();
         }
+        // We use an empty string to mark the boundaries between argument "groups"
+        for(auto& fs: allfiles) fs.emplace_back("");
       }
-    } else files.emplace_back(p);
+      files_s = mpi::scatter(std::move(allfiles), 0);
+    } else {
+      files_s = mpi::scatter<std::vector<std::string>>(0);
+    }
+    std::size_t arg = 0;
+    files.reserve(files_s.size());
+    for(auto& p: files_s) {
+      if(p.empty()) arg++;
+      else files.emplace_back(std::move(p), arg);
+    }
   }
 
+  // Every rank tests its allocated set of inputs, and the total number of
+  // successes per group is summed.
+  std::vector<std::uint32_t> cnts(argc - optind, 0);
   #pragma omp parallel num_threads(threads)
   {
     decltype(sources) my_sources;
     #pragma omp for
     for(std::size_t i = 0; i < files.size(); i++) {
-      auto& p = files[i];
-      auto s = ProfileSource::create_for(p);
-      if(s) my_sources.emplace_back(std::move(s), std::move(p));
+      auto pg = std::move(files[i]);
+      auto s = ProfileSource::create_for(pg.first);
+      if(s) {
+        my_sources.emplace_back(std::move(s), std::move(pg.first));
+        cnts[pg.second]++;
+      }
     }
     #pragma omp critical
     for(auto& sp: my_sources) sources.emplace_back(std::move(sp));
   }
+  cnts = mpi::allreduce(std::move(cnts), mpi::Op::sum());
+  std::size_t totalcnt = 0;
+  for(auto c: cnts) totalcnt += c;
 
-  if(sources.empty()) {
-    std::cerr << "No input files given!\n"
-                 "Usage: " << fs::path(argv[0]).filename().string()
-                            << " " << summary << "\n";
-    std::exit(2);
+  // If there are any arguments missing successes, rank 0 exits early
+  if(mpi::World::rank() == 0) {
+    if(totalcnt == 0) {
+      std::cerr << "No input files given!\n"
+                   "Usage: " << fs::path(argv[0]).filename().string()
+                              << " " << summary << "\n";
+      std::exit(2);
+    }
+    for(std::size_t g = 0; g < cnts.size(); g++) {
+      if(cnts[g] == 0) {
+        std::cerr << "Argument does not contain any profiles: " << argv[optind+g] << "\n";
+        std::exit(2);
+      }
+    }
+  }
+
+  // Every rank over the average workload ships its extra paths up to rank 0,
+  // every rank under the limit gives a report as to how many it can take.
+  std::size_t limit = totalcnt / mpi::World::size();
+  std::uint32_t avail = sources.size() < limit+1 ? limit+1 - sources.size() : 0;
+  std::vector<std::string> extra;
+  for(std::size_t i = sources.size()-1; i > limit; i--) {
+    assert(i == sources.size()-1);
+    extra.emplace_back(std::move(sources.back().second).string());
+    sources.pop_back();
+  }
+  auto avails = mpi::gather(avail, 0);
+  auto extras = mpi::gather(std::move(extra), 0);
+
+  // Allocate extra strings to ranks with available slots.
+  if(avails && extras) {
+    std::vector<std::vector<std::string>> allocations(mpi::World::size());
+    std::size_t next = 0;
+    bool nearfull = false;
+    for(auto& ps: *extras) {
+      for(auto& p: ps) {
+        while(1) {
+          while((*avails)[next] <= (nearfull ? 0 : 1) && next < avails->size()) {
+            next++;
+          }
+          if(next < avails->size()) break;
+          if(nearfull) util::log::fatal{} << "No more slots to allocate!";
+          if(next >= avails->size()) {
+            // Try again, but allocate more aggressively
+            nearfull = true;
+            next = 0;
+          }
+        }
+        allocations[next].emplace_back(std::move(p));
+        (*avails)[next] -= 1;
+      }
+    }
+    extra = mpi::scatter(std::move(allocations), 0);
+  } else extra = mpi::scatter<std::vector<std::string>>(0);
+
+  // Add the inputs newly allocated to us to our set
+  for(auto& p_s: extra) {
+    stdshim::filesystem::path p = std::move(p_s);
+    auto s = ProfileSource::create_for(p);
+    if(!s) util::log::fatal{} << "Inputs have changed during preparation!";
+    sources.emplace_back(std::move(s), std::move(p));
   }
 }
 

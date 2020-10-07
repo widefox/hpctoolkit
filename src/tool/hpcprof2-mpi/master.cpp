@@ -80,19 +80,7 @@ static std::unique_ptr<T> make_unique_x(Args&&... args) {
 int rank0(ProfArgs&& args) {
   // We only have one Pipeline, this is its builder.
   ProfilePipeline::Settings pipelineB;
-
-  // Divvy up the inputs across the WORLD.
-  {
-    std::vector<std::vector<std::string>> paths(mpi::World::size());
-    std::size_t rank = 1;  // Allocate to rank 1 first.
-    for(auto& sp: args.sources) {      auto src = std::move(sp.first);
-      if(rank >= mpi::World::size()) rank = 0;
-      if(rank == 0) pipelineB << std::move(src);
-      else paths[rank].push_back(sp.second.string());
-      rank++;
-    }
-    mpi::scatter(std::move(paths), 0);
-  }
+  for(auto& sp: args.sources) pipelineB << std::move(sp.first);
 
   // Set up our reduction tree with our fellow peers
   RankTree tree{std::max<std::size_t>(args.threads, 2)};

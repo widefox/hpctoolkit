@@ -83,15 +83,13 @@ static std::unique_ptr<T> make_unique_x(Args&&... args) {
 }
 
 int rankN(ProfArgs&& args) {
-  auto srcs = mpi::scatter<std::vector<std::string>>(0);
-
   ProfilePipeline::Settings pipelineB1;
   ProfilePipeline::Settings pipelineB2;
 
   // We use (mostly) the same Sources for both Pipelines.
-  for(const auto& p: srcs) {
-    pipelineB1 << ProfileSource::create_for(p);
-    pipelineB2 << ProfileSource::create_for(p);
+  for(auto& sp: args.sources) {
+    pipelineB1 << std::move(sp.first);
+    pipelineB2 << ProfileSource::create_for(sp.second);
   }
 
   std::size_t threadIdOffset;
