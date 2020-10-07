@@ -74,7 +74,7 @@ template<class T, std::void_t<decltype(detail::asDatatype<T>())>* = nullptr>
 stdshim::optional<std::vector<T>> gather(T data, std::size_t root) {
   if(World::rank() == root) {
     std::vector<T> result(World::size());
-    result[0] = std::move(data);
+    result[root] = std::move(data);
     detail::gather(result.data(), 1, detail::asDatatype<T>(), root);
     return std::move(result);
   }
@@ -91,7 +91,7 @@ T scatter(std::vector<T, A> data, std::size_t root) {
     if(data.size() != World::size())
       util::log::fatal{} << "Invalid data argument to mpi::scatter!";
     detail::scatter(data.data(), 1, detail::asDatatype<T>(), root);
-    return std::move(data[0]);
+    return std::move(data[root]);
   }
 
   T result;
@@ -112,7 +112,7 @@ template<class T, std::size_t N>
 stdshim::optional<std::vector<std::array<T, N>>> gather(std::array<T, N> data, std::size_t root) {
   if(World::rank() == root) {
     std::vector<T> buffer(N * World::size());
-    for(std::size_t i = 0; i < N; i++) buffer[i] = std::move(data[i]);
+    for(std::size_t i = 0; i < N; i++) buffer[N*root + i] = std::move(data[i]);
     detail::gather(buffer.data(), N, detail::asDatatype<T>(), root);
     std::vector<std::array<T, N>> result(World::size());
     for(std::size_t r = 0, idx = 0; r < World::size(); r++)
@@ -138,7 +138,7 @@ std::array<T, N> scatter(std::vector<std::array<T, N>, A> data, std::size_t root
     detail::scatter(buffer.data(), N, detail::asDatatype<T>(), root);
     std::array<T, N> result;
     for(std::size_t i = 0; i < N; i++)
-      result[i] = std::move(buffer[i]);
+      result[i] = std::move(buffer[N*root + i]);
     return std::move(result);
   }
 
@@ -151,23 +151,24 @@ std::array<T, N> scatter(std::vector<std::array<T, N>, A> data, std::size_t root
 /// This allows for ranks to contribute different numbers of elements.
 template<class T>
 stdshim::optional<std::vector<std::vector<T>>> gather(std::vector<T> data, std::size_t root) {
-  auto cnts = gather(data.size(), root);
-
   if(World::rank() == root) {
+    auto cnts = gather((std::size_t)0, root);
     std::size_t total = 0;
     for(std::size_t r = 0; r < World::size(); r++) total += (*cnts)[r];
-    data.resize(total);
-    detail::gatherv(data.data(), cnts.value().data(), detail::asDatatype<T>(), root);
+    std::vector<T> buffer(total);
+    detail::gatherv(buffer.data(), cnts.value().data(), detail::asDatatype<T>(), root);
     std::vector<std::vector<T>> result(World::size());
     total = 0;
     for(std::size_t r = 0; r < World::size(); r++) {
       result[r].reserve(cnts.value()[r]);
       for(std::size_t i = 0; i < cnts.value()[r]; i++, total++)
-        result[r].emplace_back(std::move(data[total]));
+        result[r].emplace_back(std::move(buffer[total]));
     }
+    result[root] = std::move(data);
     return std::move(result);
   }
 
+  gather(data.size(), root);
   detail::gatherv(data.data(), data.size(), detail::asDatatype<T>(), root);
   return {};
 }
@@ -180,17 +181,18 @@ std::vector<T> scatter(std::vector<std::vector<T>> data, std::size_t root) {
     if(data.size() != World::size())
       util::log::fatal{} << "Invalid data argument to mpi::scatter!";
     std::vector<std::size_t> cnts(World::size());
-    cnts[0] = 0;
+    cnts[root] = 0;
     std::vector<T> buffer;
     std::size_t totalsz = 0;
-    for(std::size_t r = 1; r < World::size(); r++)
-      totalsz += (cnts[r] = data[r].size());
+    for(std::size_t r = 0; r < World::size(); r++)
+      totalsz += r == root ? 0 : (cnts[r] = data[r].size());
     buffer.reserve(totalsz);
-    for(std::size_t r = 1; r < World::size(); r++)
-      buffer.insert(buffer.end(), data[r].begin(), data[r].end());
+    for(std::size_t r = 0; r < World::size(); r++)
+      if(r != root)
+        for(auto& x: data[r]) buffer.emplace_back(std::move(x));
     scatter(cnts, root);
     detail::scatterv(buffer.data(), cnts.data(), detail::asDatatype<T>(), root);
-    return std::move(data[0]);
+    return std::move(data[root]);
   }
 
   auto cnt = scatter(std::vector<std::size_t>{}, root);
@@ -229,7 +231,7 @@ stdshim::optional<std::vector<std::vector<std::basic_string<C,T>>>> gather(std::
     auto lengths = gather(std::vector<std::size_t>{}, root).value();
     auto strips = gather(std::vector<C>{}, root).value();
     std::vector<std::vector<std::basic_string<C,T>>> result(World::size());
-    result[0] = std::move(data);
+    result[root] = std::move(data);
     for(std::size_t r = 0; r < World::size(); r++) {
       result[r].reserve(lengths[r].size());
       for(std::size_t i = 0, idx = 0; i < lengths[r].size(); idx += lengths[r][i], i++)
@@ -260,20 +262,22 @@ std::vector<std::basic_string<C,T>> scatter(std::vector<std::vector<std::basic_s
       util::log::fatal{} << "Invalid data argument to mpi::scatter!";
     std::vector<std::vector<std::size_t>> lengths(World::size());
     std::vector<std::vector<C>> strips(World::size());
-    for(std::size_t r = 1; r < World::size(); r++) {
-      lengths[r].reserve(data[r].size());
-      std::size_t totalsz = 0;
-      for(std::size_t i = 0; i < data[r].size(); i++) {
-        lengths[r].push_back(data[r][i].size());
-        totalsz += data[r][i].size();
+    for(std::size_t r = 0; r < World::size(); r++) {
+      if(r != root) {
+        lengths[r].reserve(data[r].size());
+        std::size_t totalsz = 0;
+        for(std::size_t i = 0; i < data[r].size(); i++) {
+          lengths[r].push_back(data[r][i].size());
+          totalsz += data[r][i].size();
+        }
+        strips[r].reserve(totalsz);
+        for(std::size_t i = 0; i < data[r].size(); i++)
+          strips[r].insert(strips[r].end(), data[r][i].begin(), data[r][i].end());
       }
-      strips[r].reserve(totalsz);
-      for(std::size_t i = 0; i < data[r].size(); i++)
-        strips[r].insert(strips[r].end(), data[r][i].begin(), data[r][i].end());
     }
     scatter(std::move(lengths), root);
     scatter(std::move(strips), root);
-    return std::move(data[0]);
+    return std::move(data[root]);
   }
 
   auto lengths = scatter(std::vector<std::vector<std::size_t>>{}, root);

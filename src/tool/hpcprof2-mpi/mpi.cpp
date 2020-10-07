@@ -164,9 +164,15 @@ void detail::exscan(void* data, std::size_t cnt, const Datatype& ty,
 }
 void detail::gather(void* data, std::size_t cnt, const Datatype& ty,
                     std::size_t rootRank) {
-  if(MPI_Gather(data, cnt, ty.value, data, cnt, ty.value, rootRank,
-                MPI_COMM_WORLD) != MPI_SUCCESS)
-    util::log::fatal{} << "Error while performing an MPI gather!";
+  if(World::rank() == rootRank) {
+    if(MPI_Gather(MPI_IN_PLACE, 0, 0, data, cnt, ty.value, rootRank,
+                  MPI_COMM_WORLD) != MPI_SUCCESS)
+      util::log::fatal{} << "Error while performing an MPI gather!";
+  } else {
+    if(MPI_Gather(data, cnt, ty.value, nullptr, 0, 0, rootRank,
+                  MPI_COMM_WORLD) != MPI_SUCCESS)
+      util::log::fatal{} << "Error while performing an MPI gather!";
+  }
 }
 void detail::gatherv(void* data, const std::size_t* cnts, const Datatype& ty,
                      std::size_t rootRank) {
