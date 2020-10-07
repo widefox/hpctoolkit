@@ -2348,9 +2348,15 @@ void SparseDB::merge(int threads, bool debug) {
 
   if(!debug) {
     mpi::barrier();
+    std::vector<stdshim::filesystem::path> torm;
+    torm.reserve(outputs.size() + 1);
+    torm.emplace_back(std::move(summaryOut));
     for(const auto& tp: outputs.citerate())
-      stdshim::filesystem::remove(tp.second);
-    stdshim::filesystem::remove(summaryOut);
+      torm.emplace_back(std::move(tp.second));
+
+    #pragma omp parallel for num_threads(threads) schedule(dynamic)
+    for(std::size_t i = 0; i < torm.size(); i++)
+      stdshim::filesystem::remove(std::move(torm[i]));
   }
 }
 
