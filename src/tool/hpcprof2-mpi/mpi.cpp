@@ -160,7 +160,7 @@ void detail::exscan(void* data, std::size_t cnt, const Datatype& ty,
 }
 void detail::gather(void* data, std::size_t cnt, const Datatype& ty,
                     std::size_t rootRank) {
-  if(MPI_Gather(MPI_IN_PLACE, 0, ty.value, data, cnt, ty.value, rootRank,
+  if(MPI_Gather(data, cnt, ty.value, data, cnt, ty.value, rootRank,
                 MPI_COMM_WORLD) != MPI_SUCCESS)
     util::log::fatal{} << "Error while performing an MPI gather!";
 }

@@ -50,6 +50,7 @@
 #include "core.hpp"
 
 #include <array>
+#include <vector>
 
 namespace hpctoolkit::mpi {
 
@@ -87,15 +88,31 @@ T* allreduce(T*, const Op&) = delete;
 
 /// Reduction operation. Variant to allow for the usage of std::array.
 template<class T, std::size_t N>
-std::array<T, N> reduce(std::array<T, N> data, std::size_t root) {
-  detail::reduce(data.data(), N, detail::asDatatype<T>(), root);
+std::array<T, N> reduce(std::array<T, N> data, std::size_t root, const Op& op) {
+  detail::reduce(data.data(), N, detail::asDatatype<T>(), root, op);
   return data;
 }
 
 /// Broadcast reduction operation. Variant to allow for the usage of std::array.
 template<class T, std::size_t N>
-std::array<T, N> allreduce(std::array<T, N> data) {
-  detail::allreduce(data.data(), N, detail::asDatatype<T>());
+std::array<T, N> allreduce(std::array<T, N> data, const Op& op) {
+  detail::allreduce(data.data(), N, detail::asDatatype<T>(), op);
+  return data;
+}
+
+/// Reduction operation. Variant to allow for the usage of std::vector.
+/// Note that the size of `data` on every rank must be the same.
+template<class T, class A>
+std::vector<T, A> reduce(std::vector<T, A> data, std::size_t root, const Op& op) {
+  detail::reduce(data.data(), data.size(), detail::asDatatype<T>(), root, op);
+  return data;
+}
+
+/// Broadcast reduction operation. Variant to allow for the usage of std::vector.
+/// Note that the size of `data` on every rank must be the same.
+template<class T, class A>
+std::vector<T, A> allreduce(std::vector<T, A> data, const Op& op) {
+  detail::allreduce(data.data(), data.size(), detail::asDatatype<T>(), op);
   return data;
 }
 

@@ -163,7 +163,7 @@ stdshim::optional<std::vector<std::vector<T>>> gather(std::vector<T> data, std::
     for(std::size_t r = 0; r < World::size(); r++) {
       result[r].reserve(cnts.value()[r]);
       for(std::size_t i = 0; i < cnts.value()[r]; i++, total++)
-        result[r][i] = std::move(data[total]);
+        result[r].emplace_back(std::move(data[total]));
     }
     return std::move(result);
   }
@@ -247,7 +247,7 @@ stdshim::optional<std::vector<std::vector<std::basic_string<C,T>>>> gather(std::
   std::vector<C> strip;
   strip.reserve(totalsize);
   for(std::size_t i = 0; i < data.size(); i++)
-    strip.insert(strip.end(), data[i].begin, data[i].end());
+    strip.insert(strip.end(), data[i].begin(), data[i].end());
   gather(std::move(strip), root);
   return {};
 }
