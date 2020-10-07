@@ -87,10 +87,16 @@ int rankN(ProfArgs&& args) {
   ProfilePipeline::Settings pipelineB2;
 
   // We use (mostly) the same Sources for both Pipelines.
-  for(auto& sp: args.sources) {
-    pipelineB1 << std::move(sp.first);
-    pipelineB2 << ProfileSource::create_for(sp.second);
+  #pragma omp parallel num_threads(args.threads)
+  {
+    std::vector<std::unique_ptr<ProfileSource>> my_sources;
+    #pragma omp for schedule(dynamic)
+    for(std::size_t i = 0; i < args.sources.size(); i++)
+      my_sources.emplace_back(ProfileSource::create_for(args.sources[i].second));
+    #pragma omp critical
+    for(auto& s: my_sources) pipelineB1 << std::move(s);
   }
+  for(auto& sp: args.sources) pipelineB2 << std::move(sp.first);
 
   std::size_t threadIdOffset;
 
