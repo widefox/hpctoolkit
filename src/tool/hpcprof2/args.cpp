@@ -496,22 +496,27 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
     std::vector<std::vector<std::string>> allocations(mpi::World::size());
     std::size_t next = 0;
     bool nearfull = false;
+    bool rr = false;
     for(auto& ps: *extras) {
       for(auto& p: ps) {
-        while(1) {
+        while(!rr) {
           while((*avails)[next] <= (nearfull ? 0 : 1) && next < avails->size()) {
             next++;
           }
           if(next < avails->size()) break;
-          if(nearfull) util::log::fatal{} << "No more slots to allocate!";
-          if(next >= avails->size()) {
-            // Try again, but allocate more aggressively
-            nearfull = true;
+          if(nearfull) {
+            // Give up and allocate round-robin
+            rr = true;
             next = 0;
+            break;
           }
+          // Try again, but allocate more aggressively
+          nearfull = true;
+          next = 0;
         }
         allocations[next].emplace_back(std::move(p));
-        (*avails)[next] -= 1;
+        if(!rr) (*avails)[next] -= 1;
+        else next = (next + 1) % avails->size();
       }
     }
     extra = mpi::scatter(std::move(allocations), 0);
@@ -524,6 +529,8 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
     if(!s) util::log::fatal{} << "Inputs have changed during preparation!";
     sources.emplace_back(std::move(s), std::move(p));
   }
+
+  util::log::debug{true} << "Have " << sources.size() << " of " << totalcnt;
 }
 
 static std::pair<bool, fs::path> remove_prefix(const fs::path& path, const fs::path& pre) {
