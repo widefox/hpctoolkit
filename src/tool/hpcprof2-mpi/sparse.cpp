@@ -2263,7 +2263,7 @@ void SparseDB::rwAllCtxGroup(const std::vector<uint32_t>& my_ctxs,
     size_t cur_ctx_size = ctx_off[CTX_VEC_IDX(ctx_id) + 1] - ctx_off[CTX_VEC_IDX(ctx_id)];
 
     //if((cur_size + cur_ctx_size) <= pow(10,8)) { //temp 10^4 TODO: user-defined memory limit
-    if(cur_cnt <= 10000){
+    if((cur_cnt <= 1000) && ((cur_size + cur_ctx_size) <= pow(10,9))){
       ctx_ids.emplace_back(ctx_id);
       cur_size += cur_ctx_size;
       cur_cnt++;
