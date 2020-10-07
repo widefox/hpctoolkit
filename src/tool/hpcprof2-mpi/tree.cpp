@@ -64,7 +64,6 @@ void Sender::write() {
   packAttributes(block);
   packReferences(block);
   packContexts(block);
-  packTimepoints(block);
   mpi::send(block, tree.parent, 1);
 
   if(stash) {
@@ -82,7 +81,6 @@ void Receiver::read(const DataClass&) {
   it = unpackAttributes(it);
   it = unpackReferences(it);
   it = unpackContexts(it);
-  if(sink.limit().hasTimepoints()) it = unpackTimepoints(it);
   done = true;
 }
 
@@ -97,6 +95,7 @@ void MetricSender::write() {
   std::vector<std::uint8_t> block;
   packAttributes(block);
   packMetrics(block);
+  packTimepoints(block);
   mpi::send(block, tree.parent, 3);
 }
 
@@ -107,7 +106,7 @@ MetricReceiver::MetricReceiver(std::size_t p, ctx_map_t& c, const std::vector<st
 
 DataClass MetricReceiver::provides() const noexcept {
   using namespace hpctoolkit::literals;
-  return data::attributes + data::metrics
+  return data::attributes + data::metrics + data::timepoints
          + (stash ? data::references + data::contexts : DataClass{});
 }
 
@@ -124,6 +123,7 @@ void MetricReceiver::read(const DataClass& d) {
   iter_t it = block.begin();
   it = unpackAttributes(it);
   it = unpackMetrics(it, cmap);
+  if(sink.limit().hasTimepoints()) it = unpackTimepoints(it);
   done = true;
 }
 

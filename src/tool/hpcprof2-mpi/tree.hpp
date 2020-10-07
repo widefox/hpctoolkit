@@ -72,8 +72,7 @@ public:
   hpctoolkit::ExtensionClass requires() const noexcept override { return {}; }
   hpctoolkit::DataClass accepts() const noexcept override {
     using namespace hpctoolkit::literals;
-    return data::attributes + data::references + data::contexts
-           + data::metrics + data::timepoints;
+    return data::attributes + data::references + data::contexts;
   }
   void write() override;
 
@@ -90,8 +89,7 @@ public:
 
   hpctoolkit::DataClass provides() const noexcept override {
     using namespace hpctoolkit::literals;
-    return data::references + data::attributes + data::contexts
-           + data::timepoints;
+    return data::references + data::attributes + data::contexts;
   }
   hpctoolkit::DataClass finalizeRequest(const hpctoolkit::DataClass& d) const noexcept override {
     return d;
@@ -113,7 +111,7 @@ public:
 
   hpctoolkit::DataClass accepts() const noexcept override {
     using namespace hpctoolkit::literals;
-    return data::attributes + data::contexts + data::metrics;
+    return data::attributes + data::contexts + data::metrics + data::timepoints;
   }
   void write() override;
 
