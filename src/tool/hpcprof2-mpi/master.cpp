@@ -193,5 +193,10 @@ int rank0(ProfArgs&& args) {
   pipeline.run();
   if(sdb) sdb->merge(args.threads, args.sparse_debug);
 
+  if(args.valgrindUnclean) {
+    mpi::World::finalize();
+    std::exit(0);
+  }
+
   return 0;
 }

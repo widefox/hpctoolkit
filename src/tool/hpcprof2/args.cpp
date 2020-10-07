@@ -136,12 +136,14 @@ Current Obsolete Options:
 ProfArgs::ProfArgs(int argc, char* const argv[])
   : title(), threads(1), instructionGrain(false), output(),
     include_sources(true), include_traces(true), include_thread_local(true),
-    format(Format::exmldb), dwarfMaxSize(100*1024*1024), sparse_debug(false) {
+    format(Format::exmldb), dwarfMaxSize(100*1024*1024), valgrindUnclean(false),
+    sparse_debug(false) {
   int arg_instructionGrain = instructionGrain;
   int arg_includeSources = include_sources;
   int arg_includeTraces = include_traces;
   int arg_sparseDebug = sparse_debug;
   int arg_overwriteOutput = 0;
+  int arg_valgrindUnclean = valgrindUnclean;
   struct option longopts[] = {
     // These first ones are more special and must be in this order.
     {"version", no_argument, NULL, 0},
@@ -162,6 +164,7 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
     {"name", required_argument, NULL, 'n'},
     {"sparse-debug", no_argument, &arg_sparseDebug, 1},
     {"force", no_argument, &arg_overwriteOutput, 1},
+    {"valgrind-unclean", no_argument, &arg_valgrindUnclean, 1},
     {0, 0, 0, 0}
   };
 
@@ -338,6 +341,7 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
   include_sources = arg_includeSources;
   include_traces = arg_includeTraces;
   sparse_debug = arg_sparseDebug;
+  valgrindUnclean = arg_valgrindUnclean;
 
   if(dryRun) output = fs::path();
   else {

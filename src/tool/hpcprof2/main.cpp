@@ -124,5 +124,7 @@ int main(int argc, char* const argv[]) {
   // Drain the Pipeline, and make everything happen.
   pipeline.run();
 
+  if(args.valgrindUnclean) std::exit(0);  // Skips local cleanup of pipeline
+
   return 0;
 }
