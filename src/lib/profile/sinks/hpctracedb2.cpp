@@ -107,7 +107,7 @@ void HPCTraceDB2::notifyWavefront(DataClass d){
   }
 
   // Ensure the file is truncated by rank 0 before proceeding.
-  mpi::bcast((std::uint8_t)0, 0);
+  mpi::barrier();
 
   // Write out the headers for threads that have no timepoints
   for(const auto& t : src.threads().iterate()) {

@@ -127,6 +127,10 @@ void World::finalize() noexcept {
   done = true;
 }
 
+void hpctoolkit::mpi::barrier() {
+  if(MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS)
+    util::log::fatal{} << "Error while performing an MPI barrier!";
+}
 void detail::bcast(void* data, std::size_t cnt, const Datatype& ty,
                    std::size_t root) {
   if(MPI_Bcast(data, cnt, ty.value, root, MPI_COMM_WORLD) != MPI_SUCCESS)

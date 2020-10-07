@@ -84,6 +84,7 @@ std::size_t World::m_size = 1;
 void World::initialize() noexcept {};
 void World::finalize() noexcept {};
 
+void barrier() {};
 void detail::bcast(void*, std::size_t, const Datatype&, std::size_t) {};
 void detail::reduce(void*, std::size_t, const Datatype&, std::size_t, const Op&) {};
 void detail::allreduce(void*, std::size_t, const Datatype&, const Op&) {};

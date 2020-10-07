@@ -2347,7 +2347,7 @@ void SparseDB::merge(int threads, bool debug) {
   writeCCTMajor(ctx_nzval_cnts,ctx_nzmids, ctxcnt, world_rank, world_size, threads);
 
   if(!debug) {
-    MPI_Barrier(MPI_COMM_WORLD);
+    mpi::barrier();
     for(const auto& tp: outputs.citerate())
       stdshim::filesystem::remove(tp.second);
     stdshim::filesystem::remove(summaryOut);

@@ -74,7 +74,7 @@ File::File(stdshim::filesystem::path path, bool create) noexcept
     if(!f) util::log::fatal{} << "Error opening file " << udF(data)->path;
     std::fclose(f);
   }
-  mpi::bcast((uint8_t)0, 0);
+  mpi::barrier();
 }
 
 struct InstanceUD {

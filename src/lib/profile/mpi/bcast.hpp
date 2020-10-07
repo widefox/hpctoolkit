@@ -60,6 +60,9 @@ namespace detail {
 void bcast(void* data, std::size_t cnt, const Datatype&, std::size_t rootRank);
 }  // namespace detail
 
+/// Barrier operation. Ensures all ranks reach this point before any continue.
+void barrier();
+
 /// Broadcast operation. Copies the given data from the root rank to all other
 /// processes in the team. Returns the given data.
 template<class T, std::void_t<decltype(detail::asDatatype<T>())>* = nullptr>
