@@ -44,6 +44,8 @@
 //
 // ******************************************************* EndRiceCopyright *
 
+#include "lib/profile/util/vgannotations.hpp"
+
 #include "args.hpp"
 
 #include "lib/profile/source.hpp"
@@ -429,20 +431,36 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
   // Every rank tests its allocated set of inputs, and the total number of
   // successes per group is summed.
   std::vector<std::uint32_t> cnts(argc - optind, 0);
-  #pragma omp parallel num_threads(threads)
   {
-    decltype(sources) my_sources;
-    #pragma omp for
-    for(std::size_t i = 0; i < files.size(); i++) {
-      auto pg = std::move(files[i]);
-      auto s = ProfileSource::create_for(pg.first);
-      if(s) {
-        my_sources.emplace_back(std::move(s), std::move(pg.first));
-        cnts[pg.second]++;
+    std::vector<std::atomic<std::uint32_t>> cnts_a(cnts.size());
+    for(auto& a: cnts_a) a.store(0, std::memory_order_relaxed);
+
+  #ifdef ENABLE_VG_ANNOTATIONS
+    char start_arc;
+    char end_arc;
+  #endif
+
+    ANNOTATE_HAPPENS_BEFORE(&start_arc);
+    #pragma omp parallel num_threads(threads)
+    {
+      ANNOTATE_HAPPENS_AFTER(&start_arc);
+      decltype(sources) my_sources;
+      #pragma omp for schedule(dynamic) nowait
+      for(std::size_t i = 0; i < files.size(); i++) {
+        auto pg = std::move(files[i]);
+        auto s = ProfileSource::create_for(pg.first);
+        if(s) {
+          my_sources.emplace_back(std::move(s), std::move(pg.first));
+          cnts_a[pg.second].fetch_add(1, std::memory_order_relaxed);
+        }
       }
+      #pragma omp critical
+      for(auto& sp: my_sources) sources.emplace_back(std::move(sp));
+      ANNOTATE_HAPPENS_BEFORE(&end_arc);
     }
-    #pragma omp critical
-    for(auto& sp: my_sources) sources.emplace_back(std::move(sp));
+    ANNOTATE_HAPPENS_AFTER(&end_arc);
+    for(std::size_t i = 0; i < cnts.size(); i++)
+      cnts[i] = cnts_a[i].load(std::memory_order_relaxed);
   }
   cnts = mpi::allreduce(std::move(cnts), mpi::Op::sum());
   std::size_t totalcnt = 0;

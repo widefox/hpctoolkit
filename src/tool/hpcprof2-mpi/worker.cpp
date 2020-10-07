@@ -87,15 +87,23 @@ int rankN(ProfArgs&& args) {
   ProfilePipeline::Settings pipelineB2;
 
   // We use (mostly) the same Sources for both Pipelines.
+#ifdef ENABLE_VG_ANNOTATIONS
+  char start_arc;
+  char end_arc;
+#endif
+  ANNOTATE_HAPPENS_BEFORE(&start_arc);
   #pragma omp parallel num_threads(args.threads)
   {
+    ANNOTATE_HAPPENS_AFTER(&start_arc);
     std::vector<std::unique_ptr<ProfileSource>> my_sources;
-    #pragma omp for schedule(dynamic)
+    #pragma omp for schedule(dynamic) nowait
     for(std::size_t i = 0; i < args.sources.size(); i++)
       my_sources.emplace_back(ProfileSource::create_for(args.sources[i].second));
     #pragma omp critical
     for(auto& s: my_sources) pipelineB1 << std::move(s);
+    ANNOTATE_HAPPENS_BEFORE(&end_arc);
   }
+  ANNOTATE_HAPPENS_AFTER(&end_arc);
   for(auto& sp: args.sources) pipelineB2 << std::move(sp.first);
 
   std::size_t threadIdOffset;
