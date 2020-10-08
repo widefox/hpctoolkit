@@ -89,13 +89,19 @@ void Receiver::append(ProfilePipeline::Settings& pB, RankTree& tree) {
     pB << std::make_unique<Receiver>(peer);
 }
 
-MetricSender::MetricSender(RankTree& t) : tree(t) {};
+MetricSender::MetricSender(RankTree& t, bool n) : tree(t), needsTimepoints(n) {};
+
+DataClass MetricSender::accepts() const noexcept {
+  using namespace hpctoolkit::literals;
+  return data::attributes + data::contexts + data::metrics
+         + (needsTimepoints ? data::timepoints : DataClass{});
+}
 
 void MetricSender::write() {
   std::vector<std::uint8_t> block;
   packAttributes(block);
   packMetrics(block);
-  packTimepoints(block);
+  if(needsTimepoints) packTimepoints(block);
   mpi::send(block, tree.parent, 3);
 }
 

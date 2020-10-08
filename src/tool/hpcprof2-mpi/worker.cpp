@@ -160,7 +160,7 @@ int rankN(ProfArgs&& args) {
     pipelineB2 << tidfinal;
 
     // When we're done, we need to send the final metrics up towards rank 0
-    MetricSender msender{tree};
+    MetricSender msender{tree, mpi::bcast<uint8_t>(0)};
     pipelineB2 << msender;
 
     // For unpacking metrics, we need to be able to map the IDs back to their

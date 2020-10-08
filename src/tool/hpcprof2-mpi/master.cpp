@@ -129,13 +129,25 @@ int rank0(ProfArgs&& args) {
   ProfilePipeline::WavefrontOrdering mpiDep;
   pipelineB >> mpiDep;
 
+  // No-op Source to detect whether the Pipeline requires timepoints
+  // It should be args.include_traces, but you can never be too certain
+  struct Detector : public ProfileSource {
+    DataClass provides() const noexcept override { return DataClass::timepoints; }
+    DataClass finalizeRequest(const DataClass& d) const noexcept override { return d; }
+    void read(const DataClass&) override {};
+    bool needsTimepoints() const { return sink.limit().hasTimepoints(); }
+  } detector;
+  pipelineB << detector;
+
   // When everything is ready, ship off the block to the workers.
   struct Sender : public IdPacker::Sink {
-    Sender(IdPacker& s) : IdPacker::Sink(s) {};
+    Sender(IdPacker& s, Detector& d) : IdPacker::Sink(s), detector(d) {};
     void notifyPacked(std::vector<uint8_t>&& block) override {
       mpi::bcast(std::move(block), 0);
+      mpi::bcast((uint8_t)(detector.needsTimepoints() ? 1 : 0), 0);
     }
-  } spacker(packer);
+    Detector& detector;
+  } spacker(packer, detector);
   pipelineB << spacker << mpiDep >> mpiDep;
 
   // For unpacking metrics, we need to be able to map the IDs back to their

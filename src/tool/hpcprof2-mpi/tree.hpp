@@ -106,17 +106,15 @@ private:
 /// Sink for sending Statistic data up the tree.
 class MetricSender : public hpctoolkit::sinks::Packed {
 public:
-  MetricSender(RankTree&);
+  MetricSender(RankTree&, bool);
   ~MetricSender() = default;
 
-  hpctoolkit::DataClass accepts() const noexcept override {
-    using namespace hpctoolkit::literals;
-    return data::attributes + data::contexts + data::metrics + data::timepoints;
-  }
+  hpctoolkit::DataClass accepts() const noexcept override;
   void write() override;
 
 private:
   RankTree& tree;
+  bool needsTimepoints;
 };
 
 /// Source for receiving the data from MetricSender. Can also unpack the data
