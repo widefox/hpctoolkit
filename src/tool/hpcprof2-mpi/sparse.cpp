@@ -65,6 +65,9 @@
 #include <assert.h>
 #include <stdexcept> 
 
+//TEMP
+#include <chrono>
+
 using namespace hpctoolkit;
 
 SparseDB::SparseDB(const stdshim::filesystem::path& p) : dir(p), ctxMaxId(0), outputCnt(0) {
@@ -2252,23 +2255,41 @@ void SparseDB::rwAllCtxGroup(const std::vector<uint32_t>& my_ctxs,
                              const int threads, 
                              const std::vector<std::vector<TMS_CtxIdIdxPair>>& all_prof_ctx_pairs,
                              const util::File& fh,
-                             const util::File& ofh)
+                             const util::File& ofh,
+                             const int rank)//TEMP
 {
   //For each ctx group (< memory limit) this rank is in charge of, read and write
   std::vector<uint32_t> ctx_ids;
   size_t cur_size = 0;
   int cur_cnt = 0;
+
+//TEMP for debugging
+  int group_num = 0; 
+  std::vector<std::pair<uint32_t, uint64_t>> cnt_size; 
+  std::vector<uint64_t> t;
+  auto& total_size = ctx_off.back();
+  uint64_t size_limit = std::min(pow(10,9), round(total_size/4));
+
   for(uint i =0; i<my_ctxs.size(); i++){
     uint32_t ctx_id = my_ctxs[i];
     size_t cur_ctx_size = ctx_off[CTX_VEC_IDX(ctx_id) + 1] - ctx_off[CTX_VEC_IDX(ctx_id)];
 
     //if((cur_size + cur_ctx_size) <= pow(10,8)) { //temp 10^4 TODO: user-defined memory limit
-    if((cur_cnt <= 1000) && ((cur_size + cur_ctx_size) <= pow(10,9))){
+    if((cur_size + cur_ctx_size) <= size_limit){
       ctx_ids.emplace_back(ctx_id);
       cur_size += cur_ctx_size;
       cur_cnt++;
     }else{
+      group_num++;
+      cnt_size.emplace_back(cur_cnt, cur_size);
+      std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+
       rwOneCtxGroup(ctx_ids, prof_info, ctx_off, threads, all_prof_ctx_pairs, fh, ofh);
+
+      std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+      std::chrono::duration<double, std::milli> ts = t2-t1;
+      t.emplace_back(ts.count());
+
       ctx_ids.clear();
       ctx_ids.emplace_back(ctx_id);
       cur_size = cur_ctx_size;
@@ -2276,8 +2297,24 @@ void SparseDB::rwAllCtxGroup(const std::vector<uint32_t>& my_ctxs,
     }   
 
     // final ctx group
-    if((i == my_ctxs.size() - 1) && (ctx_ids.size() != 0)) rwOneCtxGroup(ctx_ids, prof_info, ctx_off, threads, all_prof_ctx_pairs, fh, ofh);
+    if((i == my_ctxs.size() - 1) && (ctx_ids.size() != 0)) {
+      group_num++;
+      cnt_size.emplace_back(cur_cnt, cur_size);
+      std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+      rwOneCtxGroup(ctx_ids, prof_info, ctx_off, threads, all_prof_ctx_pairs, fh, ofh);
+      std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+      std::chrono::duration<double, std::milli> ts = t2-t1;
+      t.emplace_back(ts.count());
+    }
   }
+
+
+  printf("\n\nRank %d, num of groups %d: \n", rank, group_num);
+  for(int i = 0; i <group_num; i++){
+    printf("num of ctxs: %d, size of ctxs in total: %ld, running time in ms: %d\n", cnt_size[i].first, cnt_size[i].second, t[i]);
+  }
+
+  
 }
 
 
@@ -2318,7 +2355,7 @@ void SparseDB::writeCCTMajor(const std::vector<uint64_t>& ctx_nzval_cnts,
 
   std::vector<std::vector<TMS_CtxIdIdxPair>> all_prof_ctx_pairs = getProfileCtxIdIdxPairs(thread_major_f, threads,prof_info);
   
-  rwAllCtxGroup(my_ctxs, prof_info, ctx_off, threads, all_prof_ctx_pairs, thread_major_f, cct_major_f);
+  rwAllCtxGroup(my_ctxs, prof_info, ctx_off, threads, all_prof_ctx_pairs, thread_major_f, cct_major_f, world_rank); //TEMP: world_rank
 }
 
 

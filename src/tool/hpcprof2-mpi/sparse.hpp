@@ -547,7 +547,8 @@ private:
                      const int threads,
                      const std::vector<std::vector<TMS_CtxIdIdxPair>>& all_prof_ctx_pairs,
                      const hpctoolkit::util::File& fh,
-                     const hpctoolkit::util::File& ofh);
+                     const hpctoolkit::util::File& ofh,
+                     const int rank);//TEMP
 
 };
 
