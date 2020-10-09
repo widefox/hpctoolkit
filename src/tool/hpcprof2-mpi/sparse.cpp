@@ -58,6 +58,7 @@
 #include <stack>
 #include <iomanip>
 #include <iostream>
+#include <vector>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -1881,51 +1882,7 @@ SparseDB::readProfiles(const std::vector<uint32_t>& ctx_ids,
                             const util::File& fh,
                             std::map<uint32_t, CtxMetricBlock>& ctx_met_blocks)
 {
-  
-  /*
-  //old design
-  std::map<uint32_t, CtxMetricBlock> empty;
-  std::vector<std::map<uint32_t, CtxMetricBlock> * > threads_ctx_met_blocks(threads, &empty);
 
-  for(auto id : ctx_ids){
-    CtxMetricBlock cmb;
-    cmb.ctx_id = id;
-    ctx_met_blocks.emplace(id, cmb);
-  }
-
-  #pragma omp parallel num_threads(threads) 
-  {
-    std::map<uint32_t, CtxMetricBlock> thread_cmb;
-    threads_ctx_met_blocks[omp_get_thread_num()] = &thread_cmb;
-
-    #pragma omp for 
-    for(uint i = 0; i < prof_info.size(); i++){
-      tms_profile_info_t pi = prof_info[i];
-      std::vector<TMS_CtxIdIdxPair> prof_ctx_pairs = all_prof_ctx_pairs[i];
-      readOneProfile(ctx_ids, pi, prof_ctx_pairs, fh, thread_cmb);
-    }
-
-    //merge all threads_ctx_met_blocks to global transpose_helper_cmbs
-    #pragma omp for
-    for(uint c = 0; c < ctx_ids.size(); c++){
-      mergeOneCtxAllThreadBlocks(threads_ctx_met_blocks,ctx_met_blocks[ctx_ids[c]]);
-    }
-
-    //sort ctx_met_blocks(if it's still serial, should be outside of parallel region)
-    sortCtxMetBlocks(ctx_met_blocks);
-  }
-
-  for (auto i = ctx_met_blocks.begin(); i != ctx_met_blocks.end(); ) {
-    if (i->second.metrics.size() == 0) {
-      i = ctx_met_blocks.erase(i);
-    } else {
-      i++;
-    }
-  }
-  */
-
-  //new design
-  //std::vector<std::pair<std::map<uint32_t, uint64_t>, std::vector<char>>> profiles_data (prof_info.size());
   std::vector<std::pair<std::vector<std::pair<uint32_t,uint64_t>>, std::vector<char>>> profiles_data (prof_info.size());
 
   //read all profiles for this ctx_ids group
@@ -1935,7 +1892,6 @@ SparseDB::readProfiles(const std::vector<uint32_t>& ctx_ids,
     tms_profile_info_t pi = prof_info[i];
     std::vector<TMS_CtxIdIdxPair> prof_ctx_pairs = all_prof_ctx_pairs[i];
     
-    //std::map<uint32_t, uint64_t> my_ctx_pairs;
     std::vector<std::pair<uint32_t,uint64_t>> my_ctx_pairs;
     int ret = getMyCtxIdIdxPairs(pi, ctx_ids, prof_ctx_pairs, fhi, my_ctx_pairs);
   
@@ -2188,60 +2144,82 @@ void SparseDB::rwOneCtxGroup(const std::vector<uint32_t>& ctx_ids,
   std::map<uint32_t, CtxMetricBlock> fake_ctx_met_blocks;
 
   //read corresponding ctx_id_idx pairs and relevant ValMidsBytes
-  //std::vector<std::pair<std::map<uint32_t, uint64_t>, std::vector<char>>> profiles_data =
   std::vector<std::pair<std::vector<std::pair<uint32_t,uint64_t>>, std::vector<char>>> profiles_data =
     readProfiles(ctx_ids, prof_info, threads, all_prof_ctx_pairs, fh, fake_ctx_met_blocks);
 
-  //find a small unit (number of ctxs) to be one task
-  //int ctx_unit = round(ctx_ids.size()/(threads*5));
+  struct nextCtx{
+    uint32_t ctx_id;
+    uint32_t prof_idx; 
+    size_t cursor;
+
+    //turn MaxHeap to MinHeap
+    bool operator<(const nextCtx& a) const{
+      if(ctx_id == a.ctx_id){
+        return prof_idx > a.prof_idx;
+      }
+      return ctx_id > a.ctx_id;  
+    }
+  };
+
 
   //for each ctx, find corresponding ctx_id_idx and bytes, and interpret
   #pragma omp parallel num_threads(threads)
   {
+    //each thread is responsible for a group of ctx_ids 
     auto ofhi = ofh.open(true);
-    std::vector<int> profiles_cursor (profiles_data.size(), SPARSE_NOT_FOUND);
-    uint ctx_ids_size = round(ctx_ids.size()/threads);
+    uint ctx_ids_size = ctx_ids.size()/threads;
     int thread_num = omp_get_thread_num();
     uint my_start = ctx_ids_size * thread_num;
     uint my_end = (thread_num != threads -1) ? my_start + ctx_ids_size : ctx_ids.size();
 
-    for(uint i = my_start; i < my_end; i++){
-      uint32_t ctx_id = ctx_ids[i];
-
-      //a new CtxMetricBlock
-      CtxMetricBlock cmb;
-      cmb.ctx_id = ctx_id;
-    
-      //interpret all profiles' data about this ctx_id
-      for(uint j = 0; j < profiles_data.size(); j++){
-        std::vector<char>& vmbytes = profiles_data[j].second;
-        //std::map<uint32_t, uint64_t>& ctx_id_idx_pairs = profiles_data[j].first;
-        std::vector<std::pair<uint32_t, uint64_t>>& ctx_id_idx_pairs = profiles_data[j].first;
-        if(ctx_id_idx_pairs.size() == 0) continue;
-        
-        //set up the profile cursor if first time for this thread, otherwise just use it
-        if(profiles_cursor[j] == SPARSE_NOT_FOUND){
-          profiles_cursor[j]=(int)(lower_bound(ctx_id_idx_pairs.begin(),ctx_id_idx_pairs.end(), 
-                std::make_pair(ctx_id,std::numeric_limits<uint64_t>::min()), //Value to compare
-                [](const std::pair<uint32_t, uint64_t>& lhs, const std::pair<uint32_t, uint64_t>& rhs)      
-                { return lhs.first < rhs.first ;}) - ctx_id_idx_pairs.begin());     
-        }
-  
-        
-        if(ctx_id_idx_pairs[profiles_cursor[j]].first == ctx_id){
-          uint64_t next_ctx_idx = ctx_id_idx_pairs[profiles_cursor[j]+1].second;
-          uint64_t first_ctx_idx = ctx_id_idx_pairs[0].second;
-          interpretValMidsBytes(vmbytes.data(), prof_info[j].prof_info_idx, ctx_id_idx_pairs[profiles_cursor[j]], next_ctx_idx, first_ctx_idx, ctx_id_idx_pairs, cmb);
-          profiles_cursor[j]++;
-        }
-
+    if(my_start < my_end) {     
+      //each thread sets up a heap to store <ctx_id, profile_idx, profile_cursor> for each profile
+      std::vector<nextCtx> heap;
+      heap.reserve(profiles_data.size());
+      for(uint i = 0; i < profiles_data.size(); i++){
+        uint32_t ctx_id = ctx_ids[my_start];
+        std::vector<std::pair<uint32_t, uint64_t>>& ctx_id_idx_pairs = profiles_data[i].first;
+        if(ctx_id_idx_pairs.empty()) continue;
+        size_t cursor =lower_bound(ctx_id_idx_pairs.begin(),ctx_id_idx_pairs.end(), 
+                  std::make_pair(ctx_id,std::numeric_limits<uint64_t>::min()), //Value to compare
+                  [](const std::pair<uint32_t, uint64_t>& lhs, const std::pair<uint32_t, uint64_t>& rhs)      
+                  { return lhs.first < rhs.first ;}) - ctx_id_idx_pairs.begin();
+        heap.push_back({ctx_id_idx_pairs[cursor].first, i, cursor});
       }
-      //write for ctx_met_blocks     
-      //if(ctx_met_blocks.size() > 0){
-        writeCtxGroup(ctx_id, ctx_off, cmb, threads, ofhi);
-      //}
+      heap.shrink_to_fit();
+      std::make_heap(heap.begin(), heap.end());
 
-    } // END of parallel for loop
+      while(1){
+        //get the min ctx_id in the heap
+        uint32_t ctx_id = heap.front().ctx_id;
+        if(ctx_id > ctx_ids[my_end-1]) break;
+
+        //a new CtxMetricBlock
+        CtxMetricBlock cmb;
+        cmb.ctx_id = ctx_id;
+
+        while(heap.front().ctx_id == ctx_id){
+          uint32_t prof_idx = heap.front().prof_idx;
+
+          std::vector<char>& vmbytes = profiles_data[prof_idx].second;
+          std::vector<std::pair<uint32_t, uint64_t>>& ctx_id_idx_pairs = profiles_data[prof_idx].first;
+          
+          uint64_t next_ctx_idx = ctx_id_idx_pairs[heap.front().cursor+1].second;
+          uint64_t first_ctx_idx = ctx_id_idx_pairs[0].second;
+          interpretValMidsBytes(vmbytes.data(), prof_info[prof_idx].prof_info_idx, ctx_id_idx_pairs[heap.front().cursor], next_ctx_idx, first_ctx_idx, ctx_id_idx_pairs, cmb);
+          
+          std::pop_heap(heap.begin(), heap.end());
+          heap.back().cursor++;
+          heap.back().ctx_id = ctx_id_idx_pairs[heap.back().cursor].first;
+          std::push_heap(heap.begin(), heap.end());
+
+        }
+
+        writeCtxGroup(ctx_id, ctx_off, cmb, threads, ofhi);
+
+      }//END of while
+
+    } //END of if my_start < my_end
 
   }//END of parallel region
   
@@ -2268,7 +2246,7 @@ void SparseDB::rwAllCtxGroup(const std::vector<uint32_t>& my_ctxs,
   std::vector<std::pair<uint32_t, uint64_t>> cnt_size; 
   std::vector<uint64_t> t;
   auto& total_size = ctx_off.back();
-  uint64_t size_limit = std::min(pow(10,9), round(total_size/4));
+  uint64_t size_limit = std::min<std::size_t>(1024*1024*100, total_size/mpi::World::size());
 
   for(uint i =0; i<my_ctxs.size(); i++){
     uint32_t ctx_id = my_ctxs[i];

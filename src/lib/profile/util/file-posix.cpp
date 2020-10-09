@@ -85,7 +85,7 @@ template<class T>
 static InstanceUD* udI(T& p) { return (InstanceUD*)p.get(); }
 
 File::Instance::Instance(const File& file, bool writable) noexcept {
-  FILE* f = std::fopen(udF(file.data)->path.c_str(), writable ? "r+bm" : "rbm");
+  FILE* f = std::fopen(udF(file.data)->path.c_str(), writable ? "r+b" : "rb");
   if(!f) util::log::fatal{} << "Error opening file " << udF(file.data);
   data = {std::make_unique<InstanceUD>(f).release(),
           [](void* d){ delete (InstanceUD*)d; }};
