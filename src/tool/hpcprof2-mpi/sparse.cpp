@@ -1048,6 +1048,9 @@ void SparseDB::writeOneProfile(const std::pair<tms_id_tuple_t, std::string>& tup
       (std::istreambuf_iterator<char>()));
   input.close();
 
+  if(!keepTemps)
+    stdshim::filesystem::remove(fn);
+
   //collect context local nonzero value counts and nz_mids from this profile
   if(tupleFn.first.idtuple.ids[0].kind != IDTUPLE_SUMMARY){
     collectCctMajorData(prof_idx_off_pair.first, bytes, ctx_nzval_cnts, ctx_nzmids);
@@ -2358,21 +2361,10 @@ void SparseDB::merge(int threads, bool debug) {
   std::vector<uint64_t> ctx_nzval_cnts (ctxcnt,0);
   std::set<uint16_t> empty;
   std::vector<std::set<uint16_t>> ctx_nzmids(ctxcnt,empty);
+  keepTemps = debug;
   writeThreadMajor(threads,world_rank,world_size, ctx_nzval_cnts,ctx_nzmids);
   writeCCTMajor(ctx_nzval_cnts,ctx_nzmids, ctxcnt, world_rank, world_size, threads);
 
-  if(!debug) {
-    mpi::barrier();
-    std::vector<stdshim::filesystem::path> torm;
-    torm.reserve(outputs.size() + 1);
-    torm.emplace_back(std::move(summaryOut));
-    for(const auto& tp: outputs.citerate())
-      torm.emplace_back(std::move(tp.second));
-
-    #pragma omp parallel for num_threads(threads) schedule(dynamic)
-    for(std::size_t i = 0; i < torm.size(); i++)
-      stdshim::filesystem::remove(std::move(torm[i]));
-  }
 }
 
 

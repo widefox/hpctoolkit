@@ -154,6 +154,8 @@ private:
   std::vector<std::pair<const tms_id_tuple_t,
     std::string>> sparseInputs;
 
+  bool keepTemps;
+
   //***************************************************************************
   // general - YUMENG
   //***************************************************************************
