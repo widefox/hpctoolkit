@@ -494,7 +494,6 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
       sources.pop_back();
     }
   }
-  util::log::debug{true} << "Have " << avail << " total slots left, " << extra.size() << " extras";
   auto avails = mpi::gather(avail, 0);
   auto extras = mpi::gather(std::move(extra), 0);
 
@@ -507,34 +506,25 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
       numextra += extras.value()[r].size();
       if(avails.value()[r] > 1) numnearavail += avails.value()[r]-1;
       numavail += avails.value()[r];
-      util::log::debug{true} << "Rank " << r << " has " << avails.value()[r] << " slots, " << extras.value()[r].size() << " extras";
     }
-    util::log::debug{true} << "To allocate " << numextra << " into " << numavail << " (near " << numnearavail << ") slots";
 
     std::vector<std::vector<std::string>> allocations(mpi::World::size());
     std::size_t next = 0;
     bool nearfull = false;
-    bool rr = false;
     for(auto& ps: *extras) {
       for(auto& p: ps) {
-        while(!rr) {
+        while(1) {
           while((*avails)[next] <= (nearfull ? 0 : 1) && next < avails->size()) {
             next++;
           }
           if(next < avails->size()) break;
-          if(nearfull) {
-            // Give up and allocate round-robin
-            rr = true;
-            next = 0;
-            break;
-          }
+          if(nearfull) util::log::fatal{} << "No more slots to fill, still bugged?";
           // Try again, but allocate more aggressively
           nearfull = true;
           next = 0;
         }
         allocations[next].emplace_back(std::move(p));
-        if(!rr) (*avails)[next] -= 1;
-        else next = (next + 1) % avails->size();
+        (*avails)[next] -= 1;
       }
     }
     extra = mpi::scatter(std::move(allocations), 0);
@@ -547,8 +537,6 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
     if(!s) util::log::fatal{} << "Inputs have changed during preparation!";
     sources.emplace_back(std::move(s), std::move(p));
   }
-
-  util::log::debug{true} << "Have " << sources.size() << " of " << totalcnt;
 }
 
 static std::pair<bool, fs::path> remove_prefix(const fs::path& path, const fs::path& pre) {
