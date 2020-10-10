@@ -82,13 +82,15 @@ protected:
 
   // All the Sources. These don't have callbacks, so they can be together.
   struct SourceEntry {
-    SourceEntry(ProfileSource& s) : source(s) {};
-    SourceEntry(SourceEntry&& o) : source(std::move(o.source)) {};
+    SourceEntry(ProfileSource& s);
+    SourceEntry(std::unique_ptr<ProfileSource>&& up);
+    SourceEntry(SourceEntry&& o);
 
     DataClass dataLimit;
 
     std::mutex lock;
     std::reference_wrapper<ProfileSource> source;
+    std::unique_ptr<ProfileSource> up_source;
     DataClass read;
 
     operator ProfileSource&() { return source; }
@@ -141,7 +143,6 @@ protected:
   ExtensionClass requested;  // Minimal requested Extension set.
 
   // Storage for the unique_ptrs
-  std::vector<std::unique_ptr<ProfileSource>> up_sources;
   std::vector<std::unique_ptr<ProfileSink>> up_sinks;
   std::vector<std::unique_ptr<ProfileTransformer>> up_transformers;
   std::vector<std::unique_ptr<ProfileFinalizer>> up_finalizers;

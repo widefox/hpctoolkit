@@ -66,14 +66,21 @@ using WavefrontOrdering = ProfilePipeline::WavefrontOrdering;
 
 const ProfilePipeline::timeout_t ProfilePipeline::timeout_forever;
 
+detail::ProfilePipelineBase::SourceEntry::SourceEntry(ProfileSource& s)
+  : source(s), up_source(nullptr) {};
+detail::ProfilePipelineBase::SourceEntry::SourceEntry(std::unique_ptr<ProfileSource>&& up)
+  : source(*up), up_source(std::move(up)) {};
+detail::ProfilePipelineBase::SourceEntry::SourceEntry(SourceEntry&& o)
+  : source(std::move(o.source)), up_source(std::move(o.up_source)) {};
+
 Settings& Settings::operator<<(ProfileSource& s) {
   sources.emplace_back(s);
   return *this;
 }
 Settings& Settings::operator<<(std::unique_ptr<ProfileSource>&& sp) {
   if(!sp) return *this;
-  up_sources.emplace_back(std::move(sp));
-  return operator<<(*up_sources.back());
+  sources.emplace_back(std::move(sp));
+  return *this;
 }
 
 Settings& Settings::operator<<(ProfileSink& s) {
@@ -362,6 +369,11 @@ void ProfilePipeline::run() {
     ANNOTATE_HAPPENS_BEFORE(&barrier_arc);
     #pragma omp barrier
     ANNOTATE_HAPPENS_AFTER(&barrier_arc);
+
+    // Clean up the Sources early, to save some serialized time later
+    #pragma omp for schedule(dynamic) nowait
+    for(std::size_t i = 0; i < sources.size(); ++i)
+      sources[i].up_source.reset();
 
     // Let the Sinks finish up their writing
     #pragma omp for schedule(dynamic) nowait
