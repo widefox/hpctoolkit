@@ -1903,7 +1903,7 @@ SparseDB::readProfiles(const std::vector<uint32_t>& ctx_ids,
       readValMidsBytes(ctx_ids, my_ctx_pairs, pi, fhi, vmbytes);
     }
 
-    profiles_data[i] = {my_ctx_pairs, vmbytes};
+    profiles_data[i] = {std::move(my_ctx_pairs), std::move(vmbytes)};
   }
   
   return profiles_data;
@@ -2046,40 +2046,12 @@ void SparseDB::ctxBlocks2Bytes(const CtxMetricBlock& cmb,
                                std::vector<char>& info_bytes,
                                std::vector<char>& metrics_bytes)
 {
-  //assert(ctx_met_blocks.size() > 0);
-  //assert(ctx_met_blocks.size() <= ctx_ids.size());
   assert(ctx_off.size() > 0);
 
   //uint64_t first_ctx_off =  ctx_off[CTX_VEC_IDX(ctx_ids[0])]; 
   uint64_t first_ctx_off =  ctx_off[CTX_VEC_IDX(ctx_id)]; 
   uint info_byte_cnt = 0;
   uint met_byte_cnt  = 0;
-
-  /*
-  //for ctx_met_blocks, not single cmb
-  auto it = ctx_met_blocks.begin();
-  for(uint i = 0; i<ctx_ids.size(); i++){
-    //INFO BYTES
-    uint32_t ctx_id = ctx_ids[i];
-    cms_ctx_info_t ci = {ctx_id, 0, 0, ctx_off[CTX_VEC_IDX(ctx_id)]};
-
-    //METRIC BYTES
-    if(it != ctx_met_blocks.end()){
-      uint32_t cmb_ctx_id = it->second.ctx_id;
-      
-      if(ctx_id == cmb_ctx_id){ // this ctx_id does have values in it
-        convertOneCtx(ctx_id, ctx_off[CTX_VEC_IDX(ctx_id+2)], it->second, first_ctx_off, ci, met_byte_cnt, metrics_bytes.data());
-        it++;
-      }else if (ctx_id > cmb_ctx_id){ // this should not happen
-        exitError("ctxBlocks2Bytes: either we missed ctxs from CtxMetricBlocks or there exists some invalid ctxs in CtxMetricBlocks\n");
-      }
-    }
-
-    //INFO BYTES
-    info_byte_cnt += convertOneCtxInfo(ci, info_bytes.data() + i * CMS_ctx_info_SIZE );
-
-  }
-  */
 
   //for single cmb
   cms_ctx_info_t ci = {ctx_id, 0, 0, ctx_off[CTX_VEC_IDX(ctx_id)]};
@@ -2088,7 +2060,6 @@ void SparseDB::ctxBlocks2Bytes(const CtxMetricBlock& cmb,
     convertOneCtx(ctx_id, ctx_off[CTX_VEC_IDX(ctx_id)+1], cmb, first_ctx_off, ci, met_byte_cnt, metrics_bytes.data());
 
   info_byte_cnt += convertOneCtxInfo(ci, info_bytes.data());
-
 
   //same for both versions
   if(info_byte_cnt != info_bytes.size())    exitError("the count of info_bytes converted is not as expected"
@@ -2101,23 +2072,14 @@ void SparseDB::ctxBlocks2Bytes(const CtxMetricBlock& cmb,
 
 
 //given ctx_met_blocks, convert all and write everything for the group of contexts, to the ofh file 
-void SparseDB::writeCtxGroup(const uint32_t& ctx_id,
-                             const std::vector<uint64_t>& ctx_off,
-                             const CtxMetricBlock& cmb,
-                             const int threads,
-                             util::File::Instance& ofh)
+void SparseDB::writeOneCtx(const uint32_t& ctx_id,
+                           const std::vector<uint64_t>& ctx_off,
+                           const CtxMetricBlock& cmb,
+                           const int threads,
+                           util::File::Instance& ofh)
 {
-  //assert(ctx_met_blocks.size() <= ctx_ids.size());
-  
-  //std::vector<char> info_bytes (CMS_ctx_info_SIZE * ctx_ids.size());
   std::vector<char> info_bytes (CMS_ctx_info_SIZE);
 
-  /*
-  uint32_t first_ctx_id = ctx_ids.front();
-  uint32_t last_ctx_id  = ctx_ids.back();
-  int metric_bytes_size = ctx_off[CTX_VEC_IDX(last_ctx_id) + 1] - ctx_off[CTX_VEC_IDX(first_ctx_id)];
-  std::vector<char> metrics_bytes (metric_bytes_size);
-  */
   int metric_bytes_size = ctx_off[CTX_VEC_IDX(ctx_id) + 1] - ctx_off[CTX_VEC_IDX(ctx_id)];
   std::vector<char> metrics_bytes (metric_bytes_size);
   
@@ -2164,16 +2126,47 @@ void SparseDB::rwOneCtxGroup(const std::vector<uint32_t>& ctx_ids,
     }
   };
 
+  uint first_ctx_off = ctx_off[CTX_VEC_IDX(ctx_ids.front())];
+  uint total_ctx_ids_size = ctx_off[CTX_VEC_IDX(ctx_ids.back()) + 1] - first_ctx_off;
+  uint thread_ctx_ids_size = round(total_ctx_ids_size/threads);
+
+  std::vector<uint64_t> t_starts (threads, 0);
+  std::vector<uint64_t> t_ends (threads, 0);
+  int cur_thread = 0;
+
+  //make sure first thread at least gets one ctx
+  size_t cur_size = ctx_off[CTX_VEC_IDX(ctx_ids.front()) + 1] - first_ctx_off; //size of first ctx
+  t_starts[cur_thread] = CTXID(0);
+  for(uint i = 2; i <= ctx_ids.size(); i++){
+    auto cid = (i == ctx_ids.size()) ? ctx_ids[i-1] + 1 : ctx_ids[i];
+    auto cid_size = (ctx_off[CTX_VEC_IDX(cid)] - ctx_off[CTX_VEC_IDX(ctx_ids[i-1])]);
+
+    if((cur_size + cid_size) > thread_ctx_ids_size){
+      t_ends[cur_thread] = CTXID(i-1);
+      cur_thread++;
+      t_starts[cur_thread] = CTXID(i-1);
+      cur_size = cid_size;
+
+      if(cur_thread == threads - 1){
+        t_ends[cur_thread] = CTXID(ctx_ids.size());
+        break;
+      } 
+    }else{
+      cur_size += cid_size;
+    }
+  }  
+  if(cur_thread != threads-1) t_ends[cur_thread] = CTXID(ctx_ids.size());
+
 
   //for each ctx, find corresponding ctx_id_idx and bytes, and interpret
   #pragma omp parallel num_threads(threads)
   {
-    //each thread is responsible for a group of ctx_ids 
     auto ofhi = ofh.open(true);
-    uint ctx_ids_size = ctx_ids.size()/threads;
+
+    //each thread is responsible for a group of ctx_ids, idx from [my_start, my_end)
     int thread_num = omp_get_thread_num();
-    uint my_start = ctx_ids_size * thread_num;
-    uint my_end = (thread_num != threads -1) ? my_start + ctx_ids_size : ctx_ids.size();
+    uint my_start = t_starts[thread_num];
+    uint my_end = t_ends[thread_num];
 
     if(my_start < my_end) {     
       //each thread sets up a heap to store <ctx_id, profile_idx, profile_cursor> for each profile
@@ -2218,7 +2211,7 @@ void SparseDB::rwOneCtxGroup(const std::vector<uint32_t>& ctx_ids,
 
         }
 
-        writeCtxGroup(ctx_id, ctx_off, cmb, threads, ofhi);
+        writeOneCtx(ctx_id, ctx_off, cmb, threads, ofhi);
 
       }//END of while
 
@@ -2249,13 +2242,13 @@ void SparseDB::rwAllCtxGroup(const std::vector<uint32_t>& my_ctxs,
   std::vector<std::pair<uint32_t, uint64_t>> cnt_size; 
   std::vector<uint64_t> t;
   auto& total_size = ctx_off.back();
-  uint64_t size_limit = std::min<std::size_t>(1024*1024*100, total_size/mpi::World::size());
+  uint64_t size_limit = std::min<std::size_t>(1024*1024*100, ctx_off[CTX_VEC_IDX(my_ctxs.back()) + 1] - ctx_off[CTX_VEC_IDX(my_ctxs.front())]);
 
   for(uint i =0; i<my_ctxs.size(); i++){
     uint32_t ctx_id = my_ctxs[i];
     size_t cur_ctx_size = ctx_off[CTX_VEC_IDX(ctx_id) + 1] - ctx_off[CTX_VEC_IDX(ctx_id)];
 
-    //if((cur_size + cur_ctx_size) <= pow(10,8)) { //temp 10^4 TODO: user-defined memory limit
+    //if((cur_size + cur_ctx_size) <= pow(10,8)) {
     if((cur_size + cur_ctx_size) <= size_limit){
       ctx_ids.emplace_back(ctx_id);
       cur_size += cur_ctx_size;

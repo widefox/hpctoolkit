@@ -524,11 +524,11 @@ private:
                        std::vector<char>& info_bytes,
                        std::vector<char>& metrics_bytes);
 
-  void writeCtxGroup(const uint32_t& ctx_id,
-                    const std::vector<uint64_t>& ctx_off,
-                    const CtxMetricBlock& cmb,
-                    const int threads,
-                    hpctoolkit::util::File::Instance& ofh);
+  void writeOneCtx(const uint32_t& ctx_id,
+                   const std::vector<uint64_t>& ctx_off,
+                   const CtxMetricBlock& cmb,
+                   const int threads,
+                   hpctoolkit::util::File::Instance& ofh);
 
   //---------------------------------------------------------------------------
   // read and write for all contexts in this rank's list
