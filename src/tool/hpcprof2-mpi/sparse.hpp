@@ -475,8 +475,7 @@ private:
                     const std::vector<tms_profile_info_t>& prof_info,
                     int threads,
                     const std::vector<std::vector<TMS_CtxIdIdxPair>>& all_prof_ctx_pairs,
-                    const hpctoolkit::util::File& fh,
-                    std::map<uint32_t, CtxMetricBlock>& ctx_met_blocks);                    
+                    const hpctoolkit::util::File& fh);                    
 
 
   //---------------------------------------------------------------------------

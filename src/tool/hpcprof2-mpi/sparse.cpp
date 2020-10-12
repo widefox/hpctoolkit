@@ -1882,8 +1882,7 @@ SparseDB::readProfiles(const std::vector<uint32_t>& ctx_ids,
                             const std::vector<tms_profile_info_t>& prof_info,
                             int threads,
                             const std::vector<std::vector<TMS_CtxIdIdxPair>>& all_prof_ctx_pairs,
-                            const util::File& fh,
-                            std::map<uint32_t, CtxMetricBlock>& ctx_met_blocks)
+                            const util::File& fh)
 {
 
   std::vector<std::pair<std::vector<std::pair<uint32_t,uint64_t>>, std::vector<char>>> profiles_data (prof_info.size());
@@ -2106,11 +2105,10 @@ void SparseDB::rwOneCtxGroup(const std::vector<uint32_t>& ctx_ids,
                              const util::File& ofh)
 {
   if(ctx_ids.size() == 0) return;
-  std::map<uint32_t, CtxMetricBlock> fake_ctx_met_blocks;
 
   //read corresponding ctx_id_idx pairs and relevant ValMidsBytes
   std::vector<std::pair<std::vector<std::pair<uint32_t,uint64_t>>, std::vector<char>>> profiles_data =
-    readProfiles(ctx_ids, prof_info, threads, all_prof_ctx_pairs, fh, fake_ctx_met_blocks);
+    readProfiles(ctx_ids, prof_info, threads, all_prof_ctx_pairs, fh);
 
   struct nextCtx{
     uint32_t ctx_id;
@@ -2137,26 +2135,30 @@ void SparseDB::rwOneCtxGroup(const std::vector<uint32_t>& ctx_ids,
   //make sure first thread at least gets one ctx
   size_t cur_size = ctx_off[CTX_VEC_IDX(ctx_ids.front()) + 1] - first_ctx_off; //size of first ctx
   t_starts[cur_thread] = CTXID(0);
-  for(uint i = 2; i <= ctx_ids.size(); i++){
-    auto cid = (i == ctx_ids.size()) ? ctx_ids[i-1] + 1 : ctx_ids[i];
-    auto cid_size = (ctx_off[CTX_VEC_IDX(cid)] - ctx_off[CTX_VEC_IDX(ctx_ids[i-1])]);
+  if(threads > 1){
+    for(uint i = 2; i <= ctx_ids.size(); i++){
+      auto cid = (i == ctx_ids.size()) ? ctx_ids[i-1] + 1 : ctx_ids[i];
+      auto cid_size = (ctx_off[CTX_VEC_IDX(cid)] - ctx_off[CTX_VEC_IDX(ctx_ids[i-1])]);
 
-    if((cur_size + cid_size) > thread_ctx_ids_size){
-      t_ends[cur_thread] = CTXID(i-1);
-      cur_thread++;
-      t_starts[cur_thread] = CTXID(i-1);
-      cur_size = cid_size;
+      if(cur_size > thread_ctx_ids_size){
+        t_ends[cur_thread] = CTXID(i-1);
+        cur_thread++;
+        t_starts[cur_thread] = CTXID(i-1);
+        cur_size = cid_size;
 
-      if(cur_thread == threads - 1){
-        t_ends[cur_thread] = CTXID(ctx_ids.size());
-        break;
-      } 
-    }else{
-      cur_size += cid_size;
-    }
-  }  
-  if(cur_thread != threads-1) t_ends[cur_thread] = CTXID(ctx_ids.size());
-
+        if(cur_thread == threads - 1){
+          t_ends[cur_thread] = CTXID(ctx_ids.size());
+          break;
+        } 
+      }else{
+        cur_size += cid_size;
+      }
+    }  
+    if(cur_thread != threads-1) t_ends[cur_thread] = CTXID(ctx_ids.size());
+  }else{
+    t_ends[cur_thread] = CTXID(ctx_ids.size());
+  }
+  
 
   //for each ctx, find corresponding ctx_id_idx and bytes, and interpret
   #pragma omp parallel num_threads(threads)
@@ -2236,33 +2238,18 @@ void SparseDB::rwAllCtxGroup(const std::vector<uint32_t>& my_ctxs,
   std::vector<uint32_t> ctx_ids;
   size_t cur_size = 0;
   int cur_cnt = 0;
-
-//TEMP for debugging
-  int group_num = 0; 
-  std::vector<std::pair<uint32_t, uint64_t>> cnt_size; 
-  std::vector<uint64_t> t;
-  auto& total_size = ctx_off.back();
   uint64_t size_limit = std::min<std::size_t>(1024*1024*100, ctx_off[CTX_VEC_IDX(my_ctxs.back()) + 1] - ctx_off[CTX_VEC_IDX(my_ctxs.front())]);
 
   for(uint i =0; i<my_ctxs.size(); i++){
     uint32_t ctx_id = my_ctxs[i];
     size_t cur_ctx_size = ctx_off[CTX_VEC_IDX(ctx_id) + 1] - ctx_off[CTX_VEC_IDX(ctx_id)];
 
-    //if((cur_size + cur_ctx_size) <= pow(10,8)) {
     if((cur_size + cur_ctx_size) <= size_limit){
       ctx_ids.emplace_back(ctx_id);
       cur_size += cur_ctx_size;
       cur_cnt++;
     }else{
-      group_num++;
-      cnt_size.emplace_back(cur_cnt, cur_size);
-      std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
-
       rwOneCtxGroup(ctx_ids, prof_info, ctx_off, threads, all_prof_ctx_pairs, fh, ofh);
-
-      std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double, std::milli> ts = t2-t1;
-      t.emplace_back(ts.count());
 
       ctx_ids.clear();
       ctx_ids.emplace_back(ctx_id);
@@ -2271,24 +2258,11 @@ void SparseDB::rwAllCtxGroup(const std::vector<uint32_t>& my_ctxs,
     }   
 
     // final ctx group
-    if((i == my_ctxs.size() - 1) && (ctx_ids.size() != 0)) {
-      group_num++;
-      cnt_size.emplace_back(cur_cnt, cur_size);
-      std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+    if((i == my_ctxs.size() - 1) && (ctx_ids.size() != 0)) 
       rwOneCtxGroup(ctx_ids, prof_info, ctx_off, threads, all_prof_ctx_pairs, fh, ofh);
-      std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double, std::milli> ts = t2-t1;
-      t.emplace_back(ts.count());
-    }
+    
   }
 
-
-  printf("\n\nRank %d, num of groups %d: \n", rank, group_num);
-  for(int i = 0; i <group_num; i++){
-    printf("num of ctxs: %d, size of ctxs in total: %ld, running time in ms: %d\n", cnt_size[i].first, cnt_size[i].second, t[i]);
-  }
-
-  
 }
 
 
