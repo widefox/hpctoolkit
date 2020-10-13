@@ -495,7 +495,7 @@ std::vector<std::pair<uint16_t, uint64_t>>
 SparseDB::tuples2IntPairs(const std::vector<tms_id_tuple_t>& all_tuples)
 {
   std::vector<std::pair<uint16_t, uint64_t>> pairs;
-  pairs.emplace_back(RANK_SPOT, (uint64_t)all_tuples[0].rank);
+  pairs.emplace_back(RANK_SPOT, mpi::World::rank());
   for(auto& tuple : all_tuples){
     pairs.emplace_back(tuple.idtuple.length, (uint64_t)tuple.prof_info_idx);
     auto& idtuple = tuple.idtuple;
@@ -1134,15 +1134,6 @@ void SparseDB::writeThreadMajor(const int threads,
   util::File thread_major_f(dir / "thread.db", true);
 
   id_tuples_sec_size = workIdTuplesSection(world_rank, world_size, threads, thread_major_f);
-
-  //TEMP: change prof_info_idx to thread's unique id to match trace.db, need a more integrated way
-  /*
-  int i = 0;
-  for(const auto& tp: outputs.citerate()){
-    //if it's not summary
-    if(prof_idx_off_pairs[i].first != 0) prof_idx_off_pairs[i].first = tp.first->userdata[src.identifier()]+1;
-    i++;
-  }*/
 
   uint32_t total_prof = workProfSizesOffsets(world_rank, threads);
   assert(total_prof * TMS_prof_info_SIZE == prof_info_sec_size);
