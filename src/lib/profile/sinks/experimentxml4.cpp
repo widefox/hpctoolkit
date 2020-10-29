@@ -438,53 +438,52 @@ void ExperimentXML4::write() {
                        << " != 0!";
 
   // Spit out the CCT
-  emit(src.contexts());
+  src.contexts().citerate([&](const Context& c){
+    auto& udc = c.userdata[ud];
+
+    // First emit our tags, and whatever extensions are nessesary.
+    of << udc.pre << udc.open;
+    switch(c.scope().type()) {
+    case Scope::Type::unknown:
+    case Scope::Type::global:
+    case Scope::Type::loop:
+    case Scope::Type::inlined_function:
+    case Scope::Type::function:
+      break;
+    case Scope::Type::point:
+      of << (c.children().empty() ? 'S' : 'C') << udc.attr;
+      break;
+    }
+    if(c.scope().type() != Scope::Type::global)
+      of << " it=\"" << c.userdata[src.identifier()] << "\"";
+
+    // If this is an empty tag, use the shorter form, otherwise close the tag.
+    if(c.children().empty()) {
+      of << "/>\n" << udc.post;
+      return;
+    }
+    of << ">\n";
+  }, [&](const Context& c){
+    // If this is the shorter form, we have no ending tag
+    if(c.children().empty()) return;
+
+    auto& udc = c.userdata[ud];
+
+    // Close off this tag.
+    switch(c.scope().type()) {
+    case Scope::Type::unknown:
+    case Scope::Type::global:
+    case Scope::Type::function:
+    case Scope::Type::inlined_function:
+    case Scope::Type::loop:
+      break;
+    case Scope::Type::point:
+      of << "</" << (c.children().empty() ? 'S' : 'C') << ">\n";
+      break;
+    }
+    of << udc.close << udc.post;
+  });
 
   of << "</SecCallPathProfile>\n"
         "</HPCToolkitExperiment>\n" << std::flush;
-}
-
-void ExperimentXML4::emit(const Context& c) {
-  const auto& s = c.scope();
-  auto& udc = c.userdata[ud];
-
-  // First emit our tags, and whatever extensions are nessesary.
-  of << udc.pre << udc.open;
-  switch(s.type()) {
-  case Scope::Type::unknown:
-  case Scope::Type::global:
-  case Scope::Type::loop:
-  case Scope::Type::inlined_function:
-  case Scope::Type::function:
-    break;
-  case Scope::Type::point:
-    of << (c.children().empty() ? 'S' : 'C') << udc.attr;
-    break;
-  }
-  if(s.type() != Scope::Type::global)
-    of << " it=\"" << c.userdata[src.identifier()] << "\"";
-
-  // If this is an empty tag, use the shorter form, otherwise close the tag.
-  if(c.children().empty()) {
-    of << "/>\n" << udc.post;
-    return;
-  }
-  of << ">\n";
-
-  // Recurse through the children.
-  for(const auto& cc: c.children().iterate()) emit(cc());
-
-  // Close off this tag.
-  switch(s.type()) {
-  case Scope::Type::unknown:
-  case Scope::Type::global:
-  case Scope::Type::function:
-  case Scope::Type::inlined_function:
-  case Scope::Type::loop:
-    break;
-  case Scope::Type::point:
-    of << "</" << (c.children().empty() ? 'S' : 'C') << ">\n";
-    break;
-  }
-  of << udc.close << udc.post;
 }

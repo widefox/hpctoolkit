@@ -92,8 +92,6 @@ private:
   HPCTraceDB2* tracedb;
   bool include_sources;
 
-  void emit(const Context& c);
-
   struct uds;
 
   class udFile {
