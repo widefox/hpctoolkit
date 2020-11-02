@@ -62,8 +62,14 @@ public:
 
   /// Instantiates the proper Source for the given arguments. In time more
   /// overloadings may be added that will handle more interesting cases.
-  // MT Internally Sychronized
+  // MT: Internally Synchronized
   static std::unique_ptr<ProfileSource> create_for(const stdshim::filesystem::path&);
+
+  /// Most format errors from a Source can be handled within the Source itself,
+  /// but if errors happen during construction callers (create_for) will want to
+  /// know. This gives a path for that information.
+  // MT: Externally Synchronized
+  virtual bool valid() const noexcept;
 
   /// Bind this Source to a Pipeline to emit the actual bits and bobs.
   // MT: Externally Sychronized

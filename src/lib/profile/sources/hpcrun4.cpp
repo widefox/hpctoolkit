@@ -57,24 +57,29 @@ using namespace sources;
 using namespace literals::data;
 
 Hpcrun4::Hpcrun4(const stdshim::filesystem::path& fn)
-  : ProfileSource(), attrsValid(true), tattrsValid(true), thread(nullptr),
-    path(fn), partial_node_id(0), unknown_node_id(0),
+  : ProfileSource(), fileValid(true), attrsValid(true), tattrsValid(true),
+    thread(nullptr), path(fn), partial_node_id(0), unknown_node_id(0),
     tracepath(fn.parent_path() / fn.stem().concat(".hpctrace")),
     trace_sort(false) {
   // Try to open up the file. Errors handled inside somewhere.
   file = hpcrun_sparse_open(path.c_str());
-  if(file == nullptr) throw std::logic_error("Unable to open file!");
+  if(file == nullptr) {
+    fileValid = false;
+    return;
+  }
   // We still need to check the header before we know for certain whether
   // this is the right version. A hassle, I know.
   hpcrun_fmt_hdr_t hdr;
   if(hpcrun_sparse_read_hdr(file, &hdr) != 0) {
     hpcrun_sparse_close(file);
-    throw std::logic_error("Invalid header!");
+    fileValid = false;
+    return;
   }
   if(hdr.version != 4.0) {
     hpcrun_fmt_hdr_free(&hdr, std::free);
     hpcrun_sparse_close(file);
-    throw std::logic_error("Invalid version of .hpcrun file!");
+    fileValid = false;
+    return;
   }
   stdshim::optional<unsigned long> mpirank;
   stdshim::optional<unsigned long> threadid;
@@ -141,8 +146,10 @@ Hpcrun4::Hpcrun4(const stdshim::filesystem::path& fn)
   if(!setupTrace()) tracepath.clear();
 }
 
+bool Hpcrun4::valid() const noexcept { return fileValid; }
+
 Hpcrun4::~Hpcrun4() {
-  hpcrun_sparse_close(file);
+  if(fileValid) hpcrun_sparse_close(file);
 }
 
 DataClass Hpcrun4::provides() const noexcept {

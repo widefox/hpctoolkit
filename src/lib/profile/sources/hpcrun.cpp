@@ -60,18 +60,22 @@ using namespace sources;
 using namespace literals::data;
 
 HpcrunFSv2::HpcrunFSv2(const stdshim::filesystem::path& fn)
-  : ProfileSource(), attrsValid(true), tattrsValid(true), thread(nullptr),
-    path(fn), epochs_final(false),
+  : ProfileSource(), fileValid(true), attrsValid(true), tattrsValid(true),
+    thread(nullptr), path(fn), epochs_final(false),
     tracepath(fn.parent_path() / fn.stem().concat(".hpctrace")) {
   // Make sure we can pop the file open.
   std::FILE* file = std::fopen(path.c_str(), "rb");
-  if(file == nullptr) throw std::logic_error("Unable to open file!");
+  if(file == nullptr) {
+    fileValid = false;
+    return;
+  }
   // Read in the file header. Reads more than I would prefer, but since we're
   // falling back on the C-like implementation...
   hpcrun_fmt_hdr_t hdr;
   if(hpcrun_fmt_hdr_fread(&hdr, file, std::malloc) != HPCFMT_OK) {
     std::fclose(file);
-    throw std::logic_error("Invalid header!");
+    fileValid = false;
+    return;
   }
   // The file is now placed right at the first epoch header.
   epoch_offsets.emplace_back(std::ftell(file));
@@ -79,7 +83,8 @@ HpcrunFSv2::HpcrunFSv2(const stdshim::filesystem::path& fn)
   if(hdr.version != 2.0 && hdr.version != 3.0) {
     hpcrun_fmt_hdr_free(&hdr, std::free);
     std::fclose(file);
-    throw std::logic_error("Invalid version of .hpcrun file!");
+    fileValid = false;
+    return;
   }
   stdshim::optional<unsigned long> mpirank;
   stdshim::optional<unsigned long> threadid;
@@ -134,6 +139,8 @@ HpcrunFSv2::HpcrunFSv2(const stdshim::filesystem::path& fn)
   // If anything goes wrong, we just won't actually use it.
   if(!setupTrace()) tracepath.clear();
 }
+
+bool HpcrunFSv2::valid() const noexcept { return fileValid; }
 
 DataClass HpcrunFSv2::provides() const noexcept {
   Class ret = attributes + references + contexts + metrics + threads;

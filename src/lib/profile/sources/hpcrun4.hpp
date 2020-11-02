@@ -66,6 +66,8 @@ public:
   // You shouldn't create these directly, use ProfileSource::create_for
   Hpcrun4() = delete;
 
+  bool valid() const noexcept override;
+
   /// Read in enough data to satify a request or until a timeout is reached.
   /// See `ProfileSource::read(...)`.
   void read(const DataClass&) override;
@@ -75,6 +77,7 @@ public:
 
 private:
   // Transfer of attributes from header-open time to read-time.
+  bool fileValid;
   bool attrsValid;
   ProfileAttributes attrs;
   bool tattrsValid;
