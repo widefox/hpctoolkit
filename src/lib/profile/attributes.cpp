@@ -84,10 +84,10 @@ void ProfileAttributes::job(unsigned long j) {
   m_job = j;
 }
 
-const stdshim::optional<const std::string&> ProfileAttributes::environment(const std::string& v) const noexcept {
+const std::string* ProfileAttributes::environment(const std::string& v) const noexcept {
   auto it = m_env.find(v);
-  if(it == m_env.end()) return {};
-  return it->second;
+  if(it == m_env.end()) return nullptr;
+  return &it->second;
 }
 void ProfileAttributes::environment(const std::string& var,
                                     const std::string& val) {

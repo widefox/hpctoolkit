@@ -149,13 +149,11 @@ public:
     Temporary(Temporary&&) = default;
 
     /// Reference to the Metric data for a particular Context in this Thread.
-    /// Returns an empty optional if none is present.
+    /// Returns `nullptr` if none is present.
     // MT: Safe (const), Unstable (before notifyThreadFinal)
-    stdshim::optional<const util::locked_unordered_map<const Metric*, MetricAccumulator>&>
+    const util::locked_unordered_map<const Metric*, MetricAccumulator>*
     accumulatorsFor(const Context& c) const noexcept {
-      auto* d = data.find(&c);
-      if(d == nullptr) return {};
-      return *d;
+      return data.find(&c);
     }
 
     /// Reference to all of the Metric data on Thread.
@@ -208,9 +206,9 @@ public:
   void job(unsigned long);
 
   /// Get or set individual environment variables. Note that the getter may
-  /// return stdshim::nullopt if the variable is not known to be set.
+  /// return `nullptr` if the variable is not known to be set.
   // MT: Externally Synchronized
-  const stdshim::optional<const std::string&> environment(const std::string& var) const noexcept;
+  const std::string* environment(const std::string& var) const noexcept;
   void environment(const std::string& var, const std::string& val);
 
   /// Access the entire environment for this profile.

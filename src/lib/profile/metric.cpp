@@ -114,10 +114,8 @@ void StatisticAccumulator::validate() const noexcept {
   util::log::warning{} << "Returning a Statistic accumulator with no value!";
 }
 
-stdshim::optional<const StatisticAccumulator&> Metric::getFor(const Context& c) const noexcept {
-  auto* a = c.data.find(this);
-  if(a == nullptr) return {};
-  return *a;
+const StatisticAccumulator* Metric::getFor(const Context& c) const noexcept {
+  return c.data.find(this);
 }
 
 stdshim::optional<double> MetricAccumulator::get(MetricScope s) const noexcept {
@@ -138,12 +136,10 @@ void MetricAccumulator::validate() const noexcept {
   util::log::warning{} << "Returning a Metric accumulator with no value!";
 }
 
-stdshim::optional<const MetricAccumulator&> Metric::getFor(const Thread::Temporary& t, const Context& c) const noexcept {
+const MetricAccumulator* Metric::getFor(const Thread::Temporary& t, const Context& c) const noexcept {
   auto* cd = t.data.find(&c);
-  if(cd == nullptr) return {};
-  auto* md = cd->find(this);
-  if(md == nullptr) return {};
-  return *md;
+  if(cd == nullptr) return nullptr;
+  return cd->find(this);
 }
 
 static bool pullsFunction(const Context& parent, const Context& child) {

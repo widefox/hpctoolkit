@@ -77,7 +77,7 @@ public:
   Scope(const Function&, const File&, uint64_t);
 
   struct loop_t {};
-  static constexpr loop_t loop = {};
+  static inline constexpr loop_t loop = {};
 
   /// Constructor for loop-construct Scopes.
   Scope(const loop_t&, const File&, uint64_t);

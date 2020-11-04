@@ -53,6 +53,7 @@
 #include "include/hpctoolkit-config.h"
 #include "lib/profile/mpi/all.hpp"
 
+#include <cassert>
 #include <getopt.h>
 #include <iostream>
 #include <iomanip>

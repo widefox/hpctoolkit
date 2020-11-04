@@ -57,6 +57,7 @@
 
 #include <iomanip>
 #include <sstream>
+#include <cassert>
 #include <cerrno>
 #include <cstring>
 

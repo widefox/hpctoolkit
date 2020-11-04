@@ -104,15 +104,15 @@ public:
   /// Get the set of Scopes that this Metric supports.
   MetricScopeSet scopes() const noexcept;
 
-  /// Obtain a reference to the Statistic Accumulators for a particular Context.
-  /// Returns an empty optional if no Statistic data exists for the given Context.
+  /// Obtain a pointer to the Statistic Accumulators for a particular Context.
+  /// Returns `nullptr` if no Statistic data exists for the given Context.
   // MT: Safe (const), Unstable (before `metrics` wavefront)
-  stdshim::optional<const StatisticAccumulator&> getFor(const Context& c) const noexcept;
+  const StatisticAccumulator* getFor(const Context& c) const noexcept;
 
-  /// Obtain a reference to the Thread-local Accumulator for a particular Context.
-  /// Returns an empty optional if no metric data exists for the given Context.
+  /// Obtain a pointer to the Thread-local Accumulator for a particular Context.
+  /// Returns `nullptr` if no metric data exists for the given Context.
   // MT: Safe (const), Unstable (before notifyThreadFinal)
-  stdshim::optional<const MetricAccumulator&> getFor(const Thread::Temporary&, const Context& c) const noexcept;
+  const MetricAccumulator* getFor(const Thread::Temporary&, const Context& c) const noexcept;
 
 private:
   util::uniqable_key<Settings> u_settings;
