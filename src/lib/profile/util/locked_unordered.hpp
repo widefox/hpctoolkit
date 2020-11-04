@@ -185,12 +185,10 @@ protected:
   real_t real;
 
 private:
-  std::pair<V&, bool> opget(const K& k, V&& v, std::unique_lock<M>&&) {
-    auto x = real.emplace(k, std::move(v));
-    return {x.first->second, x.second};
-  }
-  std::pair<V&, bool> opget(K&& k, V&& v, std::unique_lock<M>&&) {
-    auto x = real.emplace(std::move(k), std::move(v));
+  std::pair<V&, bool> opget(K k, V&& v, std::unique_lock<M>&&) {
+    auto x = real.emplace(std::piecewise_construct,
+                          std::forward_as_tuple(std::move(k)),
+                          std::forward_as_tuple(std::move(v)));
     return {x.first->second, x.second};
   }
   template<class Mtx>
@@ -212,13 +210,7 @@ private:
     return opget(std::move(k), std::move(v), std::unique_lock<Mtx>(lock));
   }
 
-  std::pair<V&, bool> opget(const K& k, std::unique_lock<M>&&) {
-    auto x = real.emplace(std::piecewise_construct,
-                          std::forward_as_tuple(k),
-                          std::forward_as_tuple());
-    return {x.first->second, x.second};
-  }
-  std::pair<V&, bool> opget(K&& k, std::unique_lock<M>&&) {
+  std::pair<V&, bool> opget(K k, std::unique_lock<M>&&) {
     auto x = real.emplace(std::piecewise_construct,
                           std::forward_as_tuple(std::move(k)),
                           std::forward_as_tuple());
@@ -243,19 +235,11 @@ private:
     return opget(std::move(k), std::unique_lock<Mtx>(lock));
   }
 
-  V* opget_r(const K& k, su_lock<M>&&) {
-    auto x = real.find(k);
-    return x == real.end() ? nullptr : &x->second;
-  }
-  V* opget_r(K&& k, su_lock<M>&&) {
+  V* opget_r(K k, su_lock<M>&&) {
     auto x = real.find(std::move(k));
     return x == real.end() ? nullptr : &x->second;
   }
-  const V* opget_r(const K& k, su_lock<M>&&) const {
-    auto x = real.find(k);
-    return x == real.end() ? nullptr : &x->second;
-  }
-  const V* opget_r(K&& k, su_lock<M>&&) const {
+  const V* opget_r(K k, su_lock<M>&&) const {
     auto x = real.find(std::move(k));
     return x == real.end() ? nullptr : &x->second;
   }
@@ -343,11 +327,7 @@ protected:
   real_t real;
 
 private:
-  std::pair<const K&, bool> opget(const K& k, std::unique_lock<M>&&) {
-    auto x = real.emplace(k);
-    return {*x.first, x.second};
-  }
-  std::pair<const K&, bool> opget(K&& k, std::unique_lock<M>&&) {
+  std::pair<const K&, bool> opget(K k, std::unique_lock<M>&&) {
     auto x = real.emplace(std::move(k));
     return {*x.first, x.second};
   }

@@ -88,9 +88,7 @@ public:
     }
   };
 
-  Metric(ud_t::struct_t& rs, const Settings& s)
-    : Metric(rs, Settings(s)) {};
-  Metric(ud_t::struct_t& rs, Settings&& s)
+  Metric(ud_t::struct_t& rs, Settings s)
     : userdata(rs, std::cref(*this)), u_settings(std::move(s)) {};
   Metric(Metric&& m)
     : userdata(std::move(m.userdata), std::cref(*this)),
