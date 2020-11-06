@@ -178,11 +178,23 @@ static void combineFormula(std::ostream& os, unsigned int id,
                            const StatisticPartial& p) {
   os << "<MetricFormula t=\"combine\" frm=\"";
   switch(p.combinator()) {
-  case Statistic::combination_t::sum: os << "sum";
-  case Statistic::combination_t::min: os << "min";
-  case Statistic::combination_t::max: os << "max";
+  case Statistic::combination_t::sum: os << "sum"; break;
+  case Statistic::combination_t::min: os << "min"; break;
+  case Statistic::combination_t::max: os << "max"; break;
   }
   os << "($" << id << ", $" << id << ")\"/>\n";
+}
+
+static void finalizeFormula(std::ostream& os, const std::string& mode,
+                            unsigned int idbase, const Statistic& s) {
+  os << "<MetricFormula t=\"" << mode << "\" frm=\"";
+  for(const auto& e: s.finalizeFormula()) {
+    if(std::holds_alternative<size_t>(e))
+      os << "$" << (idbase + std::get<size_t>(e));
+    else if(std::holds_alternative<std::string>(e))
+      os << std::get<std::string>(e);
+  }
+  os << "\"/>\n";
 }
 
 ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
@@ -208,20 +220,24 @@ ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
                         "md=" << util::xmlquoted(m.description()) << " "
                         "v=\"derived-incr\" "
                         "t=\"inclusive\" partner=\"" << func_id << "\" "
-                        "show=\"1\" show-percent=\"1\">\n";
+                        "show=\"1\" "
+                        "show-percent=\"" << (it_stat->showPercent() ? "1" : "0")
+                     << "\">\n";
       combineFormula(ss, exec_id, *it_partial);
-      ss << "<MetricFormula t=\"finalize\" frm=\"$" << exec_id << "\"/>\n"
-            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+      finalizeFormula(ss, "finalize", ids.execution << 8, *it_stat);
+      ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
             "</Metric>\n"
             "<Metric i=\"" << func_id << "\" o=\"" << func_id << "\" "
                         "n=" << util::xmlquoted(name+" (E)") << " "
                         "md=" << util::xmlquoted(m.description()) << " "
                         "v=\"derived-incr\" "
                         "t=\"exclusive\" partner=\"" << exec_id << "\" "
-                        "show=\"1\" show-percent=\"1\">\n";
+                        "show=\"1\" "
+                        "show-percent=\"" << (it_stat->showPercent() ? "1" : "0")
+                     << "\">\n";
       combineFormula(ss, func_id, *it_partial);
-      ss << "<MetricFormula t=\"finalize\" frm=\"$" << func_id << "\"/>\n"
-            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+      finalizeFormula(ss, "finalize", ids.function << 8, *it_stat);
+      ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
             "</Metric>\n";
     }
     for(; it_partial != m.partials().end(); ++it_partial, ++idx) {
@@ -236,8 +252,8 @@ ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
                         "t=\"inclusive\" partner=\"" << func_id << "\" "
                         "show=\"4\" show-percent=\"0\">\n";
       combineFormula(ss, exec_id, *it_partial);
-      ss << "<MetricFormula t=\"finalize\" frm=\"$" << exec_id << "\"/>\n"
-            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+      // ss << "<MetricFormula t=\"finalize\" frm=\"$" << exec_id << "\"/>\n"
+      ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
             "</Metric>\n"
             "<Metric i=\"" << func_id << "\" o=\"" << func_id << "\" "
                         "n=" << util::xmlquoted(name+" (E)") << " "
@@ -246,8 +262,8 @@ ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
                         "t=\"exclusive\" partner=\"" << exec_id << "\" "
                         "show=\"4\" show-percent=\"0\">\n";
       combineFormula(ss, func_id, *it_partial);
-      ss << "<MetricFormula t=\"finalize\" frm=\"$" << func_id << "\"/>\n"
-            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+      // ss << "<MetricFormula t=\"finalize\" frm=\"$" << func_id << "\"/>\n"
+      ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
             "</Metric>\n";
     }
     for(; it_stat != m.statistics().end(); ++it_stat, ++idx) {
@@ -260,18 +276,22 @@ ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
                         "md=" << util::xmlquoted(m.description()) << " "
                         "v=\"derived-incr\" "
                         "t=\"inclusive\" partner=\"" << func_id << "\" "
-                        "show=\"1\" show-percent=\"0\">\n"
-            "<MetricFormula t=\"view\" frm=\"$" << std::to_string(ids.execution<<8) << "\"/>\n"
-            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+                        "show=\"1\" "
+                        "show-percent=\"" << (it_stat->showPercent() ? "1" : "0")
+                     << "\">\n";
+      finalizeFormula(ss, "view", ids.execution << 8, *it_stat);
+      ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
             "</Metric>\n"
             "<Metric i=\"" << func_id << "\" o=\"" << func_id << "\" "
                         "n=" << util::xmlquoted(name+" (E)") << " "
                         "md=" << util::xmlquoted(m.description()) << " "
                         "v=\"derived-incr\" "
                         "t=\"exclusive\" partner=\"" << exec_id << "\" "
-                        "show=\"1\" show-percent=\"0\">\n"
-            "<MetricFormula t=\"view\" frm=\"$" << std::to_string(ids.function<<8) << "\"/>\n"
-            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+                        "show=\"1\" "
+                        "show-percent=\"" << (it_stat->showPercent() ? "1" : "0")
+                     << "\">\n";
+      finalizeFormula(ss, "view", ids.function << 8, *it_stat);
+      ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
             "</Metric>\n";
     }
     metric_tags = ss.str();

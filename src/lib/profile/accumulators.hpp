@@ -49,8 +49,8 @@
 
 #include <atomic>
 #include <bitset>
-#include <memory>
 #include "stdshim/optional.hpp"
+#include <vector>
 
 namespace hpctoolkit {
 
@@ -171,8 +171,7 @@ public:
 
 private:
   friend class Metric;
-  // Currently only for :Sum Statistics
-  std::unique_ptr<Partial> sum;
+  std::vector<Partial> partials;
 };
 
 }

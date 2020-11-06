@@ -73,18 +73,6 @@ void DenseIds::metric(const Metric& m, Metric::ScopedIdentifiers& ids) {
   if(scopes.has(MetricScope::execution)) ids.execution = id++;
 }
 
-void DenseIds::statistic(const Statistic&, unsigned int& id) {
-  id = stat_id.fetch_add(1, std::memory_order_relaxed);
-}
-
-void DenseIds::statistic(const Statistic& s, Metric::ScopedIdentifiers& ids) {
-  auto scopes = s.metric().scopes();
-  auto id = sstat_id.fetch_add(scopes.count(), std::memory_order_relaxed);
-  if(scopes.has(MetricScope::point)) ids.point = id++;
-  if(scopes.has(MetricScope::function)) ids.function = id++;
-  if(scopes.has(MetricScope::execution)) ids.execution = id++;
-}
-
 void DenseIds::context(const Context&, unsigned int& id) {
   id = ctx_id.fetch_add(1, std::memory_order_relaxed);
 }

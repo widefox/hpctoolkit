@@ -59,6 +59,7 @@
 #include <bitset>
 #include <functional>
 #include "stdshim/optional.hpp"
+#include <variant>
 #include <vector>
 
 namespace hpctoolkit {
@@ -98,25 +99,32 @@ public:
   /// Statistics are created by the associated Metric.
   Statistic() = delete;
 
-  /// Get the Metric associatated with this Statistic
-  // MT: Safe (const)
-  const Metric& metric() const noexcept { return m_metric; }
-
   /// Get the additional suffix associated with this Statistic.
   /// E.g. "Sum" or "Avg".
   // MT: Safe (const)
   const std::string& suffix() const noexcept { return m_suffix; }
 
+  /// Get whether the percentage should be shown for this Statistic.
+  /// TODO: Figure out what property this indicates mathematically
+  // MT: Safe (const)
+  bool showPercent() const noexcept { return m_showPerc; }
+
+  /// Type for formulas. Each element is either a string or the index of a Partial.
+  /// If all such indices are replaced by variable names and the entire vector
+  /// concatinated, the result is a C-like math formula.
+  using formula_t = std::vector<std::variant<size_t, std::string>>;
+
+  /// Get the formula used generate the final value for this Statistic.
+  // MT: Safe (const)
+  const formula_t& finalizeFormula() const noexcept { return m_formula; }
+
 private:
-  Metric& m_metric;
   const std::string m_suffix;
-  const finalize_t m_finalize;
+  const bool m_showPerc;
+  const formula_t m_formula;
 
   friend class Metric;
-  Statistic(Statistic&& s, Metric& m)
-    : m_metric(m), m_suffix(std::move(s.m_suffix)),
-      m_finalize(std::move(s.m_finalize)) {};
-  Statistic(Metric&, std::string, finalize_t);
+  Statistic(std::string, bool, formula_t);
 };
 
 /// A StatisticPartial is the "accumulate" and "combine" parts of a Statistic.

@@ -55,6 +55,13 @@
 
 using namespace hpctoolkit;
 
+template<class F>
+static double atomic_op(std::atomic<double>& a, const double v, F f) noexcept {
+  double old = a.load(std::memory_order_relaxed);
+  while(!a.compare_exchange_weak(old, f(old, v), std::memory_order_relaxed));
+  return old;
+}
+
 static double atomic_add(std::atomic<double>& a, const double v) noexcept {
   double old = a.load(std::memory_order_relaxed);
   while(!a.compare_exchange_weak(old, old+v, std::memory_order_relaxed));
@@ -71,8 +78,8 @@ unsigned int Metric::ScopedIdentifiers::get(MetricScope s) const noexcept {
   std::abort();  // unreachable
 }
 
-Statistic::Statistic(Metric& m, std::string suff, finalize_t fin)
-  : m_metric(m), m_suffix(std::move(suff)), m_finalize(std::move(fin)) {};
+Statistic::Statistic(std::string suff, bool showp, formula_t form)
+  : m_suffix(std::move(suff)), m_showPerc(showp), m_formula(std::move(form)) {};
 
 Metric::Metric(Metric&& m)
   : userdata(std::move(m.userdata), std::cref(*this)),
@@ -83,9 +90,13 @@ Metric::Metric(Metric&& m)
 Metric::Metric(ud_t::struct_t& rs, Settings s)
   : userdata(rs, std::cref(*this)), u_settings(std::move(s)) {
   m_partials.push_back({[](double x) -> double { return x; },
-                        Statistic::combination_t::sum, 0});
-  m_stats.push_back({*this, "Sum",
-    [](const std::vector<double>& v) -> double { return v[0]; }});
+                        Statistic::combination_t::sum, m_partials.size()});
+  m_partials.push_back({[](double x) -> double { return x == 0 ? 0 : 1; },
+                        Statistic::combination_t::sum, m_partials.size()});
+  m_stats.push_back({"Sum", true,
+    {(Statistic::formula_t::value_type)(size_t)0} });
+  m_stats.push_back({"Mean", false,
+    {(size_t)0, "/", (size_t)1} });
 }
 
 MetricScopeSet Metric::scopes() const noexcept {
@@ -101,7 +112,8 @@ const std::vector<Statistic>& Metric::statistics() const noexcept {
   return m_stats;
 }
 
-StatisticAccumulator::StatisticAccumulator(const Metric&) : sum(new Partial()) {};
+StatisticAccumulator::StatisticAccumulator(const Metric& m)
+  : partials(m.partials().size()) {};
 
 void StatisticAccumulator::Partial::add(MetricScope s, double v) noexcept {
   if(v == 0) util::log::warning{} << "Adding a 0-metric value!";
@@ -114,12 +126,10 @@ void StatisticAccumulator::Partial::add(MetricScope s, double v) noexcept {
 }
 
 const StatisticAccumulator::Partial& StatisticAccumulator::get(const StatisticPartial& p) const noexcept {
-  if(p.m_idx > 0) util::log::fatal{} << "TODO";
-  return *sum;
+  return partials[p.m_idx];
 }
 StatisticAccumulator::Partial& StatisticAccumulator::get(const StatisticPartial& p) noexcept {
-  if(p.m_idx > 0) util::log::fatal{} << "TODO";
-  return *sum;
+  return partials[p.m_idx];
 }
 
 void MetricAccumulator::add(double v) noexcept {
@@ -287,9 +297,25 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
     for(const auto& mx: data.citerate()) {
       auto& accum = cdata.emplace(std::piecewise_construct,
         std::forward_as_tuple(mx.first), std::forward_as_tuple(*mx.first)).first;
-      atomic_add(accum.sum->point, mx.second.point.load(std::memory_order_relaxed));
-      atomic_add(accum.sum->function, mx.second.function);
-      atomic_add(accum.sum->execution, mx.second.execution);
+      for(size_t i = 0; i < mx.first->partials().size(); i++) {
+        auto& partial = mx.first->partials()[i];
+        auto& atomics = accum.partials[i];
+        std::function<double(double,double)> op;
+        switch(partial.combinator()) {
+        case Statistic::combination_t::sum:
+          op = [](double x, double y) -> double { return x + y; };
+          break;
+        case Statistic::combination_t::min:
+          op = [](double x, double y) -> double { return std::min(x, y); };
+          break;
+        case Statistic::combination_t::max:
+          op = [](double x, double y) -> double { return std::max(x, y); };
+          break;
+        }
+        atomic_op(atomics.point, partial.m_accum(mx.second.point.load(std::memory_order_relaxed)), op);
+        atomic_op(atomics.function, partial.m_accum(mx.second.function), op);
+        atomic_op(atomics.execution, partial.m_accum(mx.second.execution), op);
+      }
     }
 
     stack.pop();

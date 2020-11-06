@@ -97,14 +97,6 @@ public:
   // MT: Internally Synchronized
   virtual void metric(const Metric&, Metric::ScopedIdentifiers&) {};
 
-  /// Assign a (unique, dense) ID to the given Statistic.
-  // MT: Internally Synchronized
-  virtual void statistic(const Statistic&, unsigned int&) {};
-
-  /// Assign a set of (unique, dense) IDs to the given Statistic.
-  // MT: Internally Synchronized
-  virtual void statistic(const Statistic&, Metric::ScopedIdentifiers&) {};
-
   /// Assign a (unique, dense) ID to the given Context.
   // MT: Internally Synchronized
   virtual void context(const Context&, unsigned int&) {};

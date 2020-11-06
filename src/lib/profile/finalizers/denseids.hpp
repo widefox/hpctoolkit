@@ -63,8 +63,6 @@ public:
   void file(const File&, unsigned int& id) override;
   void metric(const Metric&, unsigned int& ids) override;
   void metric(const Metric&, Metric::ScopedIdentifiers& ids) override;
-  void statistic(const Statistic&, unsigned int& ids) override;
-  void statistic(const Statistic&, Metric::ScopedIdentifiers& ids) override;
   void context(const Context&, unsigned int& id) override;
   void thread(const Thread&, unsigned int& id) override;
 
