@@ -54,6 +54,7 @@
 #include <lib/prof/tms-format.h>
 #include <lib/prof/cms-format.h>
 
+#include <fstream>
 #include <sstream>
 #include <stack>
 #include <iomanip>

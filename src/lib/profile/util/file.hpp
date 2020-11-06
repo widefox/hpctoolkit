@@ -48,6 +48,7 @@
 #define HPCTOOLKIT_PROFILE_UTIL_FILE_H
 
 #include "../stdshim/filesystem.hpp"
+#include <functional>
 #include <ios>
 #include <memory>
 

@@ -51,8 +51,10 @@
 #include <memory>
 #include <iterator>
 #include <utility>
+#include <set>
 #include <stdexcept>
 #include <type_traits>
+#include <unordered_set>
 
 /// \file
 /// Helper header for writing managable "uniqable" objects. A commong trait
@@ -73,12 +75,6 @@
 ///  - Rather than the usual data structures, special versions designed to
 ///    handle the difference are needed (`uniqued_set`, `unordered_uniqued_set`,
 ///    and `locked_unordered_uniqued_set`).
-
-// Forward definitions
-namespace std {
-  template<class, class, class> class set;
-  template<class, class, class, class> class unordered_set;
-}
 
 namespace hpctoolkit::util {
 
