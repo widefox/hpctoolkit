@@ -205,16 +205,20 @@ void SparseDB::write()
         util::log::fatal{} << "Metric isn't function/execution!";
       const auto& ids = m.userdata[src.mscopeIdentifiers()];
       const auto& vv = mx.second;
-      hpcrun_metricVal_t v;
-      if(auto vex = vv.get(MetricScope::function)) {
-        v.r = *vex;
-        mids.push_back(ids.function);
-        values.push_back(v);
-      }
-      if(auto vinc = vv.get(MetricScope::execution)) {
-        v.r = *vinc;
-        mids.push_back(ids.execution);
-        values.push_back(v);
+      size_t idx = 0;
+      for(const auto& sp: m.partials()) {
+        hpcrun_metricVal_t v;
+        if(auto vex = vv.get(sp).get(MetricScope::function)) {
+          v.r = *vex;
+          mids.push_back((ids.function << 8) + idx);
+          values.push_back(v);
+        }
+        if(auto vinc = vv.get(sp).get(MetricScope::execution)) {
+          v.r = *vinc;
+          mids.push_back((ids.execution << 8) + idx);
+          values.push_back(v);
+        }
+        idx++;
       }
     }
   }

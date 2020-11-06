@@ -174,41 +174,115 @@ void ExperimentXML4::udFile::incr(ExperimentXML4& exml) {
 
 // ud Metric bits
 
+static void combineFormula(std::ostream& os, unsigned int id,
+                           const StatisticPartial& p) {
+  os << "<MetricFormula t=\"combine\" frm=\"";
+  switch(p.combinator()) {
+  case Statistic::combination_t::sum: os << "sum";
+  case Statistic::combination_t::min: os << "min";
+  case Statistic::combination_t::max: os << "max";
+  }
+  os << "($" << id << ", $" << id << ")\"/>\n";
+}
+
 ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
-  const auto& ids = m.userdata[exml.src.mscopeIdentifiers()];
   if(!m.scopes().has(MetricScope::function) || !m.scopes().has(MetricScope::execution))
     util::log::fatal{} << "Metric isn't function/execution!";
-  inc_id = ids.execution;
-  ex_id = ids.function;
-  std::ostringstream ss;
-  ss << "<Metric i=\"" << inc_id << "\" o=\"" << inc_id << "\" "
-                    "n=" << util::xmlquoted(m.name() + ":Sum (I)") << " "
-                    "md=" << util::xmlquoted(m.description()) << " "
-                    "v=\"derived-incr\" "
-                    "t=\"inclusive\" partner=\"" << ex_id << "\" "
-                    "show=\"1\" show-percent=\"1\">\n"
-        "<MetricFormula t=\"combine\" frm=\"sum($" << inc_id << ", $" << inc_id << ")\"/>\n"
-        "<MetricFormula t=\"finalize\" frm=\"$" << inc_id << "\"/>\n"
-        "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
-        "</Metric>\n"
-        "<Metric i=\"" << ex_id << "\" o=\"" << ex_id << "\" "
-                    "n=" << util::xmlquoted(m.name() + ":Sum (E)") << " "
-                    "md=" << util::xmlquoted(m.description()) << " "
-                    "v=\"derived-incr\" "
-                    "t=\"exclusive\" partner=\"" << inc_id << "\" "
-                    "show=\"1\" show-percent=\"1\">\n"
-        "<MetricFormula t=\"combine\" frm=\"sum($" << ex_id << ", $" << ex_id << ")\"/>\n"
-        "<MetricFormula t=\"finalize\" frm=\"$" << ex_id << "\"/>\n"
-        "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
-        "</Metric>\n";
-  tags = ss.str();
+  if(m.partials().size() > 256 || m.statistics().size() > 256)
+    util::log::fatal{} << "Too many Statistics/Partials!";
+  const auto& ids = m.userdata[exml.src.mscopeIdentifiers()];
+
+  {
+    std::ostringstream ss;
+    size_t idx = 0;
+    auto it_partial = m.partials().begin();
+    auto it_stat = m.statistics().begin();
+    for(;
+        it_partial != m.partials().end() && it_stat != m.statistics().end();
+        ++it_partial, ++it_stat, ++idx) {
+      const std::string name = m.name() + ":" + it_stat->suffix();
+      const auto exec_id = (ids.execution << 8) + idx;
+      const auto func_id = (ids.function << 8) + idx;
+      ss << "<Metric i=\"" << exec_id << "\" o=\"" << exec_id << "\" "
+                        "n=" << util::xmlquoted(name+" (I)") << " "
+                        "md=" << util::xmlquoted(m.description()) << " "
+                        "v=\"derived-incr\" "
+                        "t=\"inclusive\" partner=\"" << func_id << "\" "
+                        "show=\"1\" show-percent=\"1\">\n";
+      combineFormula(ss, exec_id, *it_partial);
+      ss << "<MetricFormula t=\"finalize\" frm=\"$" << exec_id << "\"/>\n"
+            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+            "</Metric>\n"
+            "<Metric i=\"" << func_id << "\" o=\"" << func_id << "\" "
+                        "n=" << util::xmlquoted(name+" (E)") << " "
+                        "md=" << util::xmlquoted(m.description()) << " "
+                        "v=\"derived-incr\" "
+                        "t=\"exclusive\" partner=\"" << exec_id << "\" "
+                        "show=\"1\" show-percent=\"1\">\n";
+      combineFormula(ss, func_id, *it_partial);
+      ss << "<MetricFormula t=\"finalize\" frm=\"$" << func_id << "\"/>\n"
+            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+            "</Metric>\n";
+    }
+    for(; it_partial != m.partials().end(); ++it_partial, ++idx) {
+      // Remaining partials are mapped to hidden Metrics
+      const std::string name = m.name() + ":P" + std::to_string(idx);
+      const auto exec_id = (ids.execution << 8) + idx;
+      const auto func_id = (ids.function << 8) + idx;
+      ss << "<Metric i=\"" << exec_id << "\" o=\"" << exec_id << "\" "
+                        "n=" << util::xmlquoted(name+" (I)") << " "
+                        "md=" << util::xmlquoted(m.description()) << " "
+                        "v=\"derived-incr\" "
+                        "t=\"inclusive\" partner=\"" << func_id << "\" "
+                        "show=\"4\" show-percent=\"0\">\n";
+      combineFormula(ss, exec_id, *it_partial);
+      ss << "<MetricFormula t=\"finalize\" frm=\"$" << exec_id << "\"/>\n"
+            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+            "</Metric>\n"
+            "<Metric i=\"" << func_id << "\" o=\"" << func_id << "\" "
+                        "n=" << util::xmlquoted(name+" (E)") << " "
+                        "md=" << util::xmlquoted(m.description()) << " "
+                        "v=\"derived-incr\" "
+                        "t=\"exclusive\" partner=\"" << exec_id << "\" "
+                        "show=\"4\" show-percent=\"0\">\n";
+      combineFormula(ss, func_id, *it_partial);
+      ss << "<MetricFormula t=\"finalize\" frm=\"$" << func_id << "\"/>\n"
+            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+            "</Metric>\n";
+    }
+    for(; it_stat != m.statistics().end(); ++it_stat, ++idx) {
+      // Remaining Statistics are mapped to view-only Metrics
+      const std::string name = m.name() + ":" + it_stat->suffix();
+      const auto exec_id = (ids.execution << 8) + idx;
+      const auto func_id = (ids.function << 8) + idx;
+      ss << "<Metric i=\"" << exec_id << "\" o=\"" << exec_id << "\" "
+                        "n=" << util::xmlquoted(name+" (I)") << " "
+                        "md=" << util::xmlquoted(m.description()) << " "
+                        "v=\"derived-incr\" "
+                        "t=\"inclusive\" partner=\"" << func_id << "\" "
+                        "show=\"1\" show-percent=\"0\">\n"
+            "<MetricFormula t=\"view\" frm=\"$" << std::to_string(ids.execution<<8) << "\"/>\n"
+            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+            "</Metric>\n"
+            "<Metric i=\"" << func_id << "\" o=\"" << func_id << "\" "
+                        "n=" << util::xmlquoted(name+" (E)") << " "
+                        "md=" << util::xmlquoted(m.description()) << " "
+                        "v=\"derived-incr\" "
+                        "t=\"exclusive\" partner=\"" << exec_id << "\" "
+                        "show=\"1\" show-percent=\"0\">\n"
+            "<MetricFormula t=\"view\" frm=\"$" << std::to_string(ids.function<<8) << "\"/>\n"
+            "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+            "</Metric>\n";
+    }
+    metric_tags = ss.str();
+  }
 
   std::ostringstream ss2;
-  ss2 << "<MetricDB i=\"" << inc_id << "\""
+  ss2 << "<MetricDB i=\"" << ids.execution << "\""
                   " n=" << util::xmlquoted(m.name()+" (I)") << "/>\n"
-         "<MetricDB i=\"" << ex_id << "\""
+         "<MetricDB i=\"" << ids.function << "\""
                   " n=" << util::xmlquoted(m.name()+" (E)") << "/>\n";
-  tag = ss2.str();
+  metricdb_tags = ss2.str();
 }
 
 // ud Context bits
@@ -391,11 +465,11 @@ void ExperimentXML4::write() {
 
   // MetricTable: from the Metrics
   of << "<MetricTable>\n";
-  for(const auto& m: src.metrics().iterate()) of << m().userdata[ud].tags;
+  for(const auto& m: src.metrics().iterate()) of << m().userdata[ud].metric_tags;
   of << "</MetricTable>\n";
 
   of << "<MetricDBTable>\n";
-  for(const auto& m: src.metrics().iterate()) of << m().userdata[ud].tag;
+  for(const auto& m: src.metrics().iterate()) of << m().userdata[ud].metricdb_tags;
   of << "</MetricDBTable>\n";
   if(tracedb != nullptr)
     of << "<TraceDBTable>\n" << tracedb->exmlTag() << "</TraceDBTable>\n";

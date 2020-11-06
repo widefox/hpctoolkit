@@ -57,12 +57,93 @@
 
 #include <atomic>
 #include <bitset>
+#include <functional>
 #include "stdshim/optional.hpp"
 #include <vector>
 
 namespace hpctoolkit {
 
 class Context;
+
+class Metric;
+class StatisticPartial;
+
+/// A Statistic represents a combination of Metric data across all Threads,
+/// on a per-Context basis. These are generated via three formulas:
+///  - "accumulate": converts the thread-local value into an accumulation,
+///  - "combine": combines two accumulations into a valid accumulation,
+///  - "finalize": converts an accumulation into a presentable final value.
+/// In total, this allows for condensed information regarding the entire
+/// profiled execution, while still permitting inspection of individual Threads.
+class Statistic final {
+public:
+  Statistic(const Statistic&) = delete;
+  Statistic(Statistic&&) = default;
+  Statistic& operator=(const Statistic&) = delete;
+  Statistic& operator=(Statistic&&) = default;
+
+  // Only a few combination formulas are permitted. This is the set.
+  enum class combination_t { sum, min, max };
+
+  // The other two formulas are best represented by C++ functions.
+  using accumulate_t = std::function<double(double)>;
+  using finalize_t = std::function<double(const std::vector<double>&)>;
+
+  // Standard Statistics are hard-coded based on the following enumeration.
+  enum class standard_t {
+    sum,  // Sum of thread-local values
+    mean,  // Average of non-zero thread-local values
+  };
+
+  /// Statistics are created by the associated Metric.
+  Statistic() = delete;
+
+  /// Get the Metric associatated with this Statistic
+  // MT: Safe (const)
+  const Metric& metric() const noexcept { return m_metric; }
+
+  /// Get the additional suffix associated with this Statistic.
+  /// E.g. "Sum" or "Avg".
+  // MT: Safe (const)
+  const std::string& suffix() const noexcept { return m_suffix; }
+
+private:
+  Metric& m_metric;
+  const std::string m_suffix;
+  const finalize_t m_finalize;
+
+  friend class Metric;
+  Statistic(Statistic&& s, Metric& m)
+    : m_metric(m), m_suffix(std::move(s.m_suffix)),
+      m_finalize(std::move(s.m_finalize)) {};
+  Statistic(Metric&, std::string, finalize_t);
+};
+
+/// A StatisticPartial is the "accumulate" and "combine" parts of a Statistic.
+/// There may be multiple Partials used for a Statistic, and multiple Statistics
+/// can share the same Partial.
+class StatisticPartial final {
+public:
+  StatisticPartial(const StatisticPartial&) = delete;
+  StatisticPartial(StatisticPartial&&) = default;
+  StatisticPartial& operator=(const StatisticPartial&) = delete;
+  StatisticPartial& operator=(StatisticPartial&&) = default;
+
+  /// Get the combination function used for this Partial
+  // MT: Safe (const)
+  Statistic::combination_t combinator() const noexcept { return m_combin; }
+
+private:
+  const Statistic::accumulate_t m_accum;
+  const Statistic::combination_t m_combin;
+  const std::size_t m_idx;
+
+  friend class Metric;
+  friend class StatisticAccumulator;
+  StatisticPartial() = default;
+  StatisticPartial(Statistic::accumulate_t a, Statistic::combination_t c, std::size_t idx)
+    : m_accum(std::move(a)), m_combin(std::move(c)), m_idx(idx) {};
+};
 
 // Just a simple metric class, nothing to see here
 class Metric final {
@@ -88,11 +169,8 @@ public:
     }
   };
 
-  Metric(ud_t::struct_t& rs, Settings s)
-    : userdata(rs, std::cref(*this)), u_settings(std::move(s)) {};
-  Metric(Metric&& m)
-    : userdata(std::move(m.userdata), std::cref(*this)),
-      u_settings(std::move(m.u_settings)) {};
+  Metric(ud_t::struct_t&, Settings);
+  Metric(Metric&& m);
 
   const std::string& name() const { return u_settings().name; }
   const std::string& description() const { return u_settings().description; }
@@ -101,6 +179,14 @@ public:
 
   /// Get the set of Scopes that this Metric supports.
   MetricScopeSet scopes() const noexcept;
+
+  /// List the StatisticPartials that are included in this Metric.
+  // MT: Safe (const)
+  const std::vector<StatisticPartial>& partials() const noexcept;
+
+  /// List the Statistics that are included in this Metric.
+  // MT: Safe (const)
+  const std::vector<Statistic>& statistics() const noexcept;
 
   /// Obtain a pointer to the Statistic Accumulators for a particular Context.
   /// Returns `nullptr` if no Statistic data exists for the given Context.
@@ -114,6 +200,8 @@ public:
 
 private:
   util::uniqable_key<Settings> u_settings;
+  std::vector<StatisticPartial> m_partials;
+  std::vector<Statistic> m_stats;
 
   friend class ProfilePipeline;
   // Finalize the MetricAccumulators for a Thread.

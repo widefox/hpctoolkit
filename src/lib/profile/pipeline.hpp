@@ -367,9 +367,9 @@ public:
     public:
       StatisticsRef() = delete;
 
-      /// Emit some (:Sum) Statistic data into the Pipeline.
+      /// Emit Partial value into the Pipeline, for the given MetricScope.
       // MT: Externally Synchronized (this, Source), Internally Synchronized
-      void add(Metric&, MetricScope, double);
+      void add(Metric& m, const StatisticPartial& sp, MetricScope ms, double v);
 
     private:
       friend class ProfilePipeline::Source;

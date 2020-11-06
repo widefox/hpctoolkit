@@ -49,9 +49,13 @@
 
 #include <atomic>
 #include <bitset>
+#include <memory>
 #include "stdshim/optional.hpp"
 
 namespace hpctoolkit {
+
+class Metric;
+class StatisticPartial;
 
 /// Every Metric can have values at multiple Scopes pertaining to the subtree
 /// rooted at a particular Context with Metric data.
@@ -124,29 +128,51 @@ private:
 /// Accumulator structure for the Statistics implicitly bound to a Context.
 class StatisticAccumulator final {
 public:
-  StatisticAccumulator() : point(0), function(0), execution(0) {};
+  /// Each Accumulator is a vector of Partial accumulators, each of which is
+  /// bound implicitly to a particular Statistic::Partial.
+  class Partial final {
+  public:
+    Partial() : point(0), function(0), execution(0) {};
+
+    Partial(const Partial&) = delete;
+    Partial& operator=(const Partial&) = delete;
+    Partial(Partial&&) = default;
+    Partial& operator=(Partial&&) = delete;
+
+    /// Add some value to this particular Partial, for a particular MetricScope.
+    // MT: Internally Synchronized
+    void add(MetricScope, double) noexcept;
+
+    /// Get this Partial's accumulation, for a particular MetricScope.
+    // MT: Safe (const), Unstable (before `metrics` wavefront)
+    stdshim::optional<double> get(MetricScope) const noexcept;
+
+  private:
+    void validate() const noexcept;
+
+    friend class StatisticAccumulator;
+    friend class Metric;
+    std::atomic<double> point;
+    std::atomic<double> function;
+    std::atomic<double> execution;
+  };
+
+  StatisticAccumulator(const Metric&);
 
   StatisticAccumulator(const StatisticAccumulator&) = delete;
   StatisticAccumulator& operator=(const StatisticAccumulator&) = delete;
   StatisticAccumulator(StatisticAccumulator&&) = default;
   StatisticAccumulator& operator=(StatisticAccumulator&&) = delete;
 
-  /// Add some Statistic value to this Accumulator, for the given Scope.
-  // MT: Internally Synchronized
-  void add(MetricScope, double) noexcept;
-
-  /// Get the (:Sum) Statistic accumulation, for a particular Scope.
-  // MT: Safe (const), Unstable (before `metrics` wavefront)
-  stdshim::optional<double> get(MetricScope) const noexcept;
+  /// Get the Partial accumulator for a particular Partial Statistic.
+  // MT: Safe (const)
+  const Partial& get(const StatisticPartial&) const noexcept;
+  Partial& get(const StatisticPartial&) noexcept;
 
 private:
-  void validate() const noexcept;
-
   friend class Metric;
   // Currently only for :Sum Statistics
-  std::atomic<double> point;
-  std::atomic<double> function;
-  std::atomic<double> execution;
+  std::unique_ptr<Partial> sum;
 };
 
 }

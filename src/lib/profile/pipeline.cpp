@@ -182,8 +182,8 @@ ProfilePipeline::ProfilePipeline(Settings&& b, std::size_t team_sz)
         for(ProfileFinalizer& fp: finalizers.identifier) fp.module(m, id);
       });
     uds.identifier.metric = structs.metric.add_default<unsigned int>(
-      [this](unsigned int& ids, const Metric& m){
-        for(ProfileFinalizer& fp: finalizers.identifier) fp.metric(m, ids);
+      [this](unsigned int& id, const Metric& m){
+        for(ProfileFinalizer& fp: finalizers.identifier) fp.metric(m, id);
       });
     uds.identifier.thread = structs.thread.add_default<unsigned int>(
       [this](unsigned int& id, const Thread& t){
@@ -543,8 +543,12 @@ Source::StatisticsRef Source::accumulateTo(Context& c) {
   return {c};
 }
 
-void Source::StatisticsRef::add(Metric& m, MetricScope ms, double v) {
-  c.data[&m].add(ms, v);
+void Source::StatisticsRef::add(Metric& m, const StatisticPartial& sp,
+                                MetricScope ms, double v) {
+  auto& a = c.data.emplace(std::piecewise_construct,
+                           std::forward_as_tuple(&m),
+                           std::forward_as_tuple(m)).first;
+  a.get(sp).add(ms, v);
 }
 
 Thread::Temporary& Source::thread(const ThreadAttributes& o) {

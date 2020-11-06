@@ -71,13 +71,39 @@ unsigned int Metric::ScopedIdentifiers::get(MetricScope s) const noexcept {
   std::abort();  // unreachable
 }
 
+Statistic::Statistic(Metric& m, std::string suff, finalize_t fin)
+  : m_metric(m), m_suffix(std::move(suff)), m_finalize(std::move(fin)) {};
+
+Metric::Metric(Metric&& m)
+  : userdata(std::move(m.userdata), std::cref(*this)),
+    u_settings(std::move(m.u_settings)),
+    m_partials(std::move(m.m_partials)),
+    m_stats(std::move(m.m_stats)) {};
+
+Metric::Metric(ud_t::struct_t& rs, Settings s)
+  : userdata(rs, std::cref(*this)), u_settings(std::move(s)) {
+  m_partials.push_back({[](double x) -> double { return x; },
+                        Statistic::combination_t::sum, 0});
+  m_stats.push_back({*this, "Sum",
+    [](const std::vector<double>& v) -> double { return v[0]; }});
+}
+
 MetricScopeSet Metric::scopes() const noexcept {
   // For now, its always point/function/execution
   return MetricScopeSet(MetricScope::point) +
     MetricScopeSet(MetricScope::function) + MetricScopeSet(MetricScope::execution);
 }
 
-void StatisticAccumulator::add(MetricScope s, double v) noexcept {
+const std::vector<StatisticPartial>& Metric::partials() const noexcept {
+  return m_partials;
+}
+const std::vector<Statistic>& Metric::statistics() const noexcept {
+  return m_stats;
+}
+
+StatisticAccumulator::StatisticAccumulator(const Metric&) : sum(new Partial()) {};
+
+void StatisticAccumulator::Partial::add(MetricScope s, double v) noexcept {
   if(v == 0) util::log::warning{} << "Adding a 0-metric value!";
   switch(s) {
   case MetricScope::point: atomic_add(point, v); return;
@@ -85,6 +111,15 @@ void StatisticAccumulator::add(MetricScope s, double v) noexcept {
   case MetricScope::execution: atomic_add(execution, v); return;
   }
   util::log::fatal{} << "Invalid MetricScope!";
+}
+
+const StatisticAccumulator::Partial& StatisticAccumulator::get(const StatisticPartial& p) const noexcept {
+  if(p.m_idx > 0) util::log::fatal{} << "TODO";
+  return *sum;
+}
+StatisticAccumulator::Partial& StatisticAccumulator::get(const StatisticPartial& p) noexcept {
+  if(p.m_idx > 0) util::log::fatal{} << "TODO";
+  return *sum;
 }
 
 void MetricAccumulator::add(double v) noexcept {
@@ -96,7 +131,7 @@ static stdshim::optional<double> opt0(double d) {
   return d == 0 ? stdshim::optional<double>{} : d;
 }
 
-stdshim::optional<double> StatisticAccumulator::get(MetricScope s) const noexcept {
+stdshim::optional<double> StatisticAccumulator::Partial::get(MetricScope s) const noexcept {
   validate();
   switch(s) {
   case MetricScope::point: return opt0(point.load(std::memory_order_relaxed));
@@ -107,7 +142,7 @@ stdshim::optional<double> StatisticAccumulator::get(MetricScope s) const noexcep
   std::abort();  // unreachable
 }
 
-void StatisticAccumulator::validate() const noexcept {
+void StatisticAccumulator::Partial::validate() const noexcept {
   if(point.load(std::memory_order_relaxed) != 0) return;
   if(function.load(std::memory_order_relaxed) != 0) return;
   if(execution.load(std::memory_order_relaxed) != 0) return;
@@ -250,10 +285,11 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
     // Now that our bits are stable, accumulate back into the Statistics
     auto& cdata = const_cast<Context&>(c).data;
     for(const auto& mx: data.citerate()) {
-      auto& accum = cdata[mx.first];
-      atomic_add(accum.point, mx.second.point.load(std::memory_order_relaxed));
-      atomic_add(accum.function, mx.second.function);
-      atomic_add(accum.execution, mx.second.execution);
+      auto& accum = cdata.emplace(std::piecewise_construct,
+        std::forward_as_tuple(mx.first), std::forward_as_tuple(*mx.first)).first;
+      atomic_add(accum.sum->point, mx.second.point.load(std::memory_order_relaxed));
+      atomic_add(accum.sum->function, mx.second.function);
+      atomic_add(accum.sum->execution, mx.second.execution);
     }
 
     stack.pop();

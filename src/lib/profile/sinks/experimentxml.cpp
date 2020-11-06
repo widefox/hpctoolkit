@@ -431,16 +431,18 @@ void ExperimentXML::write() {
 
 void ExperimentXML::emitMetrics(const Context& c, bool ex) {
   for(const auto& mx: c.statistics().citerate()) {
+    if(mx.first->partials().size() > 0) util::log::fatal{} << "TODO";
+    const auto& partial = mx.first->partials()[0];
     auto& udm = mx.first->userdata[ud];
     const auto& v = mx.second;
     if(ex) {
-      auto vex = v.get(MetricScope::function);
+      auto vex = v.get(partial).get(MetricScope::function);
       if(vex)
         of << "<M n=\"" << udm.ex_id << "\" v=\""
           << std::scientific << *vex << std::defaultfloat
           << "\"/>\n";
     }
-    if(auto vinc = v.get(MetricScope::execution))
+    if(auto vinc = v.get(partial).get(MetricScope::execution))
       of << "<M n=\"" << udm.inc_id << "\" v=\""
         << std::scientific << *vinc << std::defaultfloat
         << "\"/>\n";
