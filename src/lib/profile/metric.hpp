@@ -169,8 +169,24 @@ public:
   /// Structure to be used for creating new Metrics. Encapsulates a number of
   /// smaller settings into a convienent structure.
   struct Settings final {
+    Settings()
+      : sum(false), mean(false), min(false), max(false), stddev(false),
+        cfvar(false) {};
+    Settings(std::string n, std::string d) : Settings() {
+      name = std::move(n);
+      description = std::move(d);
+    }
+
     std::string name;
     std::string description;
+
+    // For now the Statistics are all explicitly requested
+    bool sum : 1;
+    bool mean : 1;
+    bool min : 1;
+    bool max : 1;
+    bool stddev : 1;
+    bool cfvar : 1;
 
     bool operator==(const Settings& o) const noexcept {
       return name == o.name && description == o.description;

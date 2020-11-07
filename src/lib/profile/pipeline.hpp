@@ -315,7 +315,7 @@ public:
     /// Emit a new Metric into the Pipeline.
     /// DataClass: `attributes`
     // MT: Externally Synchronized (this), Internally Synchronized
-    Metric& metric(const Metric::Settings&);
+    Metric& metric(Metric::Settings);
 
     /// Reference the global Context.
     // MT: Externally Synchronized (this), Internally Synchronized

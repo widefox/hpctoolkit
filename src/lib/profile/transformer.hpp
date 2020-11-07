@@ -64,17 +64,9 @@ public:
     sink = std::move(se);
   }
 
-  /// Callback issued when a new Module is emitted into the Pipe.
-  // MT: Internally Synchronized
-  virtual Module& module(Module& m) { return m; }
-
-  /// Callback issued when a new File is emitted into the Pipe.
-  // MT: Internally Synchronized
-  virtual File& file(File& f) { return f; }
-
   /// Callback issued when a new Metric is emitted into the Pipe.
   // MT: Internally Synchronized
-  virtual Metric& metric(Metric& m) { return m; }
+  virtual Metric::Settings metric(Metric::Settings&& ms) { return ms; };
 
   /// Callback issued when a new Context is emitted into the Pipe.
   // MT: Internally Synchronized

@@ -77,6 +77,8 @@ int main(int argc, char* const argv[]) {
   for(auto& sp : args.structs) pipelineB << std::move(sp.first);
   ProfArgs::StructWarner sw(args);
   pipelineB << sw;
+  ProfArgs::StatisticsExtender se(args);
+  pipelineB << se;
 
   // Provide Ids for things from the void
   finalizers::DenseIds dids;

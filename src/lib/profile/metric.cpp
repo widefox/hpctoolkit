@@ -89,14 +89,51 @@ Metric::Metric(Metric&& m)
 
 Metric::Metric(ud_t::struct_t& rs, Settings s)
   : userdata(rs, std::cref(*this)), u_settings(std::move(s)) {
-  m_partials.push_back({[](double x) -> double { return x; },
-                        Statistic::combination_t::sum, m_partials.size()});
-  m_partials.push_back({[](double x) -> double { return x == 0 ? 0 : 1; },
-                        Statistic::combination_t::sum, m_partials.size()});
-  m_stats.push_back({"Sum", true,
-    {(Statistic::formula_t::value_type)(size_t)0} });
-  m_stats.push_back({"Mean", false,
-    {(size_t)0, "/", (size_t)1} });
+  size_t cntIdx = -1;
+  if(s.mean || s.stddev || s.cfvar) {
+    cntIdx = m_partials.size();
+    m_partials.push_back({[](double x) -> double { return x == 0 ? 0 : 1; },
+                          Statistic::combination_t::sum, cntIdx});
+  }
+  size_t xIdx = -1;
+  if(s.sum || s.mean || s.stddev || s.cfvar) {
+    xIdx = m_partials.size();
+    m_partials.push_back({[](double x) -> double { return x; },
+                          Statistic::combination_t::sum, xIdx});
+  }
+  size_t x2Idx = -1;
+  if(s.stddev || s.cfvar) {
+    x2Idx = m_partials.size();
+    m_partials.push_back({[](double x) -> double { return x * x; },
+                          Statistic::combination_t::sum, x2Idx});
+  }
+  size_t minIdx = -1;
+  if(s.min) {
+    minIdx = m_partials.size();
+    m_partials.push_back({[](double x) -> double { return x; },
+                          Statistic::combination_t::min, minIdx});
+  }
+  size_t maxIdx = -1;
+  if(s.max) {
+    maxIdx = m_partials.size();
+    m_partials.push_back({[](double x) -> double { return x; },
+                          Statistic::combination_t::max, maxIdx});
+  }
+
+  if(s.sum)
+    m_stats.push_back({"Sum", true, {(Statistic::formula_t::value_type)xIdx} });
+  if(s.mean)
+    m_stats.push_back({"Mean", false, {xIdx, "/", cntIdx} });
+  if(s.stddev)
+    m_stats.push_back({"StdDev", false,
+      {"sqrt((", x2Idx, "/", cntIdx, ") - pow(", xIdx, "/", cntIdx, ", 2))"} });
+  if(s.cfvar)
+    m_stats.push_back({"CfVar", false,
+      {"sqrt((", x2Idx, "/", cntIdx, ") - pow(", xIdx, "/", cntIdx, ", 2)) / (", xIdx, "/", cntIdx, ")"} });
+  if(s.min)
+    m_stats.push_back({"Min", false, {(Statistic::formula_t::value_type)minIdx} });
+  if(s.max)
+    m_stats.push_back({"Max", false, {(Statistic::formula_t::value_type)maxIdx} });
 }
 
 MetricScopeSet Metric::scopes() const noexcept {

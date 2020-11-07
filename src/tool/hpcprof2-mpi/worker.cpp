@@ -136,6 +136,11 @@ int rankN(ProfArgs&& args) {
 
   // Fire off the second pipeline, integrating the new data from rank 0
   {
+    // The Statistics need to be consistent between all the ranks, or else
+    // bad things happen
+    ProfArgs::StatisticsExtender se(args);
+    pipelineB2 << se;
+
     // Most of the IDs can be pulled from the void, only the Context IDs
     // need to be adjusted.
     finalizers::DenseIds dids;

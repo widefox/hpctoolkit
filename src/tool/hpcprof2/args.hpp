@@ -49,6 +49,7 @@
 
 #include "lib/profile/source.hpp"
 #include "lib/profile/finalizer.hpp"
+#include "lib/profile/transformer.hpp"
 
 #include "lib/profile/stdshim/filesystem.hpp"
 #include <functional>
@@ -88,6 +89,18 @@ public:
   /// Path prefix transformation pairs
   std::unordered_map<stdshim::filesystem::path, stdshim::filesystem::path> prefixes;
 
+  /// Statistics adding Transformer
+  class StatisticsExtender final : public ProfileTransformer {
+  public:
+    StatisticsExtender(ProfArgs& a) : args(a) {};
+    ~StatisticsExtender() = default;
+
+    Metric::Settings metric(Metric::Settings&&) override;
+
+  private:
+    ProfArgs& args;
+  };
+
   /// Path prefix expansion Finalizer
   class Prefixer final : public ProfileFinalizer {
   public:
@@ -109,10 +122,18 @@ public:
   /// Whether to emit line-level or instruction-level data
   bool instructionGrain;
 
-  /// Summary metrics to include in the output
-  // NOTE: For now only :Sum is supported and always on. In the near future
-  //       this will change, and it will be done via Finalizers.
-  std::vector<std::string> stats;
+  /// Summary Statistics to include in the output
+  struct Stats final {
+    bool sum : 1;
+    bool mean : 1;
+    bool min : 1;
+    bool max : 1;
+    bool stddev : 1;
+    bool cfvar : 1;
+
+    Stats() : sum(true), mean(false), min(false), max(false), stddev(false),
+              cfvar(false) {};
+  } stats;
 
   /// Path for the root database directory, or output file
   stdshim::filesystem::path output;

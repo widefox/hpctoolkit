@@ -252,7 +252,6 @@ ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
                         "t=\"inclusive\" partner=\"" << func_id << "\" "
                         "show=\"4\" show-percent=\"0\">\n";
       combineFormula(ss, exec_id, *it_partial);
-      // ss << "<MetricFormula t=\"finalize\" frm=\"$" << exec_id << "\"/>\n"
       ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
             "</Metric>\n"
             "<Metric i=\"" << func_id << "\" o=\"" << func_id << "\" "
@@ -262,7 +261,6 @@ ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
                         "t=\"exclusive\" partner=\"" << exec_id << "\" "
                         "show=\"4\" show-percent=\"0\">\n";
       combineFormula(ss, func_id, *it_partial);
-      // ss << "<MetricFormula t=\"finalize\" frm=\"$" << func_id << "\"/>\n"
       ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
             "</Metric>\n";
     }

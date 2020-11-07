@@ -444,15 +444,6 @@ Module& Source::module(const stdshim::filesystem::path& p) {
     }
     r->userdata.initialize();
   }
-  for(std::size_t i = 0; i < pipe->transformers.size(); i++)
-    try {
-      if(i != tskip)
-        r = &pipe->transformers[i].get().module(*r);
-    } catch(std::exception& e) {
-      util::log::fatal() << "Exception caught while processing module " << p
-                         << " through transformer " << i << "\n"
-                         << "  what(): " << e.what();
-    }
   return *r;
 }
 
@@ -467,21 +458,21 @@ File& Source::file(const stdshim::filesystem::path& p) {
     }
     r->userdata.initialize();
   }
-  for(std::size_t i = 0; i < pipe->transformers.size(); i++)
-    try {
-      if(i != tskip)
-        r = &pipe->transformers[i].get().file(*r);
-    } catch(std::exception& e) {
-      util::log::fatal() << "Exception caught while processing file " << p
-                         << " through transformer " << i << "\n"
-                         << "  what(): " << e.what();
-    }
   return *r;
 }
 
-Metric& Source::metric(const Metric::Settings& s) {
+Metric& Source::metric(Metric::Settings s) {
   if(!limit().hasAttributes())
     util::log::fatal() << "Source did not register for `attributes` emission!";
+  for(std::size_t i = 0; i < pipe->transformers.size(); i++)
+    try {
+      if(i != tskip)
+        s = pipe->transformers[i].get().metric(std::move(s));
+    } catch(std::exception& e) {
+      util::log::fatal() << "Exception caught while processing metric " << s.name
+                         << " through transformer " << i << "\n"
+                         << "  what(): " << e.what();
+    }
   auto x = pipe->mets.emplace(pipe->structs.metric, s);
   auto r = &x.first();
   if(x.second) {
@@ -490,15 +481,6 @@ Metric& Source::metric(const Metric::Settings& s) {
     }
     r->userdata.initialize();
   }
-  for(std::size_t i = 0; i < pipe->transformers.size(); i++)
-    try {
-      if(i != tskip)
-        r = &pipe->transformers[i].get().metric(*r);
-    } catch(std::exception& e) {
-      util::log::fatal() << "Exception caught while processing metric " << s.name
-                         << " through transformer " << i << "\n"
-                         << "  what(): " << e.what();
-    }
   return *r;
 }
 

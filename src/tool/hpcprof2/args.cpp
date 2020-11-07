@@ -266,9 +266,35 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
       }
       break;
     }
-    case 'M':
-      // Eventually, getsubopt etc.
+    case 'M': {
+      const char* const options[] = {"none", "sum", "normal", "extrema",
+                                     "stats", nullptr};
+      char* value;
+      while(optarg[0] != '\0') {
+        switch(getsubopt(&optarg, const_cast<char*const*>(options), &value)) {
+        case 0:  // none
+          stats.sum = stats.mean = stats.min = stats.max = stats.stddev
+                    = stats.cfvar = false;
+          break;
+        case 1:  // sum
+          stats.sum = true; break;
+        case 2:  // normal
+          stats.mean = stats.stddev = stats.cfvar = true; break;
+        case 3:  // extrema
+          stats.min = stats.max = true; break;
+        case 4:  // stats
+          stats.sum = stats.mean = stats.min = stats.max = stats.stddev
+                    = stats.cfvar = true;
+          break;
+        default:
+          std::cout << "Unrecognized argument to -M: " << value << "\n"
+                       "Usage: " << fs::path(argv[0]).filename().string()
+                                 << " " << summary << "\n";
+          std::exit(2);
+        }
+      }
       break;
+    }
     case 0:
       switch(longopt) {
       case 0:  // --version
@@ -572,6 +598,16 @@ static fs::path search(const std::unordered_map<fs::path, fs::path>& prefixes,
   }
   if(fs::is_regular_file(p, ec)) return p;  // If all else fails;
   return fs::path();
+}
+
+Metric::Settings ProfArgs::StatisticsExtender::metric(Metric::Settings&& ms) {
+  ms.sum = ms.sum || args.stats.sum;
+  ms.mean = ms.mean || args.stats.mean;
+  ms.min = ms.min || args.stats.min;
+  ms.max = ms.max || args.stats.max;
+  ms.stddev = ms.stddev || args.stats.stddev;
+  ms.cfvar = ms.cfvar || args.stats.cfvar;
+  return ms;
 }
 
 void ProfArgs::Prefixer::file(const File& f, stdshim::filesystem::path& p) {

@@ -88,6 +88,10 @@ int rank0(ProfArgs&& args) {
   // When time, gather up the data from all our friends and emit it.
   Receiver::append(pipelineB, tree);
 
+  // Make sure all Metrics have their Statistics set properly
+  ProfArgs::StatisticsExtender se(args);
+  pipelineB << se;
+
   // Load in the Finalizers for Structfiles.
   for(auto& sp: args.structs) pipelineB << std::move(sp.first);
   ProfArgs::StructWarner sw(args);
