@@ -55,16 +55,25 @@
 
 using namespace hpctoolkit;
 
-template<class F>
-static double atomic_op(std::atomic<double>& a, const double v, F f) noexcept {
-  double old = a.load(std::memory_order_relaxed);
-  while(!a.compare_exchange_weak(old, f(old, v), std::memory_order_relaxed));
-  return old;
-}
-
 static double atomic_add(std::atomic<double>& a, const double v) noexcept {
   double old = a.load(std::memory_order_relaxed);
   while(!a.compare_exchange_weak(old, old+v, std::memory_order_relaxed));
+  return old;
+}
+
+static double atomic_op(std::atomic<double>& a, const double v, Statistic::combination_t op) noexcept {
+  double old = a.load(std::memory_order_relaxed);
+  switch(op) {
+  case Statistic::combination_t::sum:
+    while(!a.compare_exchange_weak(old, old+v, std::memory_order_relaxed));
+    break;
+  case Statistic::combination_t::min:
+    while((v < old || old == 0) && !a.compare_exchange_weak(old, v, std::memory_order_relaxed));
+    break;
+  case Statistic::combination_t::max:
+    while((v > old || old == 0) && !a.compare_exchange_weak(old, v, std::memory_order_relaxed));
+    break;
+  }
   return old;
 }
 
@@ -152,21 +161,21 @@ const std::vector<Statistic>& Metric::statistics() const noexcept {
 StatisticAccumulator::StatisticAccumulator(const Metric& m)
   : partials(m.partials().size()) {};
 
-void StatisticAccumulator::Partial::add(MetricScope s, double v) noexcept {
+void StatisticAccumulator::PartialRef::add(MetricScope s, double v) noexcept {
   if(v == 0) util::log::warning{} << "Adding a 0-metric value!";
   switch(s) {
-  case MetricScope::point: atomic_add(point, v); return;
-  case MetricScope::function: atomic_add(function, v); return;
-  case MetricScope::execution: atomic_add(execution, v); return;
+  case MetricScope::point: atomic_op(partial.point, v, statpart.combinator()); return;
+  case MetricScope::function: atomic_op(partial.function, v, statpart.combinator()); return;
+  case MetricScope::execution: atomic_op(partial.execution, v, statpart.combinator()); return;
   }
   util::log::fatal{} << "Invalid MetricScope!";
 }
 
-const StatisticAccumulator::Partial& StatisticAccumulator::get(const StatisticPartial& p) const noexcept {
-  return partials[p.m_idx];
+StatisticAccumulator::PartialCRef StatisticAccumulator::get(const StatisticPartial& p) const noexcept {
+  return {partials[p.m_idx], p};
 }
-StatisticAccumulator::Partial& StatisticAccumulator::get(const StatisticPartial& p) noexcept {
-  return partials[p.m_idx];
+StatisticAccumulator::PartialRef StatisticAccumulator::get(const StatisticPartial& p) noexcept {
+  return {partials[p.m_idx], p};
 }
 
 void MetricAccumulator::add(double v) noexcept {
@@ -178,12 +187,22 @@ static stdshim::optional<double> opt0(double d) {
   return d == 0 ? stdshim::optional<double>{} : d;
 }
 
-stdshim::optional<double> StatisticAccumulator::Partial::get(MetricScope s) const noexcept {
-  validate();
+stdshim::optional<double> StatisticAccumulator::PartialRef::get(MetricScope s) const noexcept {
+  partial.validate();
   switch(s) {
-  case MetricScope::point: return opt0(point.load(std::memory_order_relaxed));
-  case MetricScope::function: return opt0(function.load(std::memory_order_relaxed));
-  case MetricScope::execution: return opt0(execution.load(std::memory_order_relaxed));
+  case MetricScope::point: return opt0(partial.point.load(std::memory_order_relaxed));
+  case MetricScope::function: return opt0(partial.function.load(std::memory_order_relaxed));
+  case MetricScope::execution: return opt0(partial.execution.load(std::memory_order_relaxed));
+  };
+  util::log::fatal{} << "Invalid MetricScope value!";
+  std::abort();  // unreachable
+}
+stdshim::optional<double> StatisticAccumulator::PartialCRef::get(MetricScope s) const noexcept {
+  partial.validate();
+  switch(s) {
+  case MetricScope::point: return opt0(partial.point.load(std::memory_order_relaxed));
+  case MetricScope::function: return opt0(partial.function.load(std::memory_order_relaxed));
+  case MetricScope::execution: return opt0(partial.execution.load(std::memory_order_relaxed));
   };
   util::log::fatal{} << "Invalid MetricScope value!";
   std::abort();  // unreachable
@@ -337,21 +356,9 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
       for(size_t i = 0; i < mx.first->partials().size(); i++) {
         auto& partial = mx.first->partials()[i];
         auto& atomics = accum.partials[i];
-        std::function<double(double,double)> op;
-        switch(partial.combinator()) {
-        case Statistic::combination_t::sum:
-          op = [](double x, double y) -> double { return x + y; };
-          break;
-        case Statistic::combination_t::min:
-          op = [](double x, double y) -> double { return std::min(x, y); };
-          break;
-        case Statistic::combination_t::max:
-          op = [](double x, double y) -> double { return std::max(x, y); };
-          break;
-        }
-        atomic_op(atomics.point, partial.m_accum(mx.second.point.load(std::memory_order_relaxed)), op);
-        atomic_op(atomics.function, partial.m_accum(mx.second.function), op);
-        atomic_op(atomics.execution, partial.m_accum(mx.second.execution), op);
+        atomic_op(atomics.point, partial.m_accum(mx.second.point.load(std::memory_order_relaxed)), partial.combinator());
+        atomic_op(atomics.function, partial.m_accum(mx.second.function), partial.combinator());
+        atomic_op(atomics.execution, partial.m_accum(mx.second.execution), partial.combinator());
       }
     }
 

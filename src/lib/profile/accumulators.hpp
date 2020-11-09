@@ -127,7 +127,7 @@ private:
 
 /// Accumulator structure for the Statistics implicitly bound to a Context.
 class StatisticAccumulator final {
-public:
+private:
   /// Each Accumulator is a vector of Partial accumulators, each of which is
   /// bound implicitly to a particular Statistic::Partial.
   class Partial final {
@@ -138,6 +138,24 @@ public:
     Partial& operator=(const Partial&) = delete;
     Partial(Partial&&) = default;
     Partial& operator=(Partial&&) = delete;
+  private:
+    void validate() const noexcept;
+
+    friend class StatisticAccumulator;
+    friend class Metric;
+    std::atomic<double> point;
+    std::atomic<double> function;
+    std::atomic<double> execution;
+  };
+
+public:
+  class PartialRef final {
+  public:
+    PartialRef() = delete;
+    PartialRef(const PartialRef&) = delete;
+    PartialRef& operator=(const PartialRef&) = delete;
+    PartialRef(PartialRef&&) = default;
+    PartialRef& operator=(PartialRef&&) = default;
 
     /// Add some value to this particular Partial, for a particular MetricScope.
     // MT: Internally Synchronized
@@ -148,13 +166,33 @@ public:
     stdshim::optional<double> get(MetricScope) const noexcept;
 
   private:
-    void validate() const noexcept;
-
     friend class StatisticAccumulator;
-    friend class Metric;
-    std::atomic<double> point;
-    std::atomic<double> function;
-    std::atomic<double> execution;
+    PartialRef(Partial& p, const StatisticPartial& sp)
+      : partial(p), statpart(sp) {};
+
+    Partial& partial;
+    const StatisticPartial& statpart;
+  };
+
+  class PartialCRef final {
+  public:
+    PartialCRef() = delete;
+    PartialCRef(const PartialCRef&) = delete;
+    PartialCRef& operator=(const PartialCRef&) = delete;
+    PartialCRef(PartialCRef&&) = default;
+    PartialCRef& operator=(PartialCRef&&) = default;
+
+    /// Get this Partial's accumulation, for a particular MetricScope.
+    // MT: Safe (const), Unstable (before `metrics` wavefront)
+    stdshim::optional<double> get(MetricScope) const noexcept;
+
+  private:
+    friend class StatisticAccumulator;
+    PartialCRef(const Partial& p, const StatisticPartial& sp)
+      : partial(p), statpart(sp) {};
+
+    const Partial& partial;
+    const StatisticPartial& statpart;
   };
 
   StatisticAccumulator(const Metric&);
@@ -166,8 +204,8 @@ public:
 
   /// Get the Partial accumulator for a particular Partial Statistic.
   // MT: Safe (const)
-  const Partial& get(const StatisticPartial&) const noexcept;
-  Partial& get(const StatisticPartial&) noexcept;
+  PartialCRef get(const StatisticPartial&) const noexcept;
+  PartialRef get(const StatisticPartial&) noexcept;
 
 private:
   friend class Metric;
