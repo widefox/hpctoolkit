@@ -207,70 +207,39 @@ ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
   {
     std::ostringstream ss;
 
-    // Pre-pass: find an identity Statistic for every Partial if one exists.
-    std::vector<std::pair<const Statistic*, size_t>> identStats{m.partials().size(), {nullptr, -1}};
-    std::vector<bool> skipStat;
-    skipStat.resize(m.statistics().size(), false);
-    for(size_t idx = 0; idx < m.statistics().size(); idx++) {
-      const auto& stat = m.statistics()[idx];
-      const auto& f = stat.finalizeFormula();
-      if(f.size() == 1 && std::holds_alternative<size_t>(f[0])) {
-        size_t id = std::get<size_t>(f[0]);
-        if(identStats[id].first == nullptr) {
-          identStats[id] = {&stat, idx};
-          skipStat[idx] = true;
-        }
-      }
-    }
-
     // First pass: get all the Partials out there.
     for(size_t idx = 0; idx < m.partials().size(); idx++) {
       const auto& partial = m.partials()[idx];
-      const auto [stat, sidx] = identStats[idx];
-      const std::string name = m.name() + ":"
-        + (stat == nullptr ? "PARTIAL:" + std::to_string(idx) : stat->suffix());
+      const std::string name = m.name() + ":PARTIAL:" + std::to_string(idx);
       const auto exec_id = (ids.execution << 8) + idx;
-      const auto exec_oid = (ids.execution << 8) + (stat == nullptr ? 256-idx : sidx);
       const auto func_id = (ids.function << 8) + idx;
-      const auto func_oid = (ids.function << 8) + (stat == nullptr ? 256-idx : sidx);
-      ss << "<Metric i=\"" << exec_id << "\" o=\"" << exec_oid << "\" "
+      ss << "<Metric i=\"" << exec_id << "\" o=\"" << exec_id << "\" "
                         "n=" << util::xmlquoted(name+" (I)") << " "
                         "md=" << util::xmlquoted(m.description()) << " "
                         "v=\"derived-incr\" "
                         "t=\"inclusive\" partner=\"" << func_id << "\" "
-                        "show=\"" << (stat != nullptr ? "1" : "4") << "\" "
-                        "show-percent=\"" << ((stat != nullptr && stat->showPercent()) ? "1" : "0")
-                     << "\">\n";
+                        "show=\"4\" show-percent=\"0\">\n";
       combineFormula(ss, exec_id, partial);
-      if(stat != nullptr)
-        finalizeFormula(ss, "finalize", ids.execution << 8, *stat);
       ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
             "</Metric>\n"
-            "<Metric i=\"" << func_id << "\" o=\"" << func_oid << "\" "
+            "<Metric i=\"" << func_id << "\" o=\"" << func_id << "\" "
                         "n=" << util::xmlquoted(name+" (E)") << " "
                         "md=" << util::xmlquoted(m.description()) << " "
                         "v=\"derived-incr\" "
                         "t=\"exclusive\" partner=\"" << exec_id << "\" "
-                        "show=\"" << (stat != nullptr ? "1" : "4") << "\" "
-                        "show-percent=\"" << ((stat != nullptr && stat->showPercent()) ? "1" : "0")
-                     << "\">\n";
+                        "show=\"4\" show-percent=\"0\">\n";
       combineFormula(ss, func_id, partial);
-      if(stat != nullptr)
-        finalizeFormula(ss, "finalize", ids.function << 8, *stat);
       ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
             "</Metric>\n";
     }
 
-    // Second pass: Fill in all the Statistics we didn't handle before.
+    // Second pass: handle all the Statistics.
     for(size_t idx = 0; idx < m.statistics().size(); idx++) {
       const auto& stat = m.statistics()[idx];
-      if(skipStat[idx]) continue;
       const std::string name = m.name() + ":" + stat.suffix();
-      const auto exec_id = (ids.execution << 8) + 256-idx;
-      const auto exec_oid = (ids.execution << 8) + idx;
-      const auto func_id = (ids.function << 8) + 256-idx;
-      const auto func_oid = (ids.function << 8) + idx;
-      ss << "<Metric i=\"" << exec_id << "\" o=\"" << exec_oid << "\" "
+      const auto exec_id = (ids.execution << 8) + 256-m.statistics().size() + idx;
+      const auto func_id = (ids.function << 8) + 256-m.statistics().size() + idx;
+      ss << "<Metric i=\"" << exec_id << "\" o=\"" << exec_id << "\" "
                         "n=" << util::xmlquoted(name+" (I)") << " "
                         "md=" << util::xmlquoted(m.description()) << " "
                         "v=\"derived-incr\" "
@@ -281,7 +250,7 @@ ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
       finalizeFormula(ss, "view", ids.execution << 8, stat);
       ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
             "</Metric>\n"
-            "<Metric i=\"" << func_id << "\" o=\"" << func_oid << "\" "
+            "<Metric i=\"" << func_id << "\" o=\"" << func_id << "\" "
                         "n=" << util::xmlquoted(name+" (E)") << " "
                         "md=" << util::xmlquoted(m.description()) << " "
                         "v=\"derived-incr\" "
