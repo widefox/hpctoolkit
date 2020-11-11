@@ -1432,7 +1432,7 @@ void SparseDB::updateCtxOffset(const size_t ctxcnt,
 
   #pragma omp parallel for num_threads(threads)
   for(uint i = 0; i < ctxcnt + 1; i++){
-    ctx_off[i] += ctxcnt * CMS_ctx_info_SIZE + HPCCCTSPARSE_FMT_CtxInfoOff;
+    ctx_off[i] += ctxcnt * CMS_ctx_info_SIZE + CMS_hdr_SIZE;
   }
 }
 
@@ -1572,9 +1572,7 @@ int SparseDB::findOneCtxIdIdxPair(const uint32_t target_ctx_id,
     TMS_CtxIdIdxPair target_ciip;
     target_ciip.ctx_id = target_ctx_id;
     idx = struct_member_binary_search(profile_ctx_pairs, target_ciip, &TMS_CtxIdIdxPair::ctx_id, length);
-    //if(idx != SPARSE_NOT_FOUND) my_ctx_pairs.emplace_back(profile_ctx_pairs[idx]);
     if(idx >= 0){
-      //my_ctx_pairs.emplace(profile_ctx_pairs[idx].ctx_id, profile_ctx_pairs[idx].ctx_idx);
       my_ctx_pairs.emplace_back(profile_ctx_pairs[idx].ctx_id, profile_ctx_pairs[idx].ctx_idx);
     }
     else if(idx == -1){
@@ -1678,8 +1676,6 @@ void SparseDB::readValMidsBytes(const std::vector<uint32_t>& ctx_ids,
                                 std::vector<char>& bytes)
 {
 
-  //uint64_t first_ctx_idx = my_ctx_pairs.begin()->second;
-  //uint64_t last_ctx_idx  = my_ctx_pairs.rbegin()->second;
   uint64_t first_ctx_idx = my_ctx_pairs[0].second;
   uint64_t last_ctx_idx  = my_ctx_pairs.back().second;
 
@@ -1748,19 +1744,6 @@ void SparseDB::insertValMidCtxId2CtxMetBlocks(const hpcrun_metricVal_t val,
                                               const uint32_t ctx_id,
                                               CtxMetricBlock& cmb)
 {
-  
-  /*
-  // for ctx_met_blocks not single CtxMextricBlock
-  std::map<uint32_t, CtxMetricBlock>::iterator got = ctx_met_blocks.find(ctx_id);
-
-  
-  if (got != ctx_met_blocks.end()){ //ctx_id found
-    insertValMidPair2OneCtxMetBlock(val, mid, prof_idx, got->second);
-  }else{
-    CtxMetricBlock newcmb = createNewCtxMetricBlock(val, mid, prof_idx, ctx_id);
-    ctx_met_blocks.emplace(ctx_id, newcmb);
-  }
-  */
 
   //for single CtxMextricBlock
   assert(cmb.ctx_id == ctx_id);
@@ -1789,27 +1772,6 @@ void SparseDB::interpretValMidsBytes(char *vminput,
                                      std::vector<std::pair<uint32_t, uint64_t>>& my_ctx_pairs,
                                      CtxMetricBlock& cmb)
 {
-  // for ctx_met_blocks not single CtxMetricBlock
-  /*
-  char* ctx_met_input = vminput;
-  //for each context, keep track of the values, metric ids, and thread ids
-  for(uint c = 0; c < my_ctx_pairs.size() - 1; c++) //change this to map iterator
-  {
-    uint32_t ctx_id  = my_ctx_pairs[c].ctx_id;
-    uint64_t ctx_idx = my_ctx_pairs[c].ctx_idx;
-    uint64_t num_val_this_ctx = my_ctx_pairs[c + 1].ctx_idx - ctx_idx;
-
-    for(uint i = 0; i < num_val_this_ctx; i++){
-      hpcrun_metricVal_t val;
-      uint16_t mid;
-      interpretOneValMidPair(ctx_met_input, val, mid);
-
-      insertValMidCtxId2CtxMetBlocks(val, mid, prof_idx, ctx_id, ctx_met_blocks);
-      ctx_met_input += (TMS_val_SIZE + TMS_mid_SIZE);
-    }
-
-  }
-  */
 
   // for single CtxMetricBlock
   //uint64_t ctx_idx = my_ctx_pairs[ctx_id];
@@ -2026,16 +1988,6 @@ int SparseDB::convertOneCtxInfo(const cms_ctx_info_t& ctx_info,
 //convert one ctx (whose id is ctx_id), including info and metrics to bytes
 //info will be converted to info_bytes, metrics will be converted to met_bytes
 //info_byte_cnt and met_byte_cnt will be assigned number of bytes converted
-/*
-void SparseDB::convertOneCtx(const uint32_t ctx_id, 
-                             const std::vector<uint64_t>& ctx_off,    
-                             const std::vector<CtxMetricBlock>& ctx_met_blocks, 
-                             const uint64_t first_ctx_off,
-                             uint& met_byte_cnt,
-                             uint& info_byte_cnt, 
-                             char* met_bytes,                                 
-                             char* info_bytes)
-                             */
 void SparseDB::convertOneCtx(const uint32_t ctx_id, 
                              const uint64_t next_ctx_off,    
                              const CtxMetricBlock& cmb,                          
@@ -2102,7 +2054,7 @@ void SparseDB::writeOneCtx(const uint32_t& ctx_id,
   
   ctxBlocks2Bytes(cmb, ctx_off, ctx_id, threads, info_bytes, metrics_bytes);
 
-  MPI_Offset info_off = HPCCCTSPARSE_FMT_CtxInfoOff + CTX_VEC_IDX(ctx_id) * CMS_ctx_info_SIZE;
+  MPI_Offset info_off = CMS_hdr_SIZE + CTX_VEC_IDX(ctx_id) * CMS_ctx_info_SIZE;
   ofh.writeat(info_off, info_bytes.size(), info_bytes.data());
 
   MPI_Offset metrics_off = ctx_off[CTX_VEC_IDX(ctx_id)];
@@ -2309,10 +2261,26 @@ void SparseDB::writeCCTMajor(const std::vector<uint64_t>& ctx_nzval_cnts,
     // Write hdr
     std::vector<char> hdr;
     hdr.insert(hdr.end(), HPCCCTSPARSE_FMT_Magic, HPCCCTSPARSE_FMT_Magic + HPCCCTSPARSE_FMT_MagicLen);
-    hdr.emplace_back(HPCCCTSPARSE_FMT_Version);
-    convertToByte4(ctxcnt, hdr.data() + HPCCCTSPARSE_FMT_HeaderLen); 
+    hdr.emplace_back(HPCCCTSPARSE_FMT_VersionMajor);
+    hdr.emplace_back(HPCCCTSPARSE_FMT_VersionMinor);
+    uint64_t cur_off = HPCCCTSPARSE_FMT_MagicLen + HPCCCTSPARSE_FMT_VersionLen;
+    
+    hdr.resize(CMS_hdr_SIZE);
+    convertToByte4(ctxcnt, hdr.data() + cur_off); 
+    cur_off += HPCCCTSPARSE_FMT_NumCtxLen;
+
+    convertToByte2(HPCCCTSPARSE_FMT_NumSec, hdr.data() + cur_off); 
+    cur_off += HPCCCTSPARSE_FMT_NumSecLen;
+
+    uint64_t ctx_info_sec_ptr = cur_off + (HPCCCTSPARSE_FMT_NumSec-2) * HPCCCTSPARSE_FMT_SecLen;
+    uint64_t ctx_info_sec_size = ctxcnt * CMS_ctx_info_SIZE;
+    convertToByte8(ctx_info_sec_size, hdr.data() + cur_off);
+    convertToByte8(ctx_info_sec_ptr, hdr.data() + cur_off + HPCCCTSPARSE_FMT_SecSizeLen);
+    cur_off += HPCCCTSPARSE_FMT_SecLen;
+    assert(cur_off == ctx_info_sec_ptr);
+
     auto cct_major_fi = cct_major_f.open(true);
-    SPARSE_exitIfMPIError(writeAsByteX(hdr, HPCCCTSPARSE_FMT_CtxInfoOff, cct_major_fi, 0),
+    SPARSE_exitIfMPIError(writeAsByteX(hdr, CMS_hdr_SIZE, cct_major_fi, 0),
       __FUNCTION__ + std::string(": write the hdr wrong"));
   }
   
@@ -2348,7 +2316,7 @@ void SparseDB::merge(int threads, bool debug) {
   std::vector<std::set<uint16_t>> ctx_nzmids(ctxcnt,empty);
   keepTemps = debug;
   writeThreadMajor(threads,world_rank,world_size, ctx_nzval_cnts,ctx_nzmids);
- // writeCCTMajor(ctx_nzval_cnts,ctx_nzmids, ctxcnt, world_rank, world_size, threads);
+  writeCCTMajor(ctx_nzval_cnts,ctx_nzmids, ctxcnt, world_rank, world_size, threads);
 
 }
 

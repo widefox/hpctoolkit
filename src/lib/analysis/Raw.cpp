@@ -269,9 +269,9 @@ Analysis::Raw::writeAsText_sparseDBcct(const char* filenm, bool easygrep)
     }
     cms_hdr_fprint(&hdr, stdout);
 
-    uint32_t num_ctx;
+    uint32_t num_ctx = hdr.num_ctx;
     cms_ctx_info_t* x;
-    ret = cms_ctx_info_fread(&x, &num_ctx,fs);
+    ret = cms_ctx_info_fread(&x, num_ctx,fs);
     if (ret != HPCFMT_OK) {
       DIAG_Throw("error reading cct information from sparse metrics file '" << filenm << "'");
     }

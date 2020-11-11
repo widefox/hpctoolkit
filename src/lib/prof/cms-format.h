@@ -83,21 +83,36 @@ extern "C" {
 //***************************************************************************
 // hdr
 //***************************************************************************
-#define HPCCCTSPARSE_FMT_Magic   "HPCPROF-cmsdb_____" //18 bytes
-#define HPCCCTSPARSE_FMT_Version 0                    //1  byte
+#define HPCCCTSPARSE_FMT_Magic        "HPCPROF-cmsdb___"  //16 bytes
+#define HPCCCTSPARSE_FMT_VersionMajor 0                   //1  byte
+#define HPCCCTSPARSE_FMT_VersionMinor 0                   //1  byte
+#define HPCCCTSPARSE_FMT_NumSec       3                   //2  byte
 
-#define HPCCCTSPARSE_FMT_MagicLen    (sizeof(HPCCCTSPARSE_FMT_Magic) - 1)
-#define HPCCCTSPARSE_FMT_VersionLen  1
+#define HPCCCTSPARSE_FMT_MagicLen     (sizeof(HPCCCTSPARSE_FMT_Magic) - 1)
+#define HPCCCTSPARSE_FMT_VersionLen   2
+#define HPCCCTSPARSE_FMT_NumCtxLen    4
+#define HPCCCTSPARSE_FMT_NumSecLen    2
+#define HPCCCTSPARSE_FMT_SecSizeLen   8
+#define HPCCCTSPARSE_FMT_SecPtrLen    8
+#define HPCCCTSPARSE_FMT_SecLen       (HPCCCTSPARSE_FMT_SecSizeLen + HPCCCTSPARSE_FMT_SecPtrLen)
 
-#define HPCCCTSPARSE_FMT_HeaderLen (HPCCCTSPARSE_FMT_MagicLen + HPCCCTSPARSE_FMT_VersionLen)
-#define HPCCCTSPARSE_FMT_HeaderOff 0
+
+#define CMS_hdr_SIZE (HPCCCTSPARSE_FMT_MagicLen + HPCCCTSPARSE_FMT_VersionLen \
+   + HPCCCTSPARSE_FMT_NumCtxLen + HPCCCTSPARSE_FMT_NumSecLen \ 
+   + HPCCCTSPARSE_FMT_SecLen*(HPCCCTSPARSE_FMT_NumSec-2))
 
 typedef struct cms_hdr_t{
-  uint8_t version;
+  uint8_t versionMajor;
+  uint8_t versionMinor;
+  uint32_t num_ctx;
+  uint16_t num_sec; //number of sections include hdr and sparse metrics section
+
+  uint64_t ctx_info_sec_size;
+  uint64_t ctx_info_sec_ptr;
 }cms_hdr_t;
 
 int 
-cms_hdr_fwrite(FILE* fs);
+cms_hdr_fwrite(cms_hdr_t* hdr,FILE* fs);
 
 int
 cms_hdr_fread(cms_hdr_t* hdr, FILE* infs);
@@ -116,7 +131,6 @@ cms_hdr_fprint(cms_hdr_t* hdr, FILE* fs);
 #define CMS_ctx_offset_SIZE    8
 #define CMS_ctx_info_SIZE      (CMS_ctx_id_SIZE + CMS_num_val_SIZE + CMS_num_nzmid_SIZE + CMS_ctx_offset_SIZE)
 
-#define HPCCCTSPARSE_FMT_CtxInfoOff (HPCCCTSPARSE_FMT_HeaderLen + CMS_num_ctx_SIZE)
 
 typedef struct cms_ctx_info_t{
   uint32_t ctx_id;
@@ -129,7 +143,7 @@ int
 cms_ctx_info_fwrite(cms_ctx_info_t* x, uint32_t num_ctx, FILE* fs);
 
 int 
-cms_ctx_info_fread(cms_ctx_info_t** x, uint32_t* num_ctx,FILE* fs);
+cms_ctx_info_fread(cms_ctx_info_t** x, uint32_t num_ctx,FILE* fs);
 
 int 
 cms_ctx_info_fprint(uint32_t num_ctx, cms_ctx_info_t* x, FILE* fs);

@@ -83,11 +83,19 @@
 // hdr
 //***************************************************************************
 int 
-cms_hdr_fwrite(FILE* fs)
+cms_hdr_fwrite(cms_hdr_t* hdr,FILE* fs)
 {
-  fwrite(HPCCCTSPARSE_FMT_Magic,    1, HPCCCTSPARSE_FMT_MagicLen,   fs);
-  int version = HPCCCTSPARSE_FMT_Version;
-  fwrite(&version, 1, HPCCCTSPARSE_FMT_VersionLen, fs);
+  fwrite(HPCCCTSPARSE_FMT_Magic,   1, HPCCCTSPARSE_FMT_MagicLen,   fs);
+  int versionMajor = HPCCCTSPARSE_FMT_VersionMajor;
+  int versionMinor = HPCCCTSPARSE_FMT_VersionMinor;
+  fwrite(&versionMajor, 1, 1, fs);
+  fwrite(&versionMinor, 1, 1, fs);
+  HPCFMT_ThrowIfError(hpcfmt_int4_fwrite(hdr->num_ctx, fs));
+  HPCFMT_ThrowIfError(hpcfmt_int2_fwrite(hdr->num_sec, fs));
+
+  HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(hdr->ctx_info_sec_size, fs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(hdr->ctx_info_sec_ptr, fs));
+  
   return HPCFMT_OK;
 }
 
@@ -106,10 +114,20 @@ cms_hdr_fread(cms_hdr_t* hdr, FILE* infs)
     return HPCFMT_ERR;
   }
 
-  nr = fread(&hdr->version, 1, HPCCCTSPARSE_FMT_VersionLen, infs);
-  if (nr != HPCCCTSPARSE_FMT_VersionLen) {
+  nr = fread(&hdr->versionMajor, 1, 1, infs);
+  if (nr != 1) {
     return HPCFMT_ERR;
   }
+
+  nr = fread(&hdr->versionMinor, 1, 1, infs);
+  if (nr != 1) {
+    return HPCFMT_ERR;
+  }
+
+  HPCFMT_ThrowIfError(hpcfmt_int4_fread(&(hdr->num_ctx), infs));
+  HPCFMT_ThrowIfError(hpcfmt_int2_fread(&(hdr->num_sec), infs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(hdr->ctx_info_sec_size), infs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(hdr->ctx_info_sec_ptr), infs));
 
   return HPCFMT_OK;
 }
@@ -120,7 +138,11 @@ cms_hdr_fprint(cms_hdr_t* hdr, FILE* fs)
   fprintf(fs, "%s\n", HPCCCTSPARSE_FMT_Magic);
 
   fprintf(fs, "[hdr:\n");
-  fprintf(fs, "  (version: %d)\n", hdr->version);
+  fprintf(fs, "  (version: %d.%d)\n", hdr->versionMajor, hdr->versionMinor);
+  fprintf(fs, "  (num_ctx: %d)\n", hdr->num_ctx);
+  fprintf(fs, "  (num_sec: %d)\n", hdr->num_sec);
+  fprintf(fs, "  (ctx_info_sec_size: %ld)\n", hdr->ctx_info_sec_size);
+  fprintf(fs, "  (ctx_info_sec_ptr: %ld)\n", hdr->ctx_info_sec_ptr);
   fprintf(fs, "]\n");
 
   return HPCFMT_OK;
@@ -132,8 +154,6 @@ cms_hdr_fprint(cms_hdr_t* hdr, FILE* fs)
 int
 cms_ctx_info_fwrite(cms_ctx_info_t* x, uint32_t num_ctx, FILE* fs)
 {
-  HPCFMT_ThrowIfError(hpcfmt_int4_fwrite(num_ctx, fs));
-
   for (uint i = 0; i < num_ctx; ++i) {
     HPCFMT_ThrowIfError(hpcfmt_int4_fwrite(x[i].ctx_id, fs));
     HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(x[i].num_vals, fs));
@@ -146,13 +166,11 @@ cms_ctx_info_fwrite(cms_ctx_info_t* x, uint32_t num_ctx, FILE* fs)
 
 
 int
-cms_ctx_info_fread(cms_ctx_info_t** x, uint32_t* num_ctx,FILE* fs)
+cms_ctx_info_fread(cms_ctx_info_t** x, uint32_t num_ctx,FILE* fs)
 {
-  HPCFMT_ThrowIfError(hpcfmt_int4_fread(num_ctx, fs));
+  cms_ctx_info_t * cct_infos = (cms_ctx_info_t *) malloc(num_ctx*sizeof(cms_ctx_info_t));
 
-  cms_ctx_info_t * cct_infos = (cms_ctx_info_t *) malloc((*num_ctx)*sizeof(cms_ctx_info_t));
-
-  for (uint i = 0; i < *num_ctx; ++i) {
+  for (uint i = 0; i < num_ctx; ++i) {
     HPCFMT_ThrowIfError(hpcfmt_int4_fread(&(cct_infos[i].ctx_id), fs));
     HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(cct_infos[i].num_vals), fs));
     HPCFMT_ThrowIfError(hpcfmt_int2_fread(&(cct_infos[i].num_nzmids), fs));
