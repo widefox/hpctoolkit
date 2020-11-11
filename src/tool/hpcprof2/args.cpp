@@ -136,6 +136,21 @@ Current Obsolete Options:
       --struct-id             Unsupported.
 )EOF";
 
+const bool string_starts_with(const std::string& a, const std::string& n) {
+  auto it_n = n.begin();
+  for(auto it = a.begin(); it != a.end() && it_n != n.end(); ++it, ++it_n) {
+    if(*it != *it_n) return false;
+  }
+  return it_n == n.end();
+}
+const bool string_ends_with(const std::string& a, const std::string& n) {
+  auto it_n = n.rbegin();
+  for(auto it = a.rbegin(); it != a.rend() && it_n != n.rend(); ++it, ++it_n) {
+    if(*it != *it_n) return false;
+  }
+  return it_n == n.rend();
+}
+
 ProfArgs::ProfArgs(int argc, char* const argv[])
   : title(), threads(1), instructionGrain(false), output(),
     include_sources(true), include_traces(true), include_thread_local(true),
@@ -372,15 +387,27 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
   sparse_debug = arg_sparseDebug;
   valgrindUnclean = arg_valgrindUnclean;
 
-  if(dryRun) output = fs::path();
-  else {
+  if(dryRun) {
+    output = fs::path();
+    util::log::info{} << "Dry run enabled, final output will be skipped.";
+  } else {
     if(mpi::World::rank() == 0) {
       if(output.empty()) {
-        // This is a soft error, we replace with hpctoolkit-database and give a
-        // serious warning.
-        util::log::error{} << "Output database argument not given, defaulting"
-          " to `hpctoolkit-database'";
+        // Default to something semi-reasonable.
         output = "hpctoolkit-database";
+        if(argc - optind == 1) {  // == only one input file argument
+          stdshim::filesystem::path input = argv[optind];
+          if(input.filename().empty()) input = input.parent_path();
+
+          auto fn = input.filename().string();
+          if(string_starts_with(fn, "hpctoolkit-")) {
+            if(string_ends_with(fn, "-measurements"))
+              fn = fn.substr(0, fn.size() - 13);
+            output = input.parent_path() / (fn + "-database");
+          }
+        }
+        util::log::warning{} << "Output database argument not given, defaulting"
+          " to `" << output.string() << "'";
       }
       if(stdshim::filesystem::exists(output)) {
         if(arg_overwriteOutput == 0) {
