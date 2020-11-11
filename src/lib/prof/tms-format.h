@@ -82,21 +82,37 @@ extern "C" {
 //***************************************************************************
 // hdr
 //***************************************************************************
-#define HPCTHREADSPARSE_FMT_Magic   "HPCPROF-tmsdb_____" //18 bytes
-#define HPCTHREADSPARSE_FMT_Version 0                    //1  byte
+#define HPCTHREADSPARSE_FMT_Magic   "HPCPROF-tmsdb___" //16 bytes
+#define HPCTHREADSPARSE_FMT_VersionMajor 0             //1  byte
+#define HPCTHREADSPARSE_FMT_VersionMinor 0             //1  byte
+#define HPCTHREADSPARSE_FMT_NumSec 4                   //2  byte
 
-#define HPCTHREADSPARSE_FMT_MagicLen   (sizeof(HPCTHREADSPARSE_FMT_Magic) - 1)
-#define HPCTHREADSPARSE_FMT_VersionLen 1 
+#define HPCTHREADSPARSE_FMT_MagicLen     (sizeof(HPCTHREADSPARSE_FMT_Magic) - 1)
+#define HPCTHREADSPARSE_FMT_VersionLen   2
+#define HPCTHREADSPARSE_FMT_NumProfLen   4
+#define HPCTHREADSPARSE_FMT_NumSecLen    2
+#define HPCTHREADSPARSE_FMT_SecSizeLen   8
+#define HPCTHREADSPARSE_FMT_SecPtrLen    8
+#define HPCTHREADSPARSE_FMT_SecLen       (HPCTHREADSPARSE_FMT_SecSizeLen + HPCTHREADSPARSE_FMT_SecPtrLen)
 
-#define HPCTHREADSPARSE_FMT_HeaderLen  (HPCTHREADSPARSE_FMT_MagicLen + HPCTHREADSPARSE_FMT_VersionLen)
-#define HPCTHREADSPARSE_FMT_HeaderOff  0
+
+#define TMS_hdr_SIZE (HPCTHREADSPARSE_FMT_MagicLen + HPCTHREADSPARSE_FMT_VersionLen \
+   + HPCTHREADSPARSE_FMT_NumProfLen + HPCTHREADSPARSE_FMT_NumSecLen + HPCTHREADSPARSE_FMT_SecLen*2)
 
 typedef struct tms_hdr_t{
-  uint8_t version;
+  uint8_t versionMajor;
+  uint8_t versionMinor;
+  uint32_t num_prof;
+  uint16_t num_sec; //number of sections include hdr and sparse metrics section
+
+  uint64_t prof_info_sec_size;
+  uint64_t prof_info_sec_ptr;
+  uint64_t id_tuples_sec_size;
+  uint64_t id_tuples_sec_ptr;
 }tms_hdr_t;
 
 int 
-tms_hdr_fwrite(FILE* fs);
+tms_hdr_fwrite(tms_hdr_t* hdr,FILE* fs);
 
 int
 tms_hdr_fread(tms_hdr_t* hdr, FILE* infs);
@@ -110,7 +126,7 @@ tms_hdr_fprint(tms_hdr_t* hdr, FILE* fs);
 //***************************************************************************
 #define TMS_fake_id_tuple_SIZE   2 //length = 0
 #define TMS_total_prof_SIZE      4
-#define HPCTHREADSPARSE_FMT_ProfInfoOff (HPCTHREADSPARSE_FMT_HeaderLen + TMS_total_prof_SIZE)
+
 
 #define TMS_num_val_SIZE         8
 #define TMS_num_nzctx_SIZE       4

@@ -83,11 +83,21 @@
 // hdr
 //***************************************************************************
 int 
-tms_hdr_fwrite(FILE* fs)
+tms_hdr_fwrite(tms_hdr_t* hdr, FILE* fs)
 {
   fwrite(HPCTHREADSPARSE_FMT_Magic,   1, HPCTHREADSPARSE_FMT_MagicLen,   fs);
-  int version = HPCTHREADSPARSE_FMT_Version;
-  fwrite(&version, 1, HPCTHREADSPARSE_FMT_VersionLen, fs);
+  int versionMajor = HPCTHREADSPARSE_FMT_VersionMajor;
+  int versionMinor = HPCTHREADSPARSE_FMT_VersionMinor;
+  fwrite(&versionMajor, 1, 1, fs);
+  fwrite(&versionMinor, 1, 1, fs);
+  HPCFMT_ThrowIfError(hpcfmt_int4_fwrite(hdr->num_prof, fs));
+  HPCFMT_ThrowIfError(hpcfmt_int2_fwrite(hdr->num_sec, fs));
+
+  HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(hdr->prof_info_sec_size, fs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(hdr->prof_info_sec_ptr, fs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(hdr->id_tuples_sec_size, fs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(hdr->id_tuples_sec_ptr, fs));
+  
   return HPCFMT_OK;
 }
 
@@ -106,10 +116,23 @@ tms_hdr_fread(tms_hdr_t* hdr, FILE* infs)
     return HPCFMT_ERR;
   }
 
-  nr = fread(&hdr->version, 1, HPCTHREADSPARSE_FMT_VersionLen, infs);
-  if (nr != HPCTHREADSPARSE_FMT_VersionLen) {
+  nr = fread(&hdr->versionMajor, 1, 1, infs);
+  if (nr != 1) {
     return HPCFMT_ERR;
   }
+
+  nr = fread(&hdr->versionMinor, 1, 1, infs);
+  if (nr != 1) {
+    return HPCFMT_ERR;
+  }
+
+  HPCFMT_ThrowIfError(hpcfmt_int4_fread(&(hdr->num_prof), infs));
+  HPCFMT_ThrowIfError(hpcfmt_int2_fread(&(hdr->num_sec), infs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(hdr->prof_info_sec_size), infs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(hdr->prof_info_sec_ptr), infs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(hdr->id_tuples_sec_size), infs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(hdr->id_tuples_sec_ptr), infs));
+
 
   return HPCFMT_OK;
 }
@@ -120,92 +143,17 @@ tms_hdr_fprint(tms_hdr_t* hdr, FILE* fs)
   fprintf(fs, "%s\n", HPCTHREADSPARSE_FMT_Magic);
 
   fprintf(fs, "[hdr:\n");
-  fprintf(fs, "  (version: %d)\n", hdr->version);
+  fprintf(fs, "  (version: %d.%d)\n", hdr->versionMajor, hdr->versionMinor);
+  fprintf(fs, "  (num_prof: %d)\n", hdr->num_prof);
+  fprintf(fs, "  (num_sec: %d)\n", hdr->num_sec);
+  fprintf(fs, "  (prof_info_sec_size: %ld)\n", hdr->prof_info_sec_size);
+  fprintf(fs, "  (prof_info_sec_ptr: %ld)\n", hdr->prof_info_sec_ptr);
+  fprintf(fs, "  (id_tuples_sec_size: %ld)\n", hdr->id_tuples_sec_size);
+  fprintf(fs, "  (id_tuples_sec_ptr: %ld)\n", hdr->id_tuples_sec_ptr);
   fprintf(fs, "]\n");
 
   return HPCFMT_OK;
 }
-
-#if 0
-//***************************************************************************
-// id tuple
-//***************************************************************************
-char* kindStr(const uint16_t kind)
-{
-  if(kind == IDTUPLE_SUMMARY){
-    return "SUMMARY";
-  }
-  else if(kind == IDTUPLE_RANK){
-    return "RANK";
-  }
-  else if(kind == IDTUPLE_THREAD){
-    return "THREAD";
-  }
-  else{
-    return "ERROR";
-  }
-}
-
-
-int
-id_tuples_tms_fwrite(uint32_t num_tuples,id_tuple_t* x, FILE* fs)
-{
-  for (uint i = 0; i < num_tuples; ++i) {
-    HPCFMT_ThrowIfError(hpcfmt_int2_fwrite(x[i].length, fs));
-    for (uint j = 0; j < x[i].length; ++j) {
-      HPCFMT_ThrowIfError(hpcfmt_int2_fwrite(x[i].ids[j].kind, fs));
-      HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(x[i].ids[j].index, fs));
-    }
-  }
-  return HPCFMT_OK;
-}
-
-int
-id_tuples_tms_fread(id_tuple_t** x, uint32_t num_tuples,FILE* fs)
-{
-  id_tuple_t * id_tuples = (id_tuple_t *) malloc(num_tuples*sizeof(id_tuple_t));
-
-  for (uint i = 0; i < num_tuples; ++i) {
-    HPCFMT_ThrowIfError(hpcfmt_int2_fread(&(id_tuples[i].length), fs));
-    id_tuples[i].ids = (tms_id_t *) malloc(id_tuples[i].length * sizeof(tms_id_t)); 
-    for (uint j = 0; j < id_tuples[i].length; ++j) {
-      HPCFMT_ThrowIfError(hpcfmt_int2_fread(&(id_tuples[i].ids[j].kind), fs));
-      HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(id_tuples[i].ids[j].index), fs));
-    }
-  }
-
-  *x = id_tuples;
-  return HPCFMT_OK;
-}
-
-int
-id_tuples_tms_fprint(uint32_t num_tuples, id_tuple_t* x, FILE* fs)
-{
-  fprintf(fs,"[Id tuples for %d profiles\n", num_tuples);
-
-  for (uint i = 0; i < num_tuples; ++i) {
-    fprintf(fs,"  %d[", i);
-    for (uint j = 0; j < x[i].length; ++j) {
-      fprintf(fs,"(%s: %ld) ", kindStr(x[i].ids[j].kind), x[i].ids[j].index);
-    }
-    fprintf(fs,"]\n");
-  }
-  fprintf(fs,"]\n");
-  return HPCFMT_OK;
-}
-
-void
-id_tuples_tms_free(id_tuple_t** x, uint32_t num_tuples)
-{
-  for (uint i = 0; i < num_tuples; ++i) {
-    free((*x)[i].ids);
-    (*x)[i].ids = NULL;
-  }
-
-  free(*x);
-  *x = NULL;
-}
-#endif
 
 
 //***************************************************************************
