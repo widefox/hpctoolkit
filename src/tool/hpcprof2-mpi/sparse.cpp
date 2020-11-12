@@ -1442,7 +1442,7 @@ void SparseDB::updateCtxOffset(const size_t ctxcnt,
 
   #pragma omp parallel for num_threads(threads)
   for(uint i = 0; i < ctxcnt + 1; i++){
-    ctx_off[i] += ctxcnt * CMS_ctx_info_SIZE + CMS_hdr_SIZE;
+    ctx_off[i] += (MULTIPLE_8(ctxcnt * CMS_ctx_info_SIZE)) + CMS_hdr_SIZE;
   }
 }
 
@@ -2326,7 +2326,7 @@ void SparseDB::merge(int threads, bool debug) {
   std::vector<std::set<uint16_t>> ctx_nzmids(ctxcnt,empty);
   keepTemps = debug;
   writeThreadMajor(threads,world_rank,world_size, ctx_nzval_cnts,ctx_nzmids);
-  //writeCCTMajor(ctx_nzval_cnts,ctx_nzmids, ctxcnt, world_rank, world_size, threads);
+  writeCCTMajor(ctx_nzval_cnts,ctx_nzmids, ctxcnt, world_rank, world_size, threads);
 
 }
 
