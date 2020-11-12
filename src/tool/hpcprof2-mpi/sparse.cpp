@@ -810,8 +810,7 @@ uint64_t SparseDB::workIdTuplesSection(const int world_rank,
 
     //set up prof_info_sec_size and id_tuples_sec_ptr
     prof_info_sec_size = all_rank_tuples.size() * TMS_prof_info_SIZE;
-    id_tuples_sec_ptr = TMS_hdr_SIZE + MULTIPLE_8(prof_info_sec_size);
-    printf("ptr %d\n",id_tuples_sec_ptr );
+    id_tuples_sec_ptr = TMS_hdr_SIZE + (MULTIPLE_8(prof_info_sec_size));
 
     //calculate the tuples' offset
     all_tuple_ptrs = getIdTuplesOff(all_rank_tuples, threads);
