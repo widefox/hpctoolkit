@@ -211,6 +211,7 @@ Analysis::Raw::writeAsText_sparseDBthread(const char* filenm, bool easygrep)
 
     uint32_t num_prof = hdr.num_prof;
 
+    //no need to fseek here since hdr is multiple of 8, prof_info_ptr == TMS_hdr_SIZE
     tms_profile_info_t* x;
     ret = tms_profile_info_fread(&x,num_prof,fs);
     if (ret != HPCFMT_OK) {
@@ -218,6 +219,7 @@ Analysis::Raw::writeAsText_sparseDBthread(const char* filenm, bool easygrep)
     }
     tms_profile_info_fprint(num_prof,x,stdout);
 
+    fseek(fs, hdr.id_tuples_sec_ptr, SEEK_SET);
     id_tuple_t* tuples;
     uint64_t tuples_size = hdr.id_tuples_sec_size;
     ret = id_tuples_tms_fread(&tuples, num_prof,fs);
@@ -227,6 +229,7 @@ Analysis::Raw::writeAsText_sparseDBthread(const char* filenm, bool easygrep)
     id_tuples_tms_fprint(num_prof,tuples_size,tuples,stdout);
 
     sortProfileInfo_onOffsets(x,num_prof);
+    fseek(fs, hdr.id_tuples_sec_ptr + MULTIPLE_8(hdr.id_tuples_sec_size), SEEK_SET);
     for(uint i = 0; i<num_prof; i++){
       hpcrun_fmt_sparse_metrics_t sm;
       sm.num_vals = x[i].num_vals;

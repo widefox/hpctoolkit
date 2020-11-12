@@ -159,8 +159,7 @@ private:
   //***************************************************************************
   // general - YUMENG
   //***************************************************************************
-  uint64_t id_tuples_sec_size;
-  uint64_t prof_info_sec_size;
+  #define MULTIPLE_8(v) (v + 7) & ~7
 
   #define SPARSE_ERR -1
   #define SPARSE_OK  0
@@ -174,6 +173,12 @@ private:
   //***************************************************************************
   // thread.db  - YUMENG
   //***************************************************************************
+  uint64_t id_tuples_sec_size;
+  uint64_t prof_info_sec_size;
+
+  uint64_t id_tuples_sec_ptr;
+  uint64_t prof_info_sec_ptr;
+
   //---------------------------------------------------------------------------
   // profile id tuples - format conversion with ThreadAttribute and IntPair
   //---------------------------------------------------------------------------

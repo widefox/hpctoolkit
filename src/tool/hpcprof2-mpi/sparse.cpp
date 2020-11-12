@@ -722,7 +722,7 @@ std::vector<uint64_t> SparseDB::getIdTuplesOff(std::vector<tms_id_tuple_t>& all_
 
   #pragma omp parallel for num_threads(threads) 
   for(uint i = 0; i < tupleSizes.size();i++){
-    tupleOffsets[i] = tupleSizes[i] + TMS_hdr_SIZE + prof_info_sec_size; 
+    tupleOffsets[i] = tupleSizes[i] + id_tuples_sec_ptr; 
   }
 
   return tupleOffsets;
@@ -777,7 +777,7 @@ size_t SparseDB::writeAllIdTuples(const std::vector<tms_id_tuple_t>& all_tuples,
   bytes.insert(bytes.begin(), size.begin(), size.end());
 */
   auto fhi = fh.open(true);
-  SPARSE_exitIfMPIError(writeAsByteX(bytes, bytes.size(), fhi, TMS_hdr_SIZE + prof_info_sec_size),"error writing all tuples");
+  SPARSE_exitIfMPIError(writeAsByteX(bytes, bytes.size(), fhi, id_tuples_sec_ptr),"error writing all tuples");
   
   return bytes.size();
 }
@@ -802,13 +802,23 @@ uint64_t SparseDB::workIdTuplesSection(const int world_rank,
 
   uint64_t id_tuples_section_size;
   if(world_rank == 0) {
+    //convert all int pairs to tuples
     all_rank_tuples = intPairs2Tuples(all_rank_pairs);
+
+    //sort all the tuples based on the porf_info_idx
     sortIdTuplesOnProfInfoIdx(all_rank_tuples);
+
+    //set up prof_info_sec_size and id_tuples_sec_ptr
     prof_info_sec_size = all_rank_tuples.size() * TMS_prof_info_SIZE;
+    id_tuples_sec_ptr = TMS_hdr_SIZE + MULTIPLE_8(prof_info_sec_size);
+    printf("ptr %d\n",id_tuples_sec_ptr );
+
+    //calculate the tuples' offset
     all_tuple_ptrs = getIdTuplesOff(all_rank_tuples, threads);
 
+    //write all the tuples
     id_tuples_section_size = writeAllIdTuples(all_rank_tuples, fh);
-    assert(TMS_hdr_SIZE + prof_info_sec_size + id_tuples_section_size == all_tuple_ptrs.back());
+    assert((TMS_hdr_SIZE + (MULTIPLE_8(prof_info_sec_size)) + id_tuples_section_size) == all_tuple_ptrs.back());
   }
 
   MPI_Bcast(&id_tuples_section_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
@@ -884,7 +894,7 @@ void SparseDB::getMyProfOffset(const uint32_t total_prof,
   for(uint i = 0; i < tmp.size();i++){
     if(i < tmp.size() - 1) assert(tmp[i] + profile_sizes[i] == tmp[i+1]);
     prof_offsets[i] = tmp[i] + my_offset + TMS_hdr_SIZE
-      + prof_info_sec_size + id_tuples_sec_size; 
+      + (MULTIPLE_8(prof_info_sec_size)) + (MULTIPLE_8(id_tuples_sec_size)); 
   }
 
 }
@@ -1138,6 +1148,8 @@ void SparseDB::writeThreadMajor(const int threads,
 
   util::File thread_major_f(dir / "thread.db", true);
 
+  prof_info_sec_ptr = TMS_hdr_SIZE;
+
   id_tuples_sec_size = workIdTuplesSection(world_rank, world_size, threads, thread_major_f);
 
   uint32_t total_prof = workProfSizesOffsets(world_rank, threads);
@@ -1160,12 +1172,10 @@ void SparseDB::writeThreadMajor(const int threads,
     convertToByte2(HPCTHREADSPARSE_FMT_NumSec, hdr.data() + cur_off); 
     cur_off += HPCTHREADSPARSE_FMT_NumSecLen;
 
-    uint64_t prof_info_sec_ptr = cur_off + (HPCTHREADSPARSE_FMT_NumSec-2) * HPCTHREADSPARSE_FMT_SecLen;
     convertToByte8(prof_info_sec_size, hdr.data() + cur_off);
     convertToByte8(prof_info_sec_ptr, hdr.data() + cur_off + HPCTHREADSPARSE_FMT_SecSizeLen);
     cur_off += HPCTHREADSPARSE_FMT_SecLen;
 
-    uint64_t id_tuples_sec_ptr = prof_info_sec_ptr + prof_info_sec_size;
     convertToByte8(id_tuples_sec_size, hdr.data() + cur_off);
     convertToByte8(id_tuples_sec_ptr, hdr.data() + cur_off + HPCTHREADSPARSE_FMT_SecSizeLen);
     cur_off += HPCTHREADSPARSE_FMT_SecLen;
@@ -2316,7 +2326,7 @@ void SparseDB::merge(int threads, bool debug) {
   std::vector<std::set<uint16_t>> ctx_nzmids(ctxcnt,empty);
   keepTemps = debug;
   writeThreadMajor(threads,world_rank,world_size, ctx_nzval_cnts,ctx_nzmids);
-  writeCCTMajor(ctx_nzval_cnts,ctx_nzmids, ctxcnt, world_rank, world_size, threads);
+  //writeCCTMajor(ctx_nzval_cnts,ctx_nzmids, ctxcnt, world_rank, world_size, threads);
 
 }
 
