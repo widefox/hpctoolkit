@@ -101,7 +101,7 @@ public:
   //***************************************************************************
   void writeCCTMajor(const std::vector<uint64_t>& cct_local_sizes, 
                      std::vector<std::set<uint16_t>>& cct_nzmids,
-                     const int ctxcnt, 
+                     const size_t ctxcnt, 
                      const int world_rank, 
                      const int world_size, 
                      const int threads);
@@ -344,6 +344,12 @@ private:
                     const int threads, 
                     const int rank,
                     std::vector<uint64_t>& ctx_off);
+
+  void writeCtxInfoSec(const std::vector<uint64_t>& ctx_val_cnts, 
+                       const std::vector<std::set<uint16_t>>& ctx_nzmids,
+                       const std::vector<uint64_t>& ctx_off,
+                       const size_t ctxcnt,
+                       hpctoolkit::util::File::Instance& ofh);
                     
   void getMyCtxs(const std::vector<uint64_t>& ctx_off,
                  const int num_ranks, 
@@ -353,7 +359,6 @@ private:
   void updateCtxOffset(const size_t ctxcnt, 
                        const int threads, 
                        std::vector<uint64_t>& ctx_off);
-  
 
   //---------------------------------------------------------------------------
   // get a list of profile info
@@ -502,16 +507,6 @@ private:
 
   int convertOneCtxInfo(const cms_ctx_info_t& ctx_info,                                        
                         char *bytes);
-/*
-  void convertOneCtx(const uint32_t ctx_id, 
-                     const std::vector<uint64_t>& ctx_off,    
-                     const std::vector<CtxMetricBlock>& ctx_met_blocks, 
-                     const uint64_t first_ctx_off,
-                     uint& met_byte_cnt,
-                     uint& info_byte_cnt, 
-                     char* met_bytes,                                 
-                     char* info_bytes);
-*/
 
   void convertOneCtx(const uint32_t ctx_id, 
                              const uint64_t next_ctx_off,    
@@ -525,7 +520,6 @@ private:
                        const std::vector<uint64_t>& ctx_off, 
                        const uint32_t& ctx_id,
                        int threads,
-                       std::vector<char>& info_bytes,
                        std::vector<char>& metrics_bytes);
 
   void writeOneCtx(const uint32_t& ctx_id,

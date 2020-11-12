@@ -1396,6 +1396,27 @@ void SparseDB::getCtxOffset(const std::vector<uint64_t>& ctx_val_cnts,
 
 }
 
+void SparseDB::writeCtxInfoSec(const std::vector<uint64_t>& ctx_val_cnts, 
+                               const std::vector<std::set<uint16_t>>& ctx_nzmids,
+                               const std::vector<uint64_t>& ctx_off,
+                               const size_t ctxcnt,
+                               util::File::Instance& ofh)
+{
+  assert(ctxcnt == ctx_val_cnts.size());
+  assert(ctx_val_cnts.size() == ctx_nzmids.size());
+
+  std::vector<char> info_bytes (CMS_ctx_info_SIZE * ctxcnt);
+  for(uint i = 0; i < ctxcnt; i++){
+    uint16_t num_nzmids = (uint16_t)(ctx_nzmids[i].size() - 1);
+    uint64_t num_vals = (num_nzmids == 0) ? 0 : ((ctx_off[i+1] - ctx_off[i]) - (num_nzmids + 1) * CMS_m_pair_SIZE) / CMS_val_prof_idx_pair_SIZE;
+    cms_ctx_info_t ci = {CTXID(i), num_vals, num_nzmids, ctx_off[i]};
+    convertOneCtxInfo(ci, info_bytes.data() + i * CMS_ctx_info_SIZE);
+  }
+
+  ofh.writeat(CMS_hdr_SIZE, info_bytes.size(), info_bytes.data());
+
+}
+
 
 //based on ctx offsets, assign ctx ids to different ranks
 //input: global offsets for all contexts, number of processes, rank number
@@ -2004,6 +2025,7 @@ void SparseDB::convertOneCtx(const uint32_t ctx_id,
                              cms_ctx_info_t& ci,
                              uint& met_byte_cnt,
                              char* met_bytes)
+
 {
 
   met_byte_cnt += convertOneCtxMetricBlock(cmb, met_bytes + ci.offset - first_ctx_off, ci.num_nzmids, ci.num_vals);
@@ -2017,18 +2039,25 @@ void SparseDB::convertOneCtx(const uint32_t ctx_id,
 }
 
 //convert a group of contexts to appropriate bytes 
+/*
 void SparseDB::ctxBlocks2Bytes(const CtxMetricBlock& cmb, 
                                const std::vector<uint64_t>& ctx_off, 
                                const uint32_t& ctx_id,
                                int threads,
                                std::vector<char>& info_bytes,
                                std::vector<char>& metrics_bytes)
+*/
+void SparseDB::ctxBlocks2Bytes(const CtxMetricBlock& cmb, 
+                               const std::vector<uint64_t>& ctx_off, 
+                               const uint32_t& ctx_id,
+                               int threads,
+                               std::vector<char>& metrics_bytes)
 {
   assert(ctx_off.size() > 0);
 
   //uint64_t first_ctx_off =  ctx_off[CTX_VEC_IDX(ctx_ids[0])]; 
   uint64_t first_ctx_off =  ctx_off[CTX_VEC_IDX(ctx_id)]; 
-  uint info_byte_cnt = 0;
+  //uint info_byte_cnt = 0;
   uint met_byte_cnt  = 0;
 
   //for single cmb
@@ -2037,11 +2066,11 @@ void SparseDB::ctxBlocks2Bytes(const CtxMetricBlock& cmb,
   if(cmb.metrics.size() > 0)
     convertOneCtx(ctx_id, ctx_off[CTX_VEC_IDX(ctx_id)+1], cmb, first_ctx_off, ci, met_byte_cnt, metrics_bytes.data());
 
-  info_byte_cnt += convertOneCtxInfo(ci, info_bytes.data());
+  //info_byte_cnt += convertOneCtxInfo(ci, info_bytes.data());
 
   //same for both versions
-  if(info_byte_cnt != info_bytes.size())    exitError("the count of info_bytes converted is not as expected"
-    + std::to_string(info_byte_cnt) + " != " + std::to_string(info_bytes.size()));
+  //if(info_byte_cnt != info_bytes.size())    exitError("the count of info_bytes converted is not as expected"
+  //  + std::to_string(info_byte_cnt) + " != " + std::to_string(info_bytes.size()));
  
   if(met_byte_cnt  != metrics_bytes.size()) exitError("the count of metrics_bytes converted is not as expected" 
     + std::to_string(met_byte_cnt) + " != " + std::to_string(metrics_bytes.size()));
@@ -2056,15 +2085,16 @@ void SparseDB::writeOneCtx(const uint32_t& ctx_id,
                            const int threads,
                            util::File::Instance& ofh)
 {
-  std::vector<char> info_bytes (CMS_ctx_info_SIZE);
+  //std::vector<char> info_bytes (CMS_ctx_info_SIZE);
 
   int metric_bytes_size = ctx_off[CTX_VEC_IDX(ctx_id) + 1] - ctx_off[CTX_VEC_IDX(ctx_id)];
   std::vector<char> metrics_bytes (metric_bytes_size);
   
-  ctxBlocks2Bytes(cmb, ctx_off, ctx_id, threads, info_bytes, metrics_bytes);
+  //ctxBlocks2Bytes(cmb, ctx_off, ctx_id, threads, info_bytes, metrics_bytes);
+  ctxBlocks2Bytes(cmb, ctx_off, ctx_id, threads, metrics_bytes);
 
-  MPI_Offset info_off = CMS_hdr_SIZE + CTX_VEC_IDX(ctx_id) * CMS_ctx_info_SIZE;
-  ofh.writeat(info_off, info_bytes.size(), info_bytes.data());
+  //MPI_Offset info_off = CMS_hdr_SIZE + CTX_VEC_IDX(ctx_id) * CMS_ctx_info_SIZE;
+  //ofh.writeat(info_off, info_bytes.size(), info_bytes.data());
 
   MPI_Offset metrics_off = ctx_off[CTX_VEC_IDX(ctx_id)];
   ofh.writeat(metrics_off, metrics_bytes.size(), metrics_bytes.data());
@@ -2247,12 +2277,12 @@ void SparseDB::rwAllCtxGroup(const std::vector<uint32_t>& my_ctxs,
 
 void SparseDB::writeCCTMajor(const std::vector<uint64_t>& ctx_nzval_cnts, 
                              std::vector<std::set<uint16_t>>& ctx_nzmids,
-                             const int ctxcnt, 
+                             const size_t ctxcnt, 
                              const int world_rank, 
                              const int world_size, 
                              const int threads)
 {
-  //Prepare a union ctx_nzmids
+  //Prepare a union ctx_nzmids, only rank 0's ctx_nzmids is global
   unionMids(ctx_nzmids,world_rank,world_size, threads);
 
   //Get context global final offsets for cct.db
@@ -2291,8 +2321,11 @@ void SparseDB::writeCCTMajor(const std::vector<uint64_t>& ctx_nzval_cnts,
     auto cct_major_fi = cct_major_f.open(true);
     SPARSE_exitIfMPIError(writeAsByteX(hdr, CMS_hdr_SIZE, cct_major_fi, 0),
       __FUNCTION__ + std::string(": write the hdr wrong"));
+
+    // Write ctx info section
+    writeCtxInfoSec(ctx_nzval_cnts, ctx_nzmids, ctx_off, ctxcnt, cct_major_fi);
   }
-  
+
   std::vector<tms_profile_info_t> prof_info;
   readProfileInfo(threads, thread_major_f, prof_info);
 
