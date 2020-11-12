@@ -327,11 +327,7 @@ Analysis::Raw::writeAsText_tracedb(const char* filenm)
     }
     tracedb_hdr_fprint(&hdr, stdout);
 
-    uint32_t num_t;
-    ret = hpcfmt_int4_fread(&num_t, fs);
-    if (ret != HPCFMT_OK) {
-      DIAG_Throw("error reading number of traces from tracedb file '" << filenm << "'");
-    }
+    uint32_t num_t = hdr.num_trace;
 
     trace_hdr_t* x;
     ret = trace_hdrs_fread(&x, num_t,fs);
@@ -341,6 +337,7 @@ Analysis::Raw::writeAsText_tracedb(const char* filenm)
     trace_hdrs_fprint(num_t, x, stdout);
 
     sortTraceHdrs_onStarts(x, num_t); 
+    fseek(fs, hdr.trace_hdr_sec_ptr + (MULTIPLE_8(hdr.trace_hdr_sec_size)), SEEK_SET);
     for(uint i = 0; i<num_t; i++){
       uint64_t start = x[i].start;
       uint64_t end = x[i].end;

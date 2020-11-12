@@ -72,21 +72,35 @@ extern "C" {
 //***************************************************************************
 // tracedb hdr
 //***************************************************************************
-#define HPCTRACEDB_FMT_Magic   "HPCPROF-tracedb___" //18 bytes
-#define HPCTRACEDB_FMT_Version 0                    //1  byte
+#define HPCTRACEDB_FMT_Magic   "HPCPROF-tracedb_" //16 bytes
+#define HPCTRACEDB_FMT_VersionMajor 0             //1  byte
+#define HPCTRACEDB_FMT_VersionMinor 0             //1  byte
+#define HPCTRACEDB_FMT_NumSec       3             //2  byte
 
-#define HPCTRACEDB_FMT_MagicLen   (sizeof(HPCTRACEDB_FMT_Magic) - 1)
-#define HPCTRACEDB_FMT_VersionLen 1 
+#define HPCTRACEDB_FMT_MagicLen     (sizeof(HPCTRACEDB_FMT_Magic) - 1)
+#define HPCTRACEDB_FMT_VersionLen   2 
+#define HPCTRACEDB_FMT_NumTraceLen  4
+#define HPCTRACEDB_FMT_NumSecLen    2  
+#define HPCTRACEDB_FMT_SecSizeLen   8
+#define HPCTRACEDB_FMT_SecPtrLen    8
+#define HPCTRACEDB_FMT_SecLen       (HPCTRACEDB_FMT_SecSizeLen + HPCTRACEDB_FMT_SecPtrLen)
 
-#define num_trace_SIZE 4
-#define HPCTRACEDB_FMT_HeaderLen  (HPCTRACEDB_FMT_MagicLen + HPCTRACEDB_FMT_VersionLen + num_trace_SIZE)
+#define HPCTRACEDB_FMT_HeaderLen  (HPCTRACEDB_FMT_MagicLen + HPCTRACEDB_FMT_VersionLen \
+  + HPCTRACEDB_FMT_NumTraceLen + HPCTRACEDB_FMT_NumSecLen \
+  + HPCTRACEDB_FMT_SecLen * (HPCTRACEDB_FMT_NumSec - 2))
 
 typedef struct tracedb_hdr_t{
-  uint8_t version;
+  uint8_t versionMajor;
+  uint8_t versionMinor;
+  uint32_t num_trace;
+  uint16_t num_sec; //number of sections include hdr and traces section
+
+  uint64_t trace_hdr_sec_size;
+  uint64_t trace_hdr_sec_ptr;
 }tracedb_hdr_t;
 
 int 
-tracedb_hdr_fwrite(FILE* fs);
+tracedb_hdr_fwrite(tracedb_hdr_t* hdr, FILE* fs);
 
 int
 tracedb_hdr_fread(tracedb_hdr_t* hdr, FILE* infs);

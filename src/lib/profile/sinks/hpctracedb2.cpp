@@ -88,9 +88,14 @@ void HPCTraceDB2::notifyWavefront(DataClass d){
   if(!d.hasThreads()) return;
   auto wd_sem = threadsReady.signal();
 
+  //initialize the hdr to write
+  tracedb_hdr_t hdr;
+
   //assign value to trace_hdrs_size
   uint32_t num_traces = getTotalNumTraces();
   trace_hdrs_size = num_traces * trace_hdr_SIZE;
+  hdr.num_trace = num_traces;
+  hdr.trace_hdr_sec_size = trace_hdrs_size;
 
   //calculate the offsets for later stored in start and end
   std::vector<uint64_t> trace_offs = calcStartEnd();
@@ -103,8 +108,7 @@ void HPCTraceDB2::notifyWavefront(DataClass d){
   if(mpi::World::rank() == 0) {
     trace_f = std::fopen(trace_p.c_str(), "wb");
     if(!trace_f) util::log::fatal() << "Unable to open trace.db file for output!";
-    tracedb_hdr_fwrite(trace_f);
-    hpcfmt_int4_fwrite(num_traces, trace_f);
+    tracedb_hdr_fwrite(&hdr,trace_f);
   }
 
   // Ensure the file is truncated by rank 0 before proceeding.
@@ -265,7 +269,7 @@ std::vector<uint64_t> HPCTraceDB2::calcStartEnd() {
   trace_sizes.emplace_back(0);
   exscan<uint64_t>(trace_sizes);
   for(uint i = 0; i < trace_sizes.size();i++){
-    trace_offs[i] = trace_sizes[i] + my_off + HPCTRACEDB_FMT_HeaderLen + trace_hdrs_size; 
+    trace_offs[i] = trace_sizes[i] + my_off + HPCTRACEDB_FMT_HeaderLen + (MULTIPLE_8(trace_hdrs_size)); 
   }
 
   return trace_offs;

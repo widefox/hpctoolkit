@@ -98,8 +98,8 @@ extern "C" {
 
 
 #define TMS_hdr_SIZE (HPCTHREADSPARSE_FMT_MagicLen + HPCTHREADSPARSE_FMT_VersionLen \
-   + HPCTHREADSPARSE_FMT_NumProfLen + HPCTHREADSPARSE_FMT_NumSecLen \ 
-   + HPCTHREADSPARSE_FMT_SecLen*(HPCTHREADSPARSE_FMT_NumSec-2))
+  + HPCTHREADSPARSE_FMT_NumProfLen + HPCTHREADSPARSE_FMT_NumSecLen \
+  + HPCTHREADSPARSE_FMT_SecLen*(HPCTHREADSPARSE_FMT_NumSec-2))
 
 typedef struct tms_hdr_t{
   uint8_t versionMajor;

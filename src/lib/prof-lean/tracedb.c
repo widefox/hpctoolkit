@@ -84,11 +84,20 @@
 // tracedb hdr
 //***************************************************************************
 int 
-tracedb_hdr_fwrite(FILE* fs)
+tracedb_hdr_fwrite(tracedb_hdr_t* hdr,FILE* fs)
 {
   fwrite(HPCTRACEDB_FMT_Magic, 1, HPCTRACEDB_FMT_MagicLen,   fs);
-  int version = HPCTRACEDB_FMT_Version;
-  fwrite(&version, 1, HPCTRACEDB_FMT_VersionLen, fs);
+  int versionMajor = HPCTRACEDB_FMT_VersionMajor;
+  int versionMinor = HPCTRACEDB_FMT_VersionMinor;
+  fwrite(&versionMajor, 1, 1, fs);
+  fwrite(&versionMinor, 1, 1, fs);
+
+  HPCFMT_ThrowIfError(hpcfmt_int4_fwrite(hdr->num_trace, fs));
+  HPCFMT_ThrowIfError(hpcfmt_int2_fwrite(HPCTRACEDB_FMT_NumSec, fs));
+
+  HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(hdr->trace_hdr_sec_size, fs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(HPCTRACEDB_FMT_HeaderLen, fs));
+
   return HPCFMT_OK;
 }
 
@@ -107,10 +116,19 @@ tracedb_hdr_fread(tracedb_hdr_t* hdr, FILE* infs)
     return HPCFMT_ERR;
   }
 
-  nr = fread(&hdr->version, 1, HPCTRACEDB_FMT_VersionLen, infs);
-  if (nr != HPCTRACEDB_FMT_VersionLen) {
+  nr = fread(&hdr->versionMajor, 1, 1, infs);
+  if (nr != 1) {
     return HPCFMT_ERR;
   }
+  nr = fread(&hdr->versionMinor, 1, 1, infs);
+  if (nr != 1) {
+    return HPCFMT_ERR;
+  }
+
+  HPCFMT_ThrowIfError(hpcfmt_int4_fread(&(hdr->num_trace), infs));
+  HPCFMT_ThrowIfError(hpcfmt_int2_fread(&(hdr->num_sec), infs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(hdr->trace_hdr_sec_size), infs));
+  HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(hdr->trace_hdr_sec_ptr), infs));
 
   return HPCFMT_OK;
 }
@@ -121,7 +139,11 @@ tracedb_hdr_fprint(tracedb_hdr_t* hdr, FILE* fs)
   fprintf(fs, "%s\n", HPCTRACEDB_FMT_Magic);
 
   fprintf(fs, "[hdr:\n");
-  fprintf(fs, "  (version: %d)\n", hdr->version);
+  fprintf(fs, "  (version: %d.%d)\n", hdr->versionMajor, hdr->versionMinor);
+  fprintf(fs, "  (num_trace: %d)\n", hdr->num_trace);
+  fprintf(fs, "  (num_sec: %d)\n", hdr->num_sec);
+  fprintf(fs, "  (trace_hdr_sec_size: %ld)\n", hdr->trace_hdr_sec_size);
+  fprintf(fs, "  (trace_hdr_sec_ptr: %ld)\n", hdr->trace_hdr_sec_ptr);
   fprintf(fs, "]\n");
 
   return HPCFMT_OK;
