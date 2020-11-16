@@ -61,7 +61,19 @@
 #define _HPCTOOLKIT_STDSHIM_HAS_atomic_wait
 #endif
 #if __cplusplus >= 201703L
+
+#if defined(__has_include)
+#if __has_include(<filesystem>)
 #define _HPCTOOLKIT_STDSHIM_HAS_filesystem
+#else
+// We assume experimental/filesystem is available, its close enough to work with
+#define _HPCTOOLKIT_STDSHIM_HAS_experimental_filesystem
+#endif
+#else  // defined(__has_include)
+// If we can't test it directly, just assume the compiler has it
+#define _HPCTOOLKIT_STDSHIM_HAS_filesystem
+#endif
+
 #define _HPCTOOLKIT_STDSHIM_HAS_optional
 #ifndef HPCTOOLKIT_SLOW_LIBC
 #define _HPCTOOLKIT_STDSHIM_HAS_shared_mutex

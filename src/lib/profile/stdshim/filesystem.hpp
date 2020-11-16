@@ -69,6 +69,85 @@ namespace filesystemx {
 }
 }
 
+#elif STD_HAS(experimental_filesystem)
+#include <experimental/filesystem>
+#include <system_error>
+
+namespace hpctoolkit::stdshim {
+namespace filesystem {
+  class path : public std::experimental::filesystem::path {
+  private:
+    using base = std::experimental::filesystem::path;
+
+  public:
+    template<class... Args>
+    path(Args&&... a) : base(std::forward<Args>(a)...) {};
+
+    path relative_path() const { return base::relative_path(); }
+
+    path lexically_normal() const {
+      std::string p = *this;
+      return *this;
+    }
+  };
+
+  using std::experimental::filesystem::filesystem_error;
+  using std::experimental::filesystem::directory_entry;
+  using std::experimental::filesystem::directory_iterator;
+  using std::experimental::filesystem::recursive_directory_iterator;
+  using std::experimental::filesystem::file_status;
+  using std::experimental::filesystem::space_info;
+  using std::experimental::filesystem::file_type;
+  using std::experimental::filesystem::perms;
+  using std::experimental::filesystem::copy_options;
+  using std::experimental::filesystem::directory_options;
+  using std::experimental::filesystem::file_time_type;
+
+  using std::experimental::filesystem::absolute;
+  using std::experimental::filesystem::canonical;
+  using std::experimental::filesystem::copy;
+  using std::experimental::filesystem::copy_file;
+  using std::experimental::filesystem::create_directory;
+  using std::experimental::filesystem::create_directories;
+  using std::experimental::filesystem::create_hard_link;
+  using std::experimental::filesystem::create_symlink;
+  using std::experimental::filesystem::create_directory_symlink;
+  using std::experimental::filesystem::current_path;
+  using std::experimental::filesystem::exists;
+  using std::experimental::filesystem::equivalent;
+  using std::experimental::filesystem::file_size;
+  using std::experimental::filesystem::hard_link_count;
+  using std::experimental::filesystem::last_write_time;
+  using std::experimental::filesystem::permissions;
+  using std::experimental::filesystem::read_symlink;
+  using std::experimental::filesystem::remove;
+  using std::experimental::filesystem::remove_all;
+  using std::experimental::filesystem::rename;
+  using std::experimental::filesystem::resize_file;
+  using std::experimental::filesystem::space;
+  using std::experimental::filesystem::status;
+  using std::experimental::filesystem::symlink_status;
+  using std::experimental::filesystem::temp_directory_path;
+
+  using std::experimental::filesystem::hash_value;
+
+  using std::experimental::filesystem::is_block_file;
+  using std::experimental::filesystem::is_character_file;
+  using std::experimental::filesystem::is_directory;
+  using std::experimental::filesystem::is_empty;
+  using std::experimental::filesystem::is_fifo;
+  using std::experimental::filesystem::is_other;
+  using std::experimental::filesystem::is_regular_file;
+  using std::experimental::filesystem::is_socket;
+  using std::experimental::filesystem::is_symlink;
+  using std::experimental::filesystem::status_known;
+}
+namespace filesystemx {
+  using error_code = std::error_code;
+  using copy_options = std::experimental::filesystem::copy_options;
+}
+}
+
 #else  // STD_HAS(filesystem)
 
 // The filesystem library was developed under Boost and then copied fairly

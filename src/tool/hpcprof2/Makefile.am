@@ -95,6 +95,7 @@ MYCXXFLAGS = @HOST_CXXFLAGS@ $(HPC_IFLAGS) @BINUTILS_IFLAGS@ @XERCES_IFLAGS@ \
 MYLDFLAGS = \
 	-Wl,-rpath='$(prefix)/$(EXT_LIBS)' \
 	-Wl,-rpath='$$ORIGIN/../$(EXT_LIBS)' \
+	-lstdc++fs \
 	@HOST_CXXFLAGS@ \
 	@XERCES_LDFLAGS@ \
 	@LZMA_LDFLAGS_DYN@ \
