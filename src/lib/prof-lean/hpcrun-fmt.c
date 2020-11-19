@@ -1233,7 +1233,7 @@ int hpcrun_sparse_next_block(hpcrun_sparse_file_t* sparse_fs)
     uint16_t id_tuple_length;
     fseek(sparse_fs->file, sparse_fs->footer.sm_start, SEEK_SET);
     HPCFMT_ThrowIfError(hpcfmt_int2_fread(&id_tuple_length, sparse_fs->file));
-    id_tuple_size = TMS_id_tuple_len_SIZE + TMS_id_SIZE * id_tuple_length;
+    id_tuple_size = PMS_id_tuple_len_SIZE + PMS_id_SIZE * id_tuple_length;
     fseek(sparse_fs->file, (sparse_fs->footer.sm_start + id_tuple_size), SEEK_SET);
     HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(sparse_fs->num_nzval),sparse_fs->file));
     HPCFMT_ThrowIfError(hpcfmt_int4_fread(&(sparse_fs->num_nz_cct_nodes),sparse_fs->file));

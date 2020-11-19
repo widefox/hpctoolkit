@@ -96,8 +96,8 @@
 
 #define IDTUPLE_MAXTYPES       8
 
-#define TMS_id_tuple_len_SIZE  2
-#define TMS_id_SIZE            10
+#define PMS_id_tuple_len_SIZE  2
+#define PMS_id_SIZE            10
 
 
 
@@ -105,17 +105,17 @@
 // types
 //***************************************************************************
 
-typedef struct tms_id_t {
+typedef struct pms_id_t {
   uint16_t kind;
   uint64_t index;
-} tms_id_t;
+} pms_id_t;
 
 
 typedef struct id_tuple_t {
   uint16_t length; // number of valid ids
 
   uint16_t ids_length; // number of id slots allocated
-  tms_id_t* ids;
+  pms_id_t* ids;
 } id_tuple_t;
 
 
@@ -144,7 +144,7 @@ void
 id_tuple_constructor
 (
  id_tuple_t *tuple, 
- tms_id_t *ids, 
+ pms_id_t *ids, 
  int ids_length
 );
 
@@ -192,16 +192,16 @@ id_tuple_free(id_tuple_t* x);
 //---------------------------------------------------------------------------
 
 int 
-id_tuples_tms_fwrite(uint32_t num_tuples, id_tuple_t* x, FILE* fs);
+id_tuples_pms_fwrite(uint32_t num_tuples, id_tuple_t* x, FILE* fs);
 
 int 
-id_tuples_tms_fread(id_tuple_t** x, uint32_t num_tuples,FILE* fs);
+id_tuples_pms_fread(id_tuple_t** x, uint32_t num_tuples,FILE* fs);
 
 int 
-id_tuples_tms_fprint(uint32_t num_tuples,uint64_t id_tuples_size, id_tuple_t* x, FILE* fs);
+id_tuples_pms_fprint(uint32_t num_tuples,uint64_t id_tuples_size, id_tuple_t* x, FILE* fs);
 
 void 
-id_tuples_tms_free(id_tuple_t** x, uint32_t num_tuples);
+id_tuples_pms_free(id_tuple_t** x, uint32_t num_tuples);
 
 //---------------------------------------------------------------------------
 

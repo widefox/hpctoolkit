@@ -118,7 +118,7 @@ void
 id_tuple_constructor
 (
  id_tuple_t *tuple, 
- tms_id_t *ids, 
+ pms_id_t *ids, 
  int ids_length
 )
 {
@@ -153,10 +153,10 @@ id_tuple_copy
 )
 {
   int len = src->length;
-  int ids_bytes = len * sizeof(tms_id_t);
+  int ids_bytes = len * sizeof(pms_id_t);
 
   dest->ids_length = dest->length = len;
-  dest->ids = (tms_id_t *) alloc(ids_bytes);
+  dest->ids = (pms_id_t *) alloc(ids_bytes);
   memcpy(dest->ids, src->ids, ids_bytes); 
 }
 
@@ -176,7 +176,7 @@ int
 id_tuple_fread(id_tuple_t* x, FILE* fs)
 {
     HPCFMT_ThrowIfError(hpcfmt_int2_fread(&(x->length), fs));
-    x->ids = (tms_id_t *) malloc(x->length * sizeof(tms_id_t)); 
+    x->ids = (pms_id_t *) malloc(x->length * sizeof(pms_id_t)); 
     for (uint j = 0; j < x->length; ++j) {
       HPCFMT_ThrowIfError(hpcfmt_int2_fread(&(x->ids[j].kind), fs));
       HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(x->ids[j].index), fs));
@@ -215,7 +215,7 @@ id_tuple_free(id_tuple_t* x)
 // id tuple in thread.db
 //***************************************************************************
 int
-id_tuples_tms_fwrite(uint32_t num_tuples, id_tuple_t* x, FILE* fs)
+id_tuples_pms_fwrite(uint32_t num_tuples, id_tuple_t* x, FILE* fs)
 {
     for (uint i = 0; i < num_tuples; ++i) {
         HPCFMT_ThrowIfError(id_tuple_fwrite(x+i,fs));
@@ -224,7 +224,7 @@ id_tuples_tms_fwrite(uint32_t num_tuples, id_tuple_t* x, FILE* fs)
 }
 
 int
-id_tuples_tms_fread(id_tuple_t** x, uint32_t num_tuples,FILE* fs)
+id_tuples_pms_fread(id_tuple_t** x, uint32_t num_tuples,FILE* fs)
 {
     id_tuple_t * id_tuples = (id_tuple_t *) malloc(num_tuples*sizeof(id_tuple_t));
 
@@ -237,7 +237,7 @@ id_tuples_tms_fread(id_tuple_t** x, uint32_t num_tuples,FILE* fs)
 }
 
 int
-id_tuples_tms_fprint(uint32_t num_tuples, uint64_t id_tuples_size, id_tuple_t* x, FILE* fs)
+id_tuples_pms_fprint(uint32_t num_tuples, uint64_t id_tuples_size, id_tuple_t* x, FILE* fs)
 {
   fprintf(fs,"[Id tuples for %d profiles, total size %ld\n", num_tuples, id_tuples_size);
 
@@ -253,7 +253,7 @@ id_tuples_tms_fprint(uint32_t num_tuples, uint64_t id_tuples_size, id_tuple_t* x
 }
 
 void
-id_tuples_tms_free(id_tuple_t** x, uint32_t num_tuples)
+id_tuples_pms_free(id_tuple_t** x, uint32_t num_tuples)
 {
   for (uint i = 0; i < num_tuples; ++i) {
     free((*x)[i].ids);

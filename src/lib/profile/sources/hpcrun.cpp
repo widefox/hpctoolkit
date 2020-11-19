@@ -120,7 +120,7 @@ HpcrunFSv2::HpcrunFSv2(const stdshim::filesystem::path& fn)
 
   // Generate the hierarchical tuple from the header fields
   {
-    std::vector<tms_id_t> tuple;
+    std::vector<pms_id_t> tuple;
     if(hostid) tuple.push_back({.kind = IDTUPLE_NODE, .index=*hostid});
     if(threadid && *threadid >= 500)  // GPUDEVICE goes before RANK
       tuple.push_back({.kind = IDTUPLE_GPUDEVICE, .index=0});

@@ -92,7 +92,7 @@ MYSOURCES = \
 	Flat-ProfileData.hpp Flat-ProfileData.cpp \
 	\
 	CallPath-Profile.hpp CallPath-Profile.cpp \
-	tms-format.c tms-format.h \
+	pms-format.c pms-format.h \
 	cms-format.c cms-format.h \
 	\
 	StringSet.hpp StringSet.cpp \

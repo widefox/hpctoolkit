@@ -108,13 +108,13 @@ void ThreadAttributes::timepointCnt(unsigned long long cnt) {
   m_timepointCnt = cnt;
 }
 
-const std::vector<tms_id_t>& ThreadAttributes::idTuple() const noexcept {
+const std::vector<pms_id_t>& ThreadAttributes::idTuple() const noexcept {
   if(m_idTuple.empty())
     util::log::fatal{} << "Thread with an empty tuple!";
   return m_idTuple;
 }
 
-void ThreadAttributes::idTuple(const std::vector<tms_id_t>& tuple) {
+void ThreadAttributes::idTuple(const std::vector<pms_id_t>& tuple) {
   if(!m_idTuple.empty())
     util::log::fatal{} << "Attempt to reset a hierarchical tuple!";
   if(tuple.empty())

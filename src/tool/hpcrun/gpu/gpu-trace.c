@@ -361,7 +361,7 @@ gpu_compute_profile_name
  core_profile_trace_data_t * cptd
 )
 {
-  tms_id_t ids[IDTUPLE_MAXTYPES];
+  pms_id_t ids[IDTUPLE_MAXTYPES];
   id_tuple_t id_tuple;
 
   id_tuple_constructor(&id_tuple, ids, IDTUPLE_MAXTYPES);

@@ -80,7 +80,7 @@ using std::string;
 
 #include <lib/banal/StructSimple.hpp>
 
-#include <lib/prof/tms-format.h>
+#include <lib/prof/pms-format.h>
 #include <lib/prof/cms-format.h>
 
 #include <lib/prof-lean/hpcio.h>
@@ -167,7 +167,7 @@ getProfileType(const std::string& filenm)
     ty = ProfType_Flat;
   }else if(filenm.find(".sparse-db") != std::string::npos){ //YUMENG: is->read didn't work, may need to FIX later
     ty = ProfType_SparseDBtmp;
-  }else if(strncmp(buf, HPCTHREADSPARSE_FMT_Magic, HPCTHREADSPARSE_FMT_MagicLen) == 0){ 
+  }else if(strncmp(buf, HPCPROFILESPARSE_FMT_Magic, HPCPROFILESPARSE_FMT_MagicLen) == 0){ 
     ty = ProfType_SparseDBthread;
   }else if(strncmp(buf, HPCCCTSPARSE_FMT_Magic, HPCCCTSPARSE_FMT_MagicLen) == 0){ 
     ty = ProfType_SparseDBcct;

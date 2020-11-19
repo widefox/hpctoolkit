@@ -80,7 +80,7 @@ using std::string;
 #include <lib/prof-lean/hpcrun-fmt.h>
 #include <lib/prof-lean/id-tuple.h>
 #include <lib/prof-lean/tracedb.h>
-#include <lib/prof/tms-format.h>
+#include <lib/prof/pms-format.h>
 #include <lib/prof/cms-format.h>
 
 
@@ -169,7 +169,7 @@ Analysis::Raw::writeAsText_sparseDBtmp(const char* filenm, bool sm_easyToGrep)
 }
 
 bool 
-Analysis::Raw::profileInfoOffsets_sorter(tms_profile_info_t const& lhs, tms_profile_info_t const& rhs) {
+Analysis::Raw::profileInfoOffsets_sorter(pms_profile_info_t const& lhs, pms_profile_info_t const& rhs) {
     return lhs.offset< rhs.offset;
 }
 
@@ -179,7 +179,7 @@ Analysis::Raw::traceHdr_sorter(trace_hdr_t const& lhs, trace_hdr_t const& rhs) {
 }
 
 void
-Analysis::Raw::sortProfileInfo_onOffsets(tms_profile_info_t* x, uint32_t num_prof)
+Analysis::Raw::sortProfileInfo_onOffsets(pms_profile_info_t* x, uint32_t num_prof)
 {
     std::sort(x,x+num_prof,&profileInfoOffsets_sorter);
 }
@@ -202,31 +202,31 @@ Analysis::Raw::writeAsText_sparseDBthread(const char* filenm, bool easygrep)
       DIAG_Throw("error opening thread sparse file '" << filenm << "'");
     }
 
-    tms_hdr_t hdr;
-    int ret = tms_hdr_fread(&hdr, fs);
+    pms_hdr_t hdr;
+    int ret = pms_hdr_fread(&hdr, fs);
     if (ret != HPCFMT_OK) {
       DIAG_Throw("error reading hdr from sparse metrics file '" << filenm << "'");
     }
-    tms_hdr_fprint(&hdr, stdout);
+    pms_hdr_fprint(&hdr, stdout);
 
     uint32_t num_prof = hdr.num_prof;
 
-    //no need to fseek here since hdr is multiple of 8, prof_info_ptr == TMS_hdr_SIZE
-    tms_profile_info_t* x;
-    ret = tms_profile_info_fread(&x,num_prof,fs);
+    //no need to fseek here since hdr is multiple of 8, prof_info_ptr == PMS_hdr_SIZE
+    pms_profile_info_t* x;
+    ret = pms_profile_info_fread(&x,num_prof,fs);
     if (ret != HPCFMT_OK) {
       DIAG_Throw("error reading profile information from sparse metrics file '" << filenm << "'");
     }
-    tms_profile_info_fprint(num_prof,x,stdout);
+    pms_profile_info_fprint(num_prof,x,stdout);
 
     fseek(fs, hdr.id_tuples_sec_ptr, SEEK_SET);
     id_tuple_t* tuples;
     uint64_t tuples_size = hdr.id_tuples_sec_size;
-    ret = id_tuples_tms_fread(&tuples, num_prof,fs);
+    ret = id_tuples_pms_fread(&tuples, num_prof,fs);
     if (ret != HPCFMT_OK) {
       DIAG_Throw("error reading profile identifier tuples from sparse metrics file '" << filenm << "'");
     }
-    id_tuples_tms_fprint(num_prof,tuples_size,tuples,stdout);
+    id_tuples_pms_fprint(num_prof,tuples_size,tuples,stdout);
 
     sortProfileInfo_onOffsets(x,num_prof);
     fseek(fs, hdr.id_tuples_sec_ptr + (MULTIPLE_8(hdr.id_tuples_sec_size)), SEEK_SET);
@@ -234,16 +234,16 @@ Analysis::Raw::writeAsText_sparseDBthread(const char* filenm, bool easygrep)
       hpcrun_fmt_sparse_metrics_t sm;
       sm.num_vals = x[i].num_vals;
       sm.num_nz_cct_nodes = x[i].num_nzctxs;
-      ret = tms_sparse_metrics_fread(&sm,fs);
+      ret = pms_sparse_metrics_fread(&sm,fs);
       if (ret != HPCFMT_OK) {
         DIAG_Throw("error reading sparse metrics data from sparse metrics file '" << filenm << "'");
       }
-      tms_sparse_metrics_fprint(&sm,stdout, NULL, x[i].prof_info_idx, "  ", easygrep);
-      tms_sparse_metrics_free(&sm);
+      pms_sparse_metrics_fprint(&sm,stdout, NULL, x[i].prof_info_idx, "  ", easygrep);
+      pms_sparse_metrics_free(&sm);
     }
    
-    tms_profile_info_free(&x);     
-    id_tuples_tms_free(&tuples, num_prof);
+    pms_profile_info_free(&x);     
+    id_tuples_pms_free(&tuples, num_prof);
 
     hpcio_fclose(fs);
   }

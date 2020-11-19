@@ -524,7 +524,7 @@ hpcrun_id_tuple_cputhread
   int rank = hpcrun_get_rank();
   core_profile_trace_data_t *cptd = &(td->core_profile_trace_data);
 
-  tms_id_t ids[IDTUPLE_MAXTYPES];
+  pms_id_t ids[IDTUPLE_MAXTYPES];
   id_tuple_t id_tuple;
 
   id_tuple_constructor(&id_tuple, ids, IDTUPLE_MAXTYPES);

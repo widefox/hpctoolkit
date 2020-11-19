@@ -115,7 +115,7 @@ Hpcrun4::Hpcrun4(const stdshim::filesystem::path& fn)
   // Try to read the hierarchical tuple, if we fail synth from the header data
   id_tuple_t sfTuple;
   if(hpcrun_sparse_read_id_tuple(file, &sfTuple) == SF_SUCCEED) {
-    std::vector<tms_id_t> tuple;
+    std::vector<pms_id_t> tuple;
     tuple.reserve(sfTuple.length);
     for(size_t i = 0; i < sfTuple.length; i++)
       tuple.push_back(sfTuple.ids[i]);
@@ -124,7 +124,7 @@ Hpcrun4::Hpcrun4(const stdshim::filesystem::path& fn)
   } else {
     util::log::warning{} << "Synthesizing hierarchical tuple for: "
                          << path.string();
-    std::vector<tms_id_t> tuple;
+    std::vector<pms_id_t> tuple;
     if(hostid) tuple.push_back({.kind = IDTUPLE_NODE, .index=*hostid});
     if(threadid && *threadid >= 500)  // GPUDEVICE goes before RANK
       tuple.push_back({.kind = IDTUPLE_GPUDEVICE, .index=0});

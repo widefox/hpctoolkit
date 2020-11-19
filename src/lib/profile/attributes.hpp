@@ -50,7 +50,7 @@
 #include "accumulators.hpp"
 
 #include "util/ragged_vector.hpp"
-#include "lib/prof/tms-format.h"
+#include "lib/prof/pms-format.h"
 #include "lib/prof-lean/id-tuple.h"
 
 #include <functional>
@@ -98,8 +98,8 @@ public:
   /// Get or set the hierarchical tuple assigned to this Thread. Should never
   /// be empty.
   // MT: Externally Synchronized
-  const std::vector<tms_id_t>& idTuple() const noexcept;
-  void idTuple(const std::vector<tms_id_t>&);
+  const std::vector<pms_id_t>& idTuple() const noexcept;
+  void idTuple(const std::vector<pms_id_t>&);
 
 private:
   // TODO: Remove these 4 fields and replace the bits above with functions that
@@ -112,7 +112,7 @@ private:
   stdshim::optional<unsigned long> m_threadid;
   stdshim::optional<unsigned long> m_procid;
   stdshim::optional<unsigned long long> m_timepointCnt;
-  mutable std::vector<tms_id_t> m_idTuple;
+  mutable std::vector<pms_id_t> m_idTuple;
 };
 
 /// A single Thread within a Profile. Or something like that.
