@@ -289,10 +289,15 @@ ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
   }
 
   std::ostringstream ss2;
-  ss2 << "<MetricDB i=\"" << ids.execution << "\""
-                  " n=" << util::xmlquoted(m.name()+" (I)") << "/>\n"
-         "<MetricDB i=\"" << ids.function << "\""
-                  " n=" << util::xmlquoted(m.name()+" (E)") << "/>\n";
+  const auto f = [&](MetricScope ms, MetricScope p_ms,
+                     unsigned int id, std::string suffix) {
+    if(!m.scopes().has(ms)) return;
+    ss2 << "<MetricDB i=\"" << id << "\""
+                    " n=" << util::xmlquoted(m.scopes().has(p_ms) ? m.name()+suffix : m.name())
+        << "/>\n";
+  };
+  f(MetricScope::execution, MetricScope::function, ids.execution, " (I)");
+  f(MetricScope::function, MetricScope::execution, ids.function, " (E)");
   metricdb_tags = ss2.str();
 }
 
