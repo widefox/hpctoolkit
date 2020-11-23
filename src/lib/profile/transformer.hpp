@@ -64,10 +64,6 @@ public:
     sink = std::move(se);
   }
 
-  /// Callback issued when a new Metric is emitted into the Pipe.
-  // MT: Internally Synchronized
-  virtual void metric(Metric& m) {};
-
   /// Callback issued when a new Context is emitted into the Pipe.
   // MT: Internally Synchronized
   virtual Context& context(Context& c, Scope&) { return c; }

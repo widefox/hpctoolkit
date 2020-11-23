@@ -90,12 +90,15 @@ public:
   std::unordered_map<stdshim::filesystem::path, stdshim::filesystem::path> prefixes;
 
   /// Statistics adding Transformer
-  class StatisticsExtender final : public ProfileTransformer {
+  class StatisticsExtender final : public ProfileFinalizer {
   public:
     StatisticsExtender(ProfArgs& a) : args(a) {};
     ~StatisticsExtender() = default;
 
-    void metric(Metric&) override;
+    ExtensionClass provides() const noexcept override { return {}; }
+    ExtensionClass requires() const noexcept override { return {}; }
+
+    void metric(const Metric&, Metric::StatsAccess) override;
 
   private:
     ProfArgs& args;

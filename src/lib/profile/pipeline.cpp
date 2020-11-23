@@ -470,16 +470,8 @@ Metric& Source::metric(Metric::Settings s) {
   auto x = pipe->mets.emplace(pipe->structs.metric, std::move(s));
   slocal->thawedMetrics.insert(&x.first());
   if(!x.second) return x.first();
-  for(std::size_t i = 0; i < pipe->transformers.size(); i++) {
-    try {
-      if(i != tskip)
-        pipe->transformers[i].get().metric(x.first());
-    } catch(std::exception& e) {
-      util::log::fatal() << "Exception caught while processing metric " << s.name
-                         << " through transformer " << i << "\n"
-                         << "  what(): " << e.what();
-    }
-  }
+  for(ProfileFinalizer& f: pipe->finalizers.all)
+    f.metric(x.first(), x.first().statsAccess());
   return x.first();
 }
 

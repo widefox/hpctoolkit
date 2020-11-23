@@ -627,7 +627,7 @@ static fs::path search(const std::unordered_map<fs::path, fs::path>& prefixes,
   return fs::path();
 }
 
-void ProfArgs::StatisticsExtender::metric(Metric& m) {
+void ProfArgs::StatisticsExtender::metric(const Metric& m, Metric::StatsAccess mas) {
   if(m.visibility() == Metric::Settings::visibility_t::invisible) return;
   Metric::Statistics s;
   s.sum = args.stats.sum;
@@ -636,7 +636,7 @@ void ProfArgs::StatisticsExtender::metric(Metric& m) {
   s.max = args.stats.max;
   s.stddev = args.stats.stddev;
   s.cfvar = args.stats.cfvar;
-  m.statsAccess().requestStatistics(std::move(s));
+  mas.requestStatistics(std::move(s));
 }
 
 void ProfArgs::Prefixer::file(const File& f, stdshim::filesystem::path& p) {
