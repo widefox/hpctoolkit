@@ -463,17 +463,18 @@ File& Source::file(const stdshim::filesystem::path& p) {
 
 Metric& Source::metric(Metric::Settings s) {
   if(!limit().hasAttributes())
-    util::log::fatal() << "Source did not register for `attributes` emission!";
+    util::log::fatal() << "Source did not register for `attributes` emission!";\
+  Metric::Statistics ss;
   for(std::size_t i = 0; i < pipe->transformers.size(); i++)
     try {
       if(i != tskip)
-        s = pipe->transformers[i].get().metric(std::move(s));
+        s = pipe->transformers[i].get().metric(std::move(s), ss);
     } catch(std::exception& e) {
       util::log::fatal() << "Exception caught while processing metric " << s.name
                          << " through transformer " << i << "\n"
                          << "  what(): " << e.what();
     }
-  auto x = pipe->mets.emplace(pipe->structs.metric, s);
+  auto x = pipe->mets.emplace(pipe->structs.metric, std::move(s), std::move(ss));
   auto r = &x.first();
   if(x.second) {
     for(auto& s: pipe->sinks) {

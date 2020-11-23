@@ -95,7 +95,7 @@ public:
     StatisticsExtender(ProfArgs& a) : args(a) {};
     ~StatisticsExtender() = default;
 
-    Metric::Settings metric(Metric::Settings&&) override;
+    Metric::Settings metric(Metric::Settings&&, Metric::Statistics&) override;
 
   private:
     ProfArgs& args;

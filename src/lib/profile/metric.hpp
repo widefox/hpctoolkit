@@ -90,12 +90,6 @@ public:
   using accumulate_t = std::function<double(double)>;
   using finalize_t = std::function<double(const std::vector<double>&)>;
 
-  // Standard Statistics are hard-coded based on the following enumeration.
-  enum class standard_t {
-    sum,  // Sum of thread-local values
-    mean,  // Average of non-zero thread-local values
-  };
-
   /// Statistics are created by the associated Metric.
   Statistic() = delete;
 
@@ -108,6 +102,10 @@ public:
   /// TODO: Figure out what property this indicates mathematically
   // MT: Safe (const)
   bool showPercent() const noexcept { return m_showPerc; }
+
+  /// Get whether this Statistic should be presented by default.
+  // MT: Safe (const)
+  bool visibleByDefault() const noexcept { return m_visibleByDefault; }
 
   /// Type for formulas. Each element is either a string or the index of a Partial.
   /// If all such indices are replaced by variable names and the entire vector
@@ -122,9 +120,10 @@ private:
   const std::string m_suffix;
   const bool m_showPerc;
   const formula_t m_formula;
+  const bool m_visibleByDefault;
 
   friend class Metric;
-  Statistic(std::string, bool, formula_t);
+  Statistic(std::string, bool, formula_t, bool);
 };
 
 /// A StatisticPartial is the "accumulate" and "combine" parts of a Statistic.
@@ -153,7 +152,7 @@ private:
     : m_accum(std::move(a)), m_combin(std::move(c)), m_idx(idx) {};
 };
 
-// Just a simple metric class, nothing to see here
+/// Metrics represent something that is measured at execution.
 class Metric final {
 public:
   using ud_t = util::ragged_vector<const Metric&>;
@@ -168,10 +167,10 @@ public:
 
   /// Structure to be used for creating new Metrics. Encapsulates a number of
   /// smaller settings into a convienent structure.
-  struct Settings final {
+  struct Settings {
     Settings()
-      : sum(false), mean(false), min(false), max(false), stddev(false),
-        cfvar(false) {};
+      : scopes(MetricScopeSet::all), visibility(visibility_t::shownByDefault)
+      {};
     Settings(std::string n, std::string d) : Settings() {
       name = std::move(n);
       description = std::move(d);
@@ -180,29 +179,40 @@ public:
     std::string name;
     std::string description;
 
-    // For now the Statistics are all explicitly requested
-    bool sum : 1;
-    bool mean : 1;
-    bool min : 1;
-    bool max : 1;
-    bool stddev : 1;
-    bool cfvar : 1;
+    // The usual cost-based Metrics have all possible Scopes, but not all
+    // Metrics do. This specifies which ones are available.
+    MetricScopeSet scopes;
+
+    // Metrics can have multiple visibilities depending on their needs.
+    enum class visibility_t {
+      shownByDefault, hiddenByDefault, invisible
+    } visibility;
 
     bool operator==(const Settings& o) const noexcept {
       return name == o.name && description == o.description;
     }
   };
 
-  Metric(ud_t::struct_t&, Settings);
-  Metric(Metric&& m);
+  /// Eventually the set of requested Statistics will be more general, but for
+  /// now we just use an explicit bitfield.
+  struct Statistics final {
+    Statistics()
+      : sum(false), mean(false), min(false), max(false), stddev(false),
+        cfvar(false) {};
 
-  const std::string& name() const { return u_settings().name; }
-  const std::string& description() const { return u_settings().description; }
+    bool sum : 1;
+    bool mean : 1;
+    bool min : 1;
+    bool max : 1;
+    bool stddev : 1;
+    bool cfvar : 1;
+  };
+
+  const std::string& name() const noexcept { return u_settings().name; }
+  const std::string& description() const noexcept { return u_settings().description; }
+  MetricScopeSet scopes() const noexcept { return u_settings().scopes; }
 
   mutable ud_t userdata;
-
-  /// Get the set of Scopes that this Metric supports.
-  MetricScopeSet scopes() const noexcept;
 
   /// List the StatisticPartials that are included in this Metric.
   // MT: Safe (const)
@@ -222,12 +232,15 @@ public:
   // MT: Safe (const), Unstable (before notifyThreadFinal)
   const MetricAccumulator* getFor(const Thread::Temporary&, const Context& c) const noexcept;
 
+  Metric(Metric&& m);
+
 private:
   util::uniqable_key<Settings> u_settings;
   std::vector<StatisticPartial> m_partials;
   std::vector<Statistic> m_stats;
 
   friend class ProfilePipeline;
+  Metric(ud_t::struct_t&, Settings, Statistics);
   // Finalize the MetricAccumulators for a Thread.
   // MT: Internally Synchronized
   static void finalize(Thread::Temporary& t) noexcept;

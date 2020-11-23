@@ -87,8 +87,9 @@ unsigned int Metric::ScopedIdentifiers::get(MetricScope s) const noexcept {
   std::abort();  // unreachable
 }
 
-Statistic::Statistic(std::string suff, bool showp, formula_t form)
-  : m_suffix(std::move(suff)), m_showPerc(showp), m_formula(std::move(form)) {};
+Statistic::Statistic(std::string suff, bool showp, formula_t form, bool showBD)
+  : m_suffix(std::move(suff)), m_showPerc(showp), m_formula(std::move(form)),
+    m_visibleByDefault(showBD) {};
 
 Metric::Metric(Metric&& m)
   : userdata(std::move(m.userdata), std::cref(*this)),
@@ -96,59 +97,66 @@ Metric::Metric(Metric&& m)
     m_partials(std::move(m.m_partials)),
     m_stats(std::move(m.m_stats)) {};
 
-Metric::Metric(ud_t::struct_t& rs, Settings s)
+Metric::Metric(ud_t::struct_t& rs, Settings s, Statistics ss)
   : userdata(rs, std::cref(*this)), u_settings(std::move(s)) {
+  if(s.visibility == Settings::visibility_t::invisible) {
+    // If its not going to be presented anyway, don't do anything with it.
+    if(ss.sum || ss.mean || ss.max || ss.min || ss.stddev || ss.cfvar)
+      util::log::error{} << "Non-presentable Metrics should not have Statistics!";
+    return;
+  }
+
   size_t cntIdx = -1;
-  if(s.mean || s.stddev || s.cfvar) {
+  if(ss.mean || ss.stddev || ss.cfvar) {
     cntIdx = m_partials.size();
     m_partials.push_back({[](double x) -> double { return x == 0 ? 0 : 1; },
                           Statistic::combination_t::sum, cntIdx});
   }
   size_t xIdx = -1;
-  if(s.sum || s.mean || s.stddev || s.cfvar) {
+  if(ss.sum || ss.mean || ss.stddev || ss.cfvar) {
     xIdx = m_partials.size();
     m_partials.push_back({[](double x) -> double { return x; },
                           Statistic::combination_t::sum, xIdx});
   }
   size_t x2Idx = -1;
-  if(s.stddev || s.cfvar) {
+  if(ss.stddev || ss.cfvar) {
     x2Idx = m_partials.size();
     m_partials.push_back({[](double x) -> double { return x * x; },
                           Statistic::combination_t::sum, x2Idx});
   }
   size_t minIdx = -1;
-  if(s.min) {
+  if(ss.min) {
     minIdx = m_partials.size();
     m_partials.push_back({[](double x) -> double { return x; },
                           Statistic::combination_t::min, minIdx});
   }
   size_t maxIdx = -1;
-  if(s.max) {
+  if(ss.max) {
     maxIdx = m_partials.size();
     m_partials.push_back({[](double x) -> double { return x; },
                           Statistic::combination_t::max, maxIdx});
   }
 
-  if(s.sum)
-    m_stats.push_back({"Sum", true, {(Statistic::formula_t::value_type)xIdx} });
-  if(s.mean)
-    m_stats.push_back({"Mean", false, {xIdx, "/", cntIdx} });
-  if(s.stddev)
+  if(ss.sum)
+    m_stats.push_back({"Sum", true, {(Statistic::formula_t::value_type)xIdx},
+                       u_settings().visibility == Settings::visibility_t::shownByDefault});
+  if(ss.mean)
+    m_stats.push_back({"Mean", false, {xIdx, "/", cntIdx},
+                       u_settings().visibility == Settings::visibility_t::shownByDefault});
+  if(ss.stddev)
     m_stats.push_back({"StdDev", false,
-      {"sqrt((", x2Idx, "/", cntIdx, ") - pow(", xIdx, "/", cntIdx, ", 2))"} });
-  if(s.cfvar)
+      {"sqrt((", x2Idx, "/", cntIdx, ") - pow(", xIdx, "/", cntIdx, ", 2))"},
+      u_settings().visibility == Settings::visibility_t::shownByDefault});
+  if(ss.cfvar)
     m_stats.push_back({"CfVar", false,
-      {"sqrt((", x2Idx, "/", cntIdx, ") - pow(", xIdx, "/", cntIdx, ", 2)) / (", xIdx, "/", cntIdx, ")"} });
-  if(s.min)
-    m_stats.push_back({"Min", false, {(Statistic::formula_t::value_type)minIdx} });
-  if(s.max)
-    m_stats.push_back({"Max", false, {(Statistic::formula_t::value_type)maxIdx} });
-}
-
-MetricScopeSet Metric::scopes() const noexcept {
-  // For now, its always point/function/execution
-  return MetricScopeSet(MetricScope::point) +
-    MetricScopeSet(MetricScope::function) + MetricScopeSet(MetricScope::execution);
+      {"sqrt((", x2Idx, "/", cntIdx, ") - pow(", xIdx, "/", cntIdx, ", 2)) / (", xIdx, "/", cntIdx, ")"},
+      u_settings().visibility == Settings::visibility_t::shownByDefault});
+  if(ss.min)
+    m_stats.push_back({"Min", false, {(Statistic::formula_t::value_type)minIdx},
+                       u_settings().visibility == Settings::visibility_t::shownByDefault});
+  if(ss.max)
+    m_stats.push_back({"Max", false, {(Statistic::formula_t::value_type)maxIdx},
+                       u_settings().visibility == Settings::visibility_t::shownByDefault});
 }
 
 const std::vector<StatisticPartial>& Metric::partials() const noexcept {

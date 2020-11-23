@@ -219,7 +219,29 @@ void Hpcrun4::read(const DataClass& needed) {
       if(m.flags.fields.valFmt == MetricFlags_ValFmt_Real) isInt = false;
       else if(m.flags.fields.valFmt == MetricFlags_ValFmt_Int) isInt = true;
       else util::log::fatal() << "Invalid metric value format!";
-      metrics.emplace(id, sink.metric({m.name, m.description}));
+      Metric::Settings settings{m.name, m.description};
+      switch(m.flags.fields.show) {
+      case HPCRUN_FMT_METRIC_SHOW: break;  // Default
+      case HPCRUN_FMT_METRIC_HIDE:
+        settings.visibility = Metric::Settings::visibility_t::hiddenByDefault;
+        break;
+      case HPCRUN_FMT_METRIC_SHOW_INCLUSIVE:
+        util::log::error{} << "Show parameter SHOW_INCLUSIVE does not have a clear definition,"
+                              " " << m.name << " may be presented incorrectly.";
+        settings.scopes &= {MetricScope::execution, MetricScope::point};
+        break;
+      case HPCRUN_FMT_METRIC_SHOW_EXCLUSIVE:
+        settings.scopes &= {MetricScope::function, MetricScope::point};
+        break;
+      case HPCRUN_FMT_METRIC_INVISIBLE:
+        settings.visibility = Metric::Settings::visibility_t::invisible;
+        break;
+      default:
+        util::log::error{} << "Unknown show parameter " << (unsigned int)m.flags.fields.show
+                           << ", " << m.name << " may be presented incorrectly.";
+        break;
+      }
+      metrics.emplace(id, sink.metric(std::move(settings)));
       metricInt.emplace(id, isInt);
       hpcrun_fmt_metricDesc_free(&m, std::free);
     }

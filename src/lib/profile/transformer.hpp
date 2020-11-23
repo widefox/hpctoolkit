@@ -66,7 +66,7 @@ public:
 
   /// Callback issued when a new Metric is emitted into the Pipe.
   // MT: Internally Synchronized
-  virtual Metric::Settings metric(Metric::Settings&& ms) { return ms; };
+  virtual Metric::Settings metric(Metric::Settings&& ms, Metric::Statistics& ss) { return ms; }
 
   /// Callback issued when a new Context is emitted into the Pipe.
   // MT: Internally Synchronized

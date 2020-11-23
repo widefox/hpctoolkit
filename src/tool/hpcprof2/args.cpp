@@ -627,13 +627,15 @@ static fs::path search(const std::unordered_map<fs::path, fs::path>& prefixes,
   return fs::path();
 }
 
-Metric::Settings ProfArgs::StatisticsExtender::metric(Metric::Settings&& ms) {
-  ms.sum = ms.sum || args.stats.sum;
-  ms.mean = ms.mean || args.stats.mean;
-  ms.min = ms.min || args.stats.min;
-  ms.max = ms.max || args.stats.max;
-  ms.stddev = ms.stddev || args.stats.stddev;
-  ms.cfvar = ms.cfvar || args.stats.cfvar;
+Metric::Settings ProfArgs::StatisticsExtender::metric(Metric::Settings&& ms, Metric::Statistics& ss) {
+  if(ms.visibility != Metric::Settings::visibility_t::invisible) {
+    ss.sum = ss.sum || args.stats.sum;
+    ss.mean = ss.mean || args.stats.mean;
+    ss.min = ss.min || args.stats.min;
+    ss.max = ss.max || args.stats.max;
+    ss.stddev = ss.stddev || args.stats.stddev;
+    ss.cfvar = ss.cfvar || args.stats.cfvar;
+  }
   return ms;
 }
 

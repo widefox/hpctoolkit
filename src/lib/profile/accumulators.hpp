@@ -59,7 +59,7 @@ class StatisticPartial;
 
 /// Every Metric can have values at multiple Scopes pertaining to the subtree
 /// rooted at a particular Context with Metric data.
-enum MetricScope {
+enum class MetricScope : size_t {
   /// Encapsulates the current Context, and no other nodes. This references
   /// exactly where the data arose, and is the smallest MetricScope.
   point,
@@ -84,9 +84,15 @@ private:
   MetricScopeSet(const base& b) : base(b) {};
 public:
   MetricScopeSet() = default;
-  MetricScopeSet(MetricScope s) : base(1<<s) {};
+  MetricScopeSet(MetricScope s) : base(1<<static_cast<size_t>(s)) {};
+  MetricScopeSet(std::initializer_list<MetricScope> l) : base(0) {
+    for(const auto s: l) base::set(static_cast<size_t>(s));
+  }
 
-  bool has(MetricScope s) const noexcept { return base::operator[](s); }
+  static inline constexpr struct all_t {} all = {};
+  MetricScopeSet(all_t) : base(0) { base::set(); }
+
+  bool has(MetricScope s) const noexcept { return base::operator[](static_cast<size_t>(s)); }
 
   MetricScopeSet operator|(const MetricScopeSet& o) { return (base)*this | (base)o; }
   MetricScopeSet operator+(const MetricScopeSet& o) { return (base)*this | (base)o; }

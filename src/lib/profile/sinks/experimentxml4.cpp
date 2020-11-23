@@ -198,9 +198,9 @@ static void finalizeFormula(std::ostream& os, const std::string& mode,
 }
 
 ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
-  if(!m.scopes().has(MetricScope::function) || !m.scopes().has(MetricScope::execution))
-    util::log::fatal{} << "Metric isn't function/execution!";
-  if(m.partials().size() > 128 || m.statistics().size() > 128)
+  if(!m.scopes().has(MetricScope::function) && !m.scopes().has(MetricScope::execution))
+    util::log::fatal{} << "Metric " << m.name() << " has neither function nor execution!";
+  if(m.partials().size() > 64 || m.statistics().size() > 64)
     util::log::fatal{} << "Too many Statistics/Partials!";
   const auto& ids = m.userdata[exml.src.mscopeIdentifiers()];
 
@@ -211,56 +211,78 @@ ExperimentXML4::udMetric::udMetric(const Metric& m, ExperimentXML4& exml) {
     for(size_t idx = 0; idx < m.partials().size(); idx++) {
       const auto& partial = m.partials()[idx];
       const std::string name = m.name() + ":PARTIAL:" + std::to_string(idx);
-      const auto exec_id = (ids.execution << 8) + idx;
-      const auto func_id = (ids.function << 8) + idx;
-      ss << "<Metric i=\"" << exec_id << "\" o=\"" << exec_id << "\" "
-                        "n=" << util::xmlquoted(name+" (I)") << " "
-                        "md=" << util::xmlquoted(m.description()) << " "
+
+      const auto f = [&](MetricScope ms, MetricScope p_ms,
+                         unsigned int id, unsigned int p_id,
+                         std::string suffix, std::string type) {
+        if(m.scopes().has(ms)) {
+          ss << "<Metric i=\"" << id << "\" o=\"" << id << "\" "
+                            "n=" << util::xmlquoted(m.scopes().has(p_ms) ? name+suffix : name) << " "
+                            "md=" << util::xmlquoted(m.description()) << " "
+                            "v=\"derived-incr\" "
+                            "t=\"" << type << "\" partner=\"" << p_id << "\" "
+                            "show=\"4\" show-percent=\"0\">\n";
+          combineFormula(ss, id, partial);
+          ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+                "</Metric>\n";
+        } else {
+          ss << "<Metric i=\"" << id << "\" o=\"" << id << "\" "
+                        "n=" << util::xmlquoted(name+" INTERNAL") << " "
                         "v=\"derived-incr\" "
-                        "t=\"inclusive\" partner=\"" << func_id << "\" "
-                        "show=\"4\" show-percent=\"0\">\n";
-      combineFormula(ss, exec_id, partial);
-      ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
-            "</Metric>\n"
-            "<Metric i=\"" << func_id << "\" o=\"" << func_id << "\" "
-                        "n=" << util::xmlquoted(name+" (E)") << " "
-                        "md=" << util::xmlquoted(m.description()) << " "
-                        "v=\"derived-incr\" "
-                        "t=\"exclusive\" partner=\"" << exec_id << "\" "
-                        "show=\"4\" show-percent=\"0\">\n";
-      combineFormula(ss, func_id, partial);
-      ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
-            "</Metric>\n";
+                        "t=\"" << type << "\" partner=\"" << p_id << "\" "
+                        "show=\"4\" show-percent=\"0\"/>\n";
+        }
+      };
+
+      const auto exec_id = m.scopes().has(MetricScope::execution)
+                           ? (ids.execution << 8) + idx
+                           : (ids.function << 8) + 64 + idx;
+      const auto func_id = m.scopes().has(MetricScope::function)
+                           ? (ids.function << 8) + idx
+                           : (ids.execution << 8) + 64 + idx;
+      f(MetricScope::execution, MetricScope::function, exec_id, func_id,
+        " (I)", "inclusive");
+      f(MetricScope::function, MetricScope::execution, func_id, exec_id,
+        " (E)", "exclusive");
     }
 
     // Second pass: handle all the Statistics.
     for(size_t idx = 0; idx < m.statistics().size(); idx++) {
       const auto& stat = m.statistics()[idx];
       const std::string name = m.name() + ":" + stat.suffix();
-      const auto exec_id = (ids.execution << 8) + 256-m.statistics().size() + idx;
-      const auto func_id = (ids.function << 8) + 256-m.statistics().size() + idx;
-      ss << "<Metric i=\"" << exec_id << "\" o=\"" << exec_id << "\" "
-                        "n=" << util::xmlquoted(name+" (I)") << " "
-                        "md=" << util::xmlquoted(m.description()) << " "
+      const auto f = [&](MetricScope ms, MetricScope p_ms,
+                         unsigned int id, unsigned int p_id,
+                         unsigned int base, std::string suffix, std::string type) {
+        if(m.scopes().has(ms)) {
+          ss << "<Metric i=\"" << id << "\" o=\"" << id << "\" "
+                            "n=" << util::xmlquoted(m.scopes().has(p_ms) ? name+suffix : name) << " "
+                            "md=" << util::xmlquoted(m.description()) << " "
+                            "v=\"derived-incr\" "
+                            "t=\"" << type << "\" partner=\"" << p_id << "\" "
+                            "show=\"" << (stat.visibleByDefault() ? "1" : "0") << "\" "
+                            "show-percent=\"" << (stat.showPercent() ? "1" : "0") << "\">\n";
+          finalizeFormula(ss, "view", base, stat);
+          ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
+                "</Metric>\n";
+        } else {
+          ss << "<Metric i=\"" << id << "\" o=\"" << id << "\" "
+                        "n=" << util::xmlquoted(name+" INTERNAL") << " "
                         "v=\"derived-incr\" "
-                        "t=\"inclusive\" partner=\"" << func_id << "\" "
-                        "show=\"1\" "
-                        "show-percent=\"" << (stat.showPercent() ? "1" : "0")
-                     << "\">\n";
-      finalizeFormula(ss, "view", ids.execution << 8, stat);
-      ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
-            "</Metric>\n"
-            "<Metric i=\"" << func_id << "\" o=\"" << func_id << "\" "
-                        "n=" << util::xmlquoted(name+" (E)") << " "
-                        "md=" << util::xmlquoted(m.description()) << " "
-                        "v=\"derived-incr\" "
-                        "t=\"exclusive\" partner=\"" << exec_id << "\" "
-                        "show=\"1\" "
-                        "show-percent=\"" << (stat.showPercent() ? "1" : "0")
-                     << "\">\n";
-      finalizeFormula(ss, "view", ids.function << 8, stat);
-      ss << "<Info><NV n=\"units\" v=\"events\"/></Info>\n"
-            "</Metric>\n";
+                        "t=\"" << type << "\" partner=\"" << p_id << "\" "
+                        "show=\"4\" show-percent=\"0\"/>\n";
+        }
+      };
+
+      const auto exec_id = m.scopes().has(MetricScope::execution)
+                           ? (ids.execution << 8) + 256-m.statistics().size() + idx
+                           : (ids.function << 8) + 256-m.statistics().size() + 64 + idx;
+      const auto func_id = m.scopes().has(MetricScope::function)
+                           ? (ids.function << 8) + 256-m.statistics().size() + idx
+                           : (ids.execution << 8) + 256-m.statistics().size() + 64 + idx;
+      f(MetricScope::execution, MetricScope::function, exec_id, func_id,
+        ids.execution << 8, " (I)", "inclusive");
+      f(MetricScope::function, MetricScope::execution, func_id, exec_id,
+        ids.function << 8, " (E)", "exclusive");
     }
 
     metric_tags = ss.str();
