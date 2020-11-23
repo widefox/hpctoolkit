@@ -363,6 +363,9 @@ void ProfilePipeline::run() {
           for(const auto& t: sl.threads) s().notifyThreadFinal(t);
       // Clean up the Source-local data.
       sl.threads.clear();
+      if(!sl.thawedMetrics.empty())
+        util::log::fatal{} << "Source exited without freezing all its Metrics!";
+      sl.thawedMetrics.clear();
     }
 
     // Make sure everything has been read before we write anything.
@@ -464,25 +467,30 @@ File& Source::file(const stdshim::filesystem::path& p) {
 Metric& Source::metric(Metric::Settings s) {
   if(!limit().hasAttributes())
     util::log::fatal() << "Source did not register for `attributes` emission!";\
-  Metric::Statistics ss;
-  for(std::size_t i = 0; i < pipe->transformers.size(); i++)
+  auto x = pipe->mets.emplace(pipe->structs.metric, std::move(s));
+  slocal->thawedMetrics.insert(&x.first());
+  if(!x.second) return x.first();
+  for(std::size_t i = 0; i < pipe->transformers.size(); i++) {
     try {
       if(i != tskip)
-        s = pipe->transformers[i].get().metric(std::move(s), ss);
+        pipe->transformers[i].get().metric(x.first());
     } catch(std::exception& e) {
       util::log::fatal() << "Exception caught while processing metric " << s.name
                          << " through transformer " << i << "\n"
                          << "  what(): " << e.what();
     }
-  auto x = pipe->mets.emplace(pipe->structs.metric, std::move(s), std::move(ss));
-  auto r = &x.first();
-  if(x.second) {
-    for(auto& s: pipe->sinks) {
-      if(s.dataLimit.hasAttributes()) s().notifyMetric(*r);
-    }
-    r->userdata.initialize();
   }
-  return *r;
+  return x.first();
+}
+
+void Source::metricFreeze(Metric& m) {
+  if(m.freeze()) {
+    for(auto& s: pipe->sinks) {
+      if(s.dataLimit.hasAttributes()) s().notifyMetric(m);
+    }
+    m.userdata.initialize();
+  }
+  slocal->thawedMetrics.erase(&m);
 }
 
 Context& Source::global() { return *pipe->cct; }

@@ -211,6 +211,7 @@ public:
   const std::string& name() const noexcept { return u_settings().name; }
   const std::string& description() const noexcept { return u_settings().description; }
   MetricScopeSet scopes() const noexcept { return u_settings().scopes; }
+  Settings::visibility_t visibility() const noexcept { return u_settings().visibility; }
 
   mutable ud_t userdata;
 
@@ -234,13 +235,38 @@ public:
 
   Metric(Metric&& m);
 
+  /// Special reference to a Metric for adding Statistics and whatnot.
+  /// Useful for limiting access to a Metric for various purposes.
+  class StatsAccess final {
+  public:
+    StatsAccess(Metric& m) : m(m) {};
+
+    /// Request the given standard Statistics to be added to the referenced Metric.
+    // MT: Internally Synchronized
+    void requestStatistics(Statistics);
+
+  private:
+    Metric& m;
+  };
+
+  /// Convience function to generate a StatsAccess handle.
+  StatsAccess statsAccess() { return StatsAccess{*this}; }
+
 private:
   util::uniqable_key<Settings> u_settings;
+  Statistics m_thawed_stats;
+  std::mutex m_frozen_lock;
+  std::atomic<bool> m_frozen;
   std::vector<StatisticPartial> m_partials;
   std::vector<Statistic> m_stats;
 
   friend class ProfilePipeline;
-  Metric(ud_t::struct_t&, Settings, Statistics);
+  Metric(ud_t::struct_t&, Settings);
+  // "Freeze" the current Statistics and Partials. All requests through
+  // StatsAccess must be processed before this point.
+  // Returns true if this call was the one to perform the freeze.
+  // MT: Internally Synchronized
+  bool freeze();
   // Finalize the MetricAccumulators for a Thread.
   // MT: Internally Synchronized
   static void finalize(Thread::Temporary& t) noexcept;

@@ -246,6 +246,7 @@ void Hpcrun4::read(const DataClass& needed) {
       hpcrun_fmt_metricDesc_free(&m, std::free);
     }
     if(id < 0) util::log::fatal() << "Hpcrun4: Error reading metric entry!";
+    for(const auto& im: metrics) sink.metricFreeze(im.second);
   }
   if(needed.hasReferences()) {
     int id;

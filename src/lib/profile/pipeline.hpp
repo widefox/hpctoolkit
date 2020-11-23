@@ -276,6 +276,7 @@ private:
   // Internal Source-local storage structure. Externally Synchronized.
   struct SourceLocal {
     std::vector<Thread::Temporary> threads;
+    std::unordered_set<Metric*> thawedMetrics;
   };
 
 public:
@@ -312,10 +313,17 @@ public:
     // MT: Externally Synchronized (this), Internally Synchronized
     File& file(const stdshim::filesystem::path&);
 
-    /// Emit a new Metric into the Pipeline.
+    /// Emit a new Metric into the Pipeline. The returned Metric may not be
+    /// used until after a call to metricFreeze.
     /// DataClass: `attributes`
     // MT: Externally Synchronized (this), Internally Synchronized
     Metric& metric(Metric::Settings);
+
+    /// "Freeze" the given previously emitted Metric. All requests through
+    /// Metric::StatsAccess must complete prior to this call.
+    /// DataClass: `attributes`
+    // MT: Externally Synchronized (this), Internally Synchronized
+    void metricFreeze(Metric&);
 
     /// Reference the global Context.
     // MT: Externally Synchronized (this), Internally Synchronized

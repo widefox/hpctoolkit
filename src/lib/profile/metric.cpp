@@ -91,20 +91,59 @@ Statistic::Statistic(std::string suff, bool showp, formula_t form, bool showBD)
   : m_suffix(std::move(suff)), m_showPerc(showp), m_formula(std::move(form)),
     m_visibleByDefault(showBD) {};
 
-Metric::Metric(Metric&& m)
-  : userdata(std::move(m.userdata), std::cref(*this)),
-    u_settings(std::move(m.u_settings)),
-    m_partials(std::move(m.m_partials)),
-    m_stats(std::move(m.m_stats)) {};
+Metric::Metric(Metric&& o)
+  : userdata(std::move(o.userdata), std::cref(*this)),
+    u_settings(std::move(o.u_settings)),
+    m_thawed_stats(std::move(o.m_thawed_stats)),
+    m_frozen(o.m_frozen.load(std::memory_order_relaxed)),
+    m_partials(std::move(o.m_partials)),
+    m_stats(std::move(o.m_stats)) {};
 
-Metric::Metric(ud_t::struct_t& rs, Settings s, Statistics ss)
-  : userdata(rs, std::cref(*this)), u_settings(std::move(s)) {
-  if(s.visibility == Settings::visibility_t::invisible) {
-    // If its not going to be presented anyway, don't do anything with it.
+Metric::Metric(ud_t::struct_t& rs, Settings s)
+  : userdata(rs, std::cref(*this)), u_settings(std::move(s)),
+    m_frozen(false) {};
+
+void Metric::StatsAccess::requestStatistics(Statistics ss) {
+  // If the Metric is invisible, we don't actually need to do anything
+  if(m.visibility() == Settings::visibility_t::invisible) {
     if(ss.sum || ss.mean || ss.max || ss.min || ss.stddev || ss.cfvar)
-      util::log::error{} << "Non-presentable Metrics should not have Statistics!";
+      util::log::fatal{} << "Attempt to request Statistics from an invisible Metric!";
     return;
   }
+
+  auto check = [&]{
+    // If we're already frozen, this operation must be idempotent.
+    // This is really just a vauge attempt at sanity checking.
+    if(ss.sum && !m.m_thawed_stats.sum)
+      util::log::fatal{} << "Attempt to request :Sum from a frozen Metric!";
+    if(ss.mean && !m.m_thawed_stats.sum)
+      util::log::fatal{} << "Attempt to request :Mean from a frozen Metric!";
+    if(ss.min && !m.m_thawed_stats.sum)
+      util::log::fatal{} << "Attempt to request :Min from a frozen Metric!";
+    if(ss.max && !m.m_thawed_stats.sum)
+      util::log::fatal{} << "Attempt to request :Max from a frozen Metric!";
+    if(ss.stddev && !m.m_thawed_stats.sum)
+      util::log::fatal{} << "Attempt to request :StdDev from a frozen Metric!";
+    if(ss.cfvar && !m.m_thawed_stats.cfvar)
+      util::log::fatal{} << "Attempt to request :CfVar from a frozen Metric!";
+  };
+  if(m.m_frozen.load(std::memory_order_acquire)) return check();
+  std::unique_lock<std::mutex> l{m.m_frozen_lock};
+  if(m.m_frozen.load(std::memory_order_relaxed)) return check();
+  m.m_thawed_stats.sum = m.m_thawed_stats.sum || ss.sum;
+  m.m_thawed_stats.mean = m.m_thawed_stats.mean || ss.mean;
+  m.m_thawed_stats.min = m.m_thawed_stats.min || ss.min;
+  m.m_thawed_stats.max = m.m_thawed_stats.max || ss.max;
+  m.m_thawed_stats.stddev = m.m_thawed_stats.stddev || ss.stddev;
+  m.m_thawed_stats.cfvar = m.m_thawed_stats.cfvar || ss.cfvar;
+}
+
+bool Metric::freeze() {
+  if(m_frozen.load(std::memory_order_acquire)) return false;
+  std::unique_lock<std::mutex> l{m_frozen_lock};
+  if(m_frozen.load(std::memory_order_relaxed)) return false;
+
+  const Statistics& ss = m_thawed_stats;
 
   size_t cntIdx = -1;
   if(ss.mean || ss.stddev || ss.cfvar) {
@@ -157,12 +196,19 @@ Metric::Metric(ud_t::struct_t& rs, Settings s, Statistics ss)
   if(ss.max)
     m_stats.push_back({"Max", false, {(Statistic::formula_t::value_type)maxIdx},
                        u_settings().visibility == Settings::visibility_t::shownByDefault});
+
+  m_frozen.store(true, std::memory_order_release);
+  return true;
 }
 
 const std::vector<StatisticPartial>& Metric::partials() const noexcept {
+  if(!m_frozen.load(std::memory_order_relaxed))
+    util::log::fatal{} << "Attempt to access a Metric's Partials before freezing!";
   return m_partials;
 }
 const std::vector<Statistic>& Metric::statistics() const noexcept {
+  if(!m_frozen.load(std::memory_order_relaxed))
+    util::log::fatal{} << "Attempt to access a Metric's Statistics before freezing!";
   return m_stats;
 }
 
