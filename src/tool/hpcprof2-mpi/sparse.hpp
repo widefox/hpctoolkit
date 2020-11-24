@@ -87,30 +87,21 @@ public:
   void notifyWavefront(hpctoolkit::DataClass) noexcept override;
   void notifyThreadFinal(const hpctoolkit::Thread::Temporary&) override;
 
-  //***************************************************************************
-  // profile.db  - YUMENG
-  //***************************************************************************
   void writeProfileMajor(const int threads, 
                          const int world_rank, 
                          const int world_size, 
                          std::vector<uint64_t>& ctx_nzval_cnts,
                          std::vector<std::set<uint16_t>>& ctx_nzmids);
 
-  //***************************************************************************
-  // cct.db  - YUMENG
-  //***************************************************************************
   void writeCCTMajor(const std::vector<uint64_t>& cct_local_sizes, 
                      std::vector<std::set<uint16_t>>& cct_nzmids,
-                     const size_t ctxcnt, 
                      const int world_rank, 
                      const int world_size, 
                      const int threads);
 
   //***************************************************************************
-  // General  - YUMENG
+  // General 
   //***************************************************************************
-  //#define CTX_VEC_IDX(c) ((c-1)/2)
-  //#define CTXID(c)       (c*2+1)
   #define CTX_VEC_IDX(c) c
   #define CTXID(c)       c
   
@@ -119,10 +110,11 @@ public:
   void exscan(std::vector<T>& data,int threads); 
   template <typename T, typename MemberT>
   int struct_member_binary_search(const std::vector<T>& datas, const T target, const MemberT target_type, const int length); 
-  MPI_Datatype createTupleType(const std::vector<MPI_Datatype>& types);
+  template<class A, class B>
+  MPI_Datatype createPairType(MPI_Datatype aty, MPI_Datatype bty);
 
   //***************************************************************************
-  // Work with bytes  - YUMENG
+  // Work with bytes  
   //***************************************************************************
   int writeAsByte4(uint32_t val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
   int writeAsByte8(uint64_t val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
@@ -151,7 +143,7 @@ private:
     hpctoolkit::stdshim::filesystem::path> outputs;
   std::atomic<std::size_t> outputCnt;
   hpctoolkit::stdshim::filesystem::path summaryOut;
-  std::vector<std::pair<const pms_id_tuple_t,
+  std::vector<std::pair<const uint32_t,
     std::string>> sparseInputs;
 
   bool keepTemps;
@@ -171,108 +163,95 @@ private:
   #define SPARSE_exitIfMPIError(r,info) if(r != MPI_SUCCESS) {exitMPIError(r, info);}
 
   //***************************************************************************
-  // profile.db  - YUMENG
+  // profile.db
   //***************************************************************************
-  //---------------------------------------------------------------------------
-  // header
-  //---------------------------------------------------------------------------
+  #define not_assigned (uint)-1
+  #define RANK_SPOT    (uint16_t)65535 //indicate the IntPair records rank number not tuples
+  #define IDTUPLE_SUMMARY_LENGTH        1
+  #define IDTUPLE_SUMMARY_PROF_INFO_IDX 0
+  #define IDTUPLE_SUMMARY_IDX           0 //kind 0 idx 0
+
   uint64_t id_tuples_sec_size;
   uint64_t prof_info_sec_size;
-
   uint64_t id_tuples_sec_ptr;
   uint64_t prof_info_sec_ptr;
 
-  //---------------------------------------------------------------------------
-  // profile id tuples - format conversion with ThreadAttribute and IntPair
-  //---------------------------------------------------------------------------
-  #define not_assigned (uint)-1
-  #define RANK_SPOT    (uint16_t)65535 //indicate the IntPair records rank number not tuples
-
-  pms_id_tuple_t buildIdTuple(const hpctoolkit::Thread* t, const int rank);
-
-  pms_id_tuple_t buildSmryIdTuple();
-
-  void assignSparseInputs(int world_rank);
-
-  std::vector<pms_id_tuple_t> getMyIdTuples();
-  
-  std::vector<std::pair<uint16_t, uint64_t>> tuples2IntPairs(const std::vector<pms_id_tuple_t>& all_tuples);
-
-  std::vector<pms_id_tuple_t> intPairs2Tuples(const std::vector<std::pair<uint16_t, uint64_t>>& all_pairs);
-
-  //---------------------------------------------------------------------------
-  // profile id tuples - organize(communication,sorting,etc)
-  //---------------------------------------------------------------------------
-  std::vector<std::pair<uint16_t, uint64_t>> gatherIdTuplesData(const int world_rank, 
-                                                                const int world_size,
-                                                                const int threads,
-                                                                MPI_Datatype IntPairType,
-                                                                const std::vector<std::pair<uint16_t, uint64_t>>& rank_pairs);
-  
-  void scatterProfIdxOffset(const std::vector<pms_id_tuple_t>& tuples,
-                            const std::vector<uint64_t>& all_tuple_ptrs,
-                            const size_t num_prof,
-                            const int world_size,
-                            const int world_rank,
-                            const int threads);
-
-  void sortIdTuples(std::vector<pms_id_tuple_t>& all_tuples);
-
-  void sortIdTuplesOnProfInfoIdx(std::vector<pms_id_tuple_t>& all_tuples);
-
-  void assignIdTuplesIdx(std::vector<pms_id_tuple_t>& all_tuples,
-                         const int threads);
-
-  std::vector<uint64_t> getIdTuplesOff(std::vector<pms_id_tuple_t>& all_tuples,
-                                       const int threads);
-
-  void freeIdTuples(std::vector<pms_id_tuple_t>& all_tuples,
-                    const int threads);
-
-  //---------------------------------------------------------------------------
-  // profile id tuples -  write it down
-  //--------------------------------------------------------------------------- 
-  std::vector<std::pair<uint32_t, uint64_t>> prof_idx_off_pairs;
-
-  std::vector<char> convertTuple2Bytes(const pms_id_tuple_t& tuple);
-
-  size_t writeAllIdTuples(const std::vector<pms_id_tuple_t>& all_tuples,
-                          const hpctoolkit::util::File& fh);
-
-  uint64_t workIdTuplesSection(const int world_rank,
-                               const int world_size,
-                               const int threads,
-                               const hpctoolkit::util::File& fh);
-
-  //---------------------------------------------------------------------------
-  // get profile's size and corresponding offsets
-  //---------------------------------------------------------------------------
   std::vector<uint64_t> profile_sizes;
   std::vector<uint64_t> prof_offsets;
 
-  uint64_t getProfileSizes();
+  std::vector<std::pair<uint32_t, uint64_t>> rank_idx_ptr_pairs;
+
+  void assignSparseInputs(int world_rank);
 
   uint32_t getTotalNumProfiles(const uint32_t my_num_prof);
 
-  uint64_t getMyOffset(const uint64_t my_size, 
-                       const int rank);
+  //---------------------------------------------------------------------------
+  // header
+  //---------------------------------------------------------------------------
+  void writePMSHdr(const uint32_t total_num_prof, const hpctoolkit::util::File& fh);
+
+  //---------------------------------------------------------------------------
+  // profile offsets
+  //---------------------------------------------------------------------------
+  // iterate through rank's profile list, assign profile_sizes
+  // return total size of rank's profiles 
+  uint64_t getProfileSizes();
+
+  // get the offset for this rank's start in profile.db
+  uint64_t getMyOffset(const uint64_t my_size, const int rank);
                    
-  void getMyProfOffset(const uint32_t total_prof, 
-                       const uint64_t my_offset, 
+  // get the final global offsets for each profile in this rank
+  void getMyProfOffset(const uint32_t total_prof, const uint64_t my_offset, 
                        const int threads);
 
-  uint32_t workProfSizesOffsets(const int world_rank, const int threads);
+  //work on profile_sizes and prof_offsets (two private variables) used later for writing profiles
+  void workProfSizesOffsets(const int world_rank,  const int total_prof, const int threads);
+
+  //---------------------------------------------------------------------------
+  // profile id tuples 
+  //---------------------------------------------------------------------------
+  std::vector<std::pair<uint16_t, uint64_t>> getMyIdTuplesPairs();
+
+  std::vector<pms_id_tuple_t> intPairs2Tuples(const std::vector<std::pair<uint16_t, uint64_t>>& all_pairs);
+
+  //rank 0 gather all the tuples as pairs format from other ranks
+  std::vector<std::pair<uint16_t, uint64_t>> gatherIdTuplesPairs(const int world_rank, const int world_size,
+                                                                 const int threads, MPI_Datatype IntPairType,
+                                                                 const std::vector<std::pair<uint16_t, uint64_t>>& rank_pairs);
+  
+  //rank 0 scatter the calculated id_tuple ptrs and prof_info_idx of each profile back to their coming ranks
+  void scatterIdxPtrs(const std::vector<std::pair<uint32_t, uint64_t>>& idx_ptr_buffer,
+                      const size_t num_prof, const int world_size, const int world_rank,
+                      const int threads);
+
+  void sortIdTuples(std::vector<pms_id_tuple_t>& all_tuples);
+
+  //sort a vector of id_tuples based on prof_info_idx
+  void sortIdTuplesOnProfInfoIdx(std::vector<pms_id_tuple_t>& all_tuples);
+
+
+  void fillIdxPtrBuffer(std::vector<pms_id_tuple_t>& all_tuples,
+                        std::vector<std::pair<uint32_t, uint64_t>>& buffer,
+                        const int threads);
+
+  void freeIdTuples(std::vector<pms_id_tuple_t>& all_tuples, const int threads);
+
+  std::vector<char> convertTuple2Bytes(const pms_id_tuple_t& tuple);
+
+  void writeAllIdTuples(const std::vector<pms_id_tuple_t>& all_tuples,
+                        const hpctoolkit::util::File& fh);
+
+  //all work related to IdTuples Section, 
+  //other sections only need the vector of prof_info_idx and id_tuple_ptr pairs
+  void workIdTuplesSection(const int world_rank, const int world_size,
+                           const int threads, const int num_prof,
+                           const hpctoolkit::util::File& fh);
+
 
   //---------------------------------------------------------------------------
   // get profile's real data (bytes)
   //---------------------------------------------------------------------------
-  void interpretOneCtxMids(const char* input,
-                           const uint64_t ctx_nzval_cnt,
-                           std::set<uint16_t>& ctx_nzmids);
-
-  void interpretOneCtxNzvalCnt(const char* input,
-                               uint64_t& ctx_nzval_cnt,
-                               uint64_t& ctx_idx);
+  void updateCtxMids(const char* input, const uint64_t ctx_nzval_cnt, std::set<uint16_t>& ctx_nzmids);
 
   void interpretOneCtxValCntMids(const char* val_cnt_input, 
                                  const char* mids_input,
@@ -294,17 +273,8 @@ private:
                                           const uint64_t spare_one_ptr,
                                           const uint64_t spare_two_ptr,
                                           const uint64_t prof_offset);
-                                       
-  void writeOneProfInfo(const std::vector<char>& info_bytes, 
-                        const uint32_t prof_info_idx,
-                        hpctoolkit::util::File::Instance& fh);
-
-  void writeOneProfileData(const std::vector<char>& bytes, 
-                           const uint64_t offset, 
-                           const uint32_t prof_info_idx,
-                           hpctoolkit::util::File::Instance& fh);
-
-  void writeOneProfile(const std::pair<pms_id_tuple_t, std::string>& tupleFn,
+                                      
+  void writeOneProfile(const std::pair<uint32_t, std::string>& tupleFn,
                        const MPI_Offset my_prof_offset, 
                        const std::pair<uint32_t,uint64_t>& prof_idx_off_pair,
                        std::vector<uint64_t>& ctx_nzval_cnts,
@@ -318,74 +288,68 @@ private:
 
 
   //***************************************************************************
-  // cct.db  - YUMENG
+  // cct.db 
   //***************************************************************************
+  #define SPARSE_NOT_FOUND -1
+  #define SPARSE_END       -2
+
   struct PMS_CtxIdIdxPair{
     uint32_t ctx_id;  // = cct node id
     uint64_t ctx_idx; //starting location of the context's values in value array
   };
-  //---------------------------------------------------------------------------
-  // calculate the offset for each cct node's section in cct.db
-  // assign cct nodes to different ranks
-  //---------------------------------------------------------------------------
-  void unionMids(std::vector<std::set<uint16_t>>& ctx_nzmids, 
-                 const int rank, 
-                 const int num_proc, 
-                 const int threads);
 
-  void getLocalCtxOffset(const std::vector<uint64_t>& ctx_val_cnts, 
-                         const std::vector<std::set<uint16_t>>& ctx_nzmids,
-                         const int threads, 
-                         const int rank,
-                         std::vector<uint64_t>& ctx_off);
-  
-  void getGlobalCtxOffset(const std::vector<uint64_t>& local_ctx_off,
-                          std::vector<uint64_t>& global_ctx_off);
-  
-  void getCtxOffset(const std::vector<uint64_t>& ctx_val_cnts, 
-                    const std::vector<std::set<uint16_t>>& ctx_nzmids,
-                    const int threads, 
-                    const int rank,
-                    std::vector<uint64_t>& ctx_off);
+  //---------------------------------------------------------------------------
+  // header
+  //---------------------------------------------------------------------------
+  void writeCMSHdr(hpctoolkit::util::File::Instance& cct_major_f);
 
-  void writeCtxInfoSec(const std::vector<uint64_t>& ctx_val_cnts, 
-                       const std::vector<std::set<uint16_t>>& ctx_nzmids,
+  //---------------------------------------------------------------------------
+  //  ctx info
+  //---------------------------------------------------------------------------
+  void writeCtxInfoSec(const std::vector<std::set<uint16_t>>& ctx_nzmids,
                        const std::vector<uint64_t>& ctx_off,
-                       const size_t ctxcnt,
                        hpctoolkit::util::File::Instance& ofh);
+
+  //---------------------------------------------------------------------------
+  // ctx offsets
+  //---------------------------------------------------------------------------
+  // union ctx_nzmids from all ranks to root, in order to avoid double counting for offset calculation
+  void unionMids(std::vector<std::set<uint16_t>>& ctx_nzmids, 
+                 const int rank, const int num_proc, const int threads);
+
+  
+  std::vector<uint64_t> getCtxOffset(const std::vector<uint64_t>& ctx_val_cnts, 
+                                     const std::vector<std::set<uint16_t>>& ctx_nzmids,
+                                     const int threads, const int rank);
                     
-  void getMyCtxs(const std::vector<uint64_t>& ctx_off,
-                 const int num_ranks, 
-                 const int rank,
-                 std::vector<uint32_t>& my_ctxs);
+  std::vector<uint32_t> getMyCtxs(const std::vector<uint64_t>& ctx_off,
+                                  const int num_ranks,const int rank);
                  
-  void updateCtxOffset(const size_t ctxcnt, 
-                       const int threads, 
-                       std::vector<uint64_t>& ctx_off);
+  void updateCtxOffset(const int threads,std::vector<uint64_t>& ctx_off);
 
   //---------------------------------------------------------------------------
   // get a list of profile info
   //---------------------------------------------------------------------------
-  void interpretOneProfInfo(const char *input,
-                            pms_profile_info_t& pi);
+  pms_profile_info_t profInfo(const char *input);
 
-  void readProfileInfo(const int threads, 
-                       const hpctoolkit::util::File& fh,
-                       std::vector<pms_profile_info_t>& prof_info);
+  std::vector<pms_profile_info_t> profInfoList(const int threads,const hpctoolkit::util::File& fh);
 
 
   //---------------------------------------------------------------------------
-  // read and interpret one profie - CtxIdIdxPairs
+  // get all profiles' CtxIdIdxPairs
   //---------------------------------------------------------------------------
-  #define SPARSE_NOT_FOUND -1
-  #define SPARSE_END       -2
+  //get one ctx_id & ctx_idx pair based on input
+  PMS_CtxIdIdxPair ctxIdIdxPair(const char *input);
 
-  void interpretOneCtxIdIdxPair(const char *input,
-                                PMS_CtxIdIdxPair& ctx_pair);
-                        
-  int readCtxIdIdxPairs(hpctoolkit::util::File::Instance& fh,
-                        const MPI_Offset off, 
-                        std::vector<PMS_CtxIdIdxPair>& ctx_id_idx_pairs);
+  //get thd ctx_id & ctx_idx pairs for a profile represented by pi                      
+  std::vector<PMS_CtxIdIdxPair> ctxIdIdxPairs(hpctoolkit::util::File::Instance& fh, 
+                                              const pms_profile_info_t pi);
+
+  std::vector<std::vector<PMS_CtxIdIdxPair>> 
+  getProfileCtxIdIdxPairs(const hpctoolkit::util::File& fh, const int threads,
+                          const std::vector<pms_profile_info_t>& prof_info);      
+
+
 
   int findOneCtxIdIdxPair(const uint32_t target_ctx_id,
                           const std::vector<PMS_CtxIdIdxPair>& profile_ctx_pairs,
@@ -408,10 +372,6 @@ private:
                          //std::map<uint32_t, uint64_t>& my_ctx_pairs);
                          std::vector<std::pair<uint32_t, uint64_t>>& my_ctx_pairs);
 
-  std::vector<std::vector<PMS_CtxIdIdxPair>> 
-  getProfileCtxIdIdxPairs(const hpctoolkit::util::File& fh,
-                          const int threads,
-                          const std::vector<pms_profile_info_t>& prof_info);
 
   //---------------------------------------------------------------------------
   // read and interpret one profie - ValMid
