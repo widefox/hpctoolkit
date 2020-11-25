@@ -87,48 +87,42 @@ public:
   void notifyWavefront(hpctoolkit::DataClass) noexcept override;
   void notifyThreadFinal(const hpctoolkit::Thread::Temporary&) override;
 
-  void writeProfileMajor(const int threads, 
-                         const int world_rank, 
-                         const int world_size, 
+  void writeProfileMajor(const int threads, const int world_rank, const int world_size, 
                          std::vector<uint64_t>& ctx_nzval_cnts,
                          std::vector<std::set<uint16_t>>& ctx_nzmids);
 
   void writeCCTMajor(const std::vector<uint64_t>& cct_local_sizes, 
                      std::vector<std::set<uint16_t>>& cct_nzmids,
-                     const int world_rank, 
-                     const int world_size, 
-                     const int threads);
-
-  //***************************************************************************
-  // General 
-  //***************************************************************************
-  #define CTX_VEC_IDX(c) c
-  #define CTXID(c)       c
+                     const int world_rank, const int world_size,const int threads);
   
   void merge(int threads, bool debug);
+
+  //local exscan over a vector of T, value after exscan will be stored in the original vector
   template<typename T>
   void exscan(std::vector<T>& data,int threads); 
+
+  //binary search over a vector of T, unlike std::binary_search, which only returns true/false, 
+  //this returns the idx of found one, SPARSE_ERR as NOT FOUND
   template <typename T, typename MemberT>
   int struct_member_binary_search(const std::vector<T>& datas, const T target, const MemberT target_type, const int length); 
+  
+  //create a MPI pair type 
   template<class A, class B>
   MPI_Datatype createPairType(MPI_Datatype aty, MPI_Datatype bty);
 
   //***************************************************************************
   // Work with bytes  
   //***************************************************************************
-  int writeAsByte4(uint32_t val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
-  int writeAsByte8(uint64_t val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
-  int writeAsByteX(std::vector<char>& val, size_t size, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
-  int readAsByte4(uint32_t& val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
-  int readAsByte8(uint64_t& val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
-  void interpretByte2(uint16_t& val, const char *input);
-  void interpretByte4(uint32_t& val, const char *input);
-  void interpretByte8(uint64_t& val, const char *input);
-  void convertToByte2(uint16_t val, char* bytes);
-  void convertToByte4(uint32_t val, char* bytes);
-  void convertToByte8(uint64_t val, char* bytes);
-
-
+  void writeAsByte4(uint32_t val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
+  void writeAsByte8(uint64_t val, hpctoolkit::util::File::Instance& fh, MPI_Offset off);
+  uint32_t readAsByte4(hpctoolkit::util::File::Instance& fh, MPI_Offset off);
+  uint64_t readAsByte8(hpctoolkit::util::File::Instance& fh, MPI_Offset off);
+  uint16_t interpretByte2(const char *input);
+  uint32_t interpretByte4(const char *input);
+  uint64_t interpretByte8(const char *input);
+  std::vector<char> convertToByte2(uint16_t val);
+  std::vector<char> convertToByte4(uint32_t val);
+  std::vector<char> convertToByte8(uint64_t val);
 
 
 private:
@@ -149,18 +143,12 @@ private:
   bool keepTemps;
 
   //***************************************************************************
-  // general - YUMENG
+  // general 
   //***************************************************************************
+  #define CTX_VEC_IDX(c) c
+  #define CTXID(c)       c
   #define MULTIPLE_8(v) (v + 7) & ~7
 
-  #define SPARSE_ERR -1
-  #define SPARSE_OK  0
-
-  void exitMPIError(int error_code, std::string info);
-  void exitError(std::string info);
-
-  #define SPARSE_throwIfMPIError(r) if (r != MPI_SUCCESS) {return r; }
-  #define SPARSE_exitIfMPIError(r,info) if(r != MPI_SUCCESS) {exitMPIError(r, info);}
 
   //***************************************************************************
   // profile.db
@@ -180,6 +168,8 @@ private:
   std::vector<uint64_t> prof_offsets;
 
   std::vector<std::pair<uint32_t, uint64_t>> rank_idx_ptr_pairs;
+
+
 
   void assignSparseInputs(int world_rank);
 
@@ -295,6 +285,17 @@ private:
     uint64_t ctx_idx; //starting location of the context's values in value array
   };
 
+  struct MetricValBlock{
+    uint16_t mid;
+    uint32_t num_values; // can be set at the end, used as idx for mid
+    std::vector<std::pair<hpcrun_metricVal_t,uint32_t>> values_prof_idxs;
+  };
+
+  struct CtxMetricBlock{
+    uint32_t ctx_id;
+    std::map<uint16_t, MetricValBlock> metrics;
+  };
+
   //---------------------------------------------------------------------------
   // header
   //---------------------------------------------------------------------------
@@ -303,6 +304,8 @@ private:
   //---------------------------------------------------------------------------
   //  ctx info
   //---------------------------------------------------------------------------
+  std::vector<char> ctxInfoBytes(const cms_ctx_info_t& ctx_info);
+
   void writeCtxInfoSec(const std::vector<std::set<uint16_t>>& ctx_nzmids,
                        const std::vector<uint64_t>& ctx_off,
                        hpctoolkit::util::File::Instance& ofh);
@@ -314,15 +317,14 @@ private:
   void unionMids(std::vector<std::set<uint16_t>>& ctx_nzmids, 
                  const int rank, const int num_proc, const int threads);
 
-  
-  std::vector<uint64_t> getCtxOffset(const std::vector<uint64_t>& ctx_val_cnts, 
-                                     const std::vector<std::set<uint16_t>>& ctx_nzmids,
-                                     const int threads, const int rank);
+  std::vector<uint64_t> ctxOffsets(const std::vector<uint64_t>& ctx_val_cnts, 
+                                   const std::vector<std::set<uint16_t>>& ctx_nzmids,
+                                   const int threads, const int rank);
                     
-  std::vector<uint32_t> getMyCtxs(const std::vector<uint64_t>& ctx_off,
-                                  const int num_ranks,const int rank);
+  std::vector<uint32_t> myCtxs(const std::vector<uint64_t>& ctx_off,
+                               const int num_ranks,const int rank);
                  
-  void updateCtxOffset(const int threads,std::vector<uint64_t>& ctx_off);
+  void updateCtxOffsets(const int threads,std::vector<uint64_t>& ctx_off);
 
   //---------------------------------------------------------------------------
   // get a list of profile info
@@ -343,10 +345,13 @@ private:
                                               const pms_profile_info_t pi);
 
   std::vector<std::vector<PMS_CtxIdIdxPair>> 
-  getProfileCtxIdIdxPairs(const hpctoolkit::util::File& fh, const int threads,
+  allProfileCtxIdIdxPairs(const hpctoolkit::util::File& fh, const int threads,
                           const std::vector<pms_profile_info_t>& prof_info);      
 
 
+  //---------------------------------------------------------------------------
+  // read/extract profiles data - my_ctx_id_idx_pairs and my val&mid bytes
+  //---------------------------------------------------------------------------
   //in a vector of PMS_CtxIdIdxPair, find one with target context id
   //output: found idx / SPARSE_END(already end of the vector, not found) / SPARSE_NOT_FOUND
   int findOneCtxIdIdxPair(const uint32_t target_ctx_id,
@@ -357,24 +362,19 @@ private:
   std::vector<std::pair<uint32_t, uint64_t>> 
   myCtxPairs(const std::vector<uint32_t>& ctx_ids, const std::vector<PMS_CtxIdIdxPair>& profile_ctx_pairs);
 
-
-  //---------------------------------------------------------------------------
-  // read and interpret one profie - ValMid
-  //---------------------------------------------------------------------------
-  struct MetricValBlock{
-    uint16_t mid;
-    uint32_t num_values; // can be set at the end, used as idx for mid
-    std::vector<std::pair<hpcrun_metricVal_t,uint32_t>> values_prof_idxs;
-  };
-
-  struct CtxMetricBlock{
-    uint32_t ctx_id;
-    std::map<uint16_t, MetricValBlock> metrics;
-  };
-
   std::vector<char> valMidsBytes(std::vector<std::pair<uint32_t, uint64_t>>& my_ctx_pairs,
                                  const uint64_t& off, hpctoolkit::util::File::Instance& fh);
 
+  //read all the profiles and convert data to appropriate bytes for a group of contexts
+  std::vector<std::pair<std::vector<std::pair<uint32_t,uint64_t>>, std::vector<char>>>
+  profilesData(const std::vector<uint32_t>& ctx_ids,const std::vector<pms_profile_info_t>& prof_info_list,
+               int threads,const std::vector<std::vector<PMS_CtxIdIdxPair>>& all_prof_ctx_pairs,
+               const hpctoolkit::util::File& fh);                               
+
+
+  //---------------------------------------------------------------------------
+  // interpret the data bytes and convert to CtxMetricBlock
+  //---------------------------------------------------------------------------
   //create and return a new MetricValBlock
   MetricValBlock metValBloc(const hpcrun_metricVal_t val,const uint16_t mid, const uint32_t prof_idx);
 
@@ -384,24 +384,10 @@ private:
 
 
   //interpret val_mids bytes for one ctx
-  void interpretValMidsBytes(char *vminput,
-                             const uint32_t prof_idx,
+  void interpretValMidsBytes(char *vminput,const uint32_t prof_idx,
                              const std::pair<uint32_t,uint64_t>& ctx_pair,
-                             const uint64_t next_ctx_idx,
-                             const uint64_t first_ctx_idx,
-                             CtxMetricBlock& cmb);
-
-
-  //---------------------------------------------------------------------------
-  // read and interpret ALL profies 
-  //---------------------------------------------------------------------------
-
-  std::vector<std::pair<std::vector<std::pair<uint32_t,uint64_t>>, std::vector<char>>>
-  profilesData(const std::vector<uint32_t>& ctx_ids, 
-                    const std::vector<pms_profile_info_t>& prof_info_list,
-                    int threads,
-                    const std::vector<std::vector<PMS_CtxIdIdxPair>>& all_prof_ctx_pairs,
-                    const hpctoolkit::util::File& fh);                    
+                             const uint64_t next_ctx_idx,const uint64_t first_ctx_idx,
+                             CtxMetricBlock& cmb);                  
 
 
   //---------------------------------------------------------------------------
@@ -413,22 +399,20 @@ private:
   //return bytes of ALL MetricValBlock of one CtxMetricBlock converted                              
   std::vector<char> mvbsBytes(std::map<uint16_t, MetricValBlock>& metrics);
 
+  //build metric id and idx pairs for one context as bytes 
   std::vector<char> metIdIdxPairsBytes(const std::map<uint16_t, MetricValBlock>& metrics);
 
-  int convertOneCtxInfo(const cms_ctx_info_t& ctx_info,                                        
-                        char *bytes);
-
-
-
+  //return bytes of one CtxMetricBlock
   std::vector<char> cmbBytes(const CtxMetricBlock& cmb, const std::vector<uint64_t>& ctx_off, 
                              const uint32_t& ctx_id);
-
-  void writeOneCtx(const uint32_t& ctx_id, const std::vector<uint64_t>& ctx_off,
-                   const CtxMetricBlock& cmb,hpctoolkit::util::File::Instance& ofh);
 
   //---------------------------------------------------------------------------
   // read and write for all contexts in this rank's list
   //---------------------------------------------------------------------------
+
+  void writeOneCtx(const uint32_t& ctx_id, const std::vector<uint64_t>& ctx_off,
+                   const CtxMetricBlock& cmb,hpctoolkit::util::File::Instance& ofh);
+
   //read a context group's data and write them out
   void rwOneCtxGroup(const std::vector<uint32_t>& ctx_ids, 
                      const std::vector<pms_profile_info_t>& prof_info, 
@@ -448,11 +432,6 @@ private:
                      const hpctoolkit::util::File& ofh);
 
 };
-
-
-
-
-
 
 
 #endif  // HPCTOOLKIT_PROF2MPI_SPARSE_H

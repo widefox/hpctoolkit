@@ -56,8 +56,8 @@
 //
 //***************************************************************************
 
-#ifndef CMS_FORMAT_H
-#define CMS_FORMAT_H
+#ifndef HPCTOOLKIT_PROF_CMS_FORMAT_H
+#define HPCTOOLKIT_PROF_CMS_FORMAT_H
 
 //************************* System Include Files ****************************
 
@@ -195,4 +195,4 @@ cms_sparse_metrics_free(cct_sparse_metrics_t* x);
 } /* extern "C" */
 #endif
 
-#endif //CMS_FORMAT_H
+#endif //HPCTOOLKIT_PROF_CMS_FORMAT_H

@@ -54,8 +54,8 @@
 //
 //***************************************************************************
 
-#ifndef ID_TUPLE_H
-#define ID_TUPLE_H
+#ifndef HPCTOOLKIT_PROF_LEAN_ID_TUPLE_H
+#define HPCTOOLKIT_PROF_LEAN_ID_TUPLE_H
 
 //***************************************************************************
 // system includes
@@ -209,4 +209,4 @@ id_tuples_pms_free(id_tuple_t** x, uint32_t num_tuples);
 } /* extern "C" */
 #endif
 
-#endif //ID_TUPLE_H
+#endif //HPCTOOLKIT_PROF_LEAN_ID_TUPLE_H
