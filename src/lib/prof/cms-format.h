@@ -84,7 +84,7 @@ extern "C" {
 // hdr
 //***************************************************************************
 #define HPCCCTSPARSE_FMT_Magic        "HPCPROF-cmsdb___"  //16 bytes
-#define HPCCCTSPARSE_FMT_VersionMajor 0                   //1  byte
+#define HPCCCTSPARSE_FMT_VersionMajor 1                   //1  byte
 #define HPCCCTSPARSE_FMT_VersionMinor 0                   //1  byte
 #define HPCCCTSPARSE_FMT_NumSec       3                   //2  byte
 
