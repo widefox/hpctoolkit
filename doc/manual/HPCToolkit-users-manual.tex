@@ -1268,7 +1268,7 @@ By default, the content of the file is as follows:
 \begin{verbatim}
 -consoleLog
 -vmargs
--Dosgi.requiredJavaVersion=1.5
+-Dosgi.requiredJavaVersion=1.8
 -XX:MaxPermSize=256m
 -Xms40m
 -Xmx1812m
@@ -1337,10 +1337,6 @@ To increase this allocation, locate the \texttt{hpcviewer.ini} file within your 
 The default maximum sizes for the Java stack and heap, respectively, are given by \texttt{-Xms400m} and \texttt{-Xmx1024m}.
 You should be able to increase these values to \texttt{-Xms800m} and \texttt{-Xmx1800m}.
 
-Third, you can disable \hpcviewer{}'s Callers View by using the \texttt{-n} option as follows:
-\begin{quote}
-  \verb|hpcviewer -n hpctoolkit-database|
-\end{quote}
 
 % ===========================================================================
 % ===========================================================================
