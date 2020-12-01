@@ -73,7 +73,7 @@ extern "C" {
 // tracedb hdr
 //***************************************************************************
 #define HPCTRACEDB_FMT_Magic   "HPCPROF-tracedb_" //16 bytes
-#define HPCTRACEDB_FMT_VersionMajor 0             //1  byte
+#define HPCTRACEDB_FMT_VersionMajor 1             //1  byte
 #define HPCTRACEDB_FMT_VersionMinor 0             //1  byte
 #define HPCTRACEDB_FMT_NumSec       3             //2  byte
 
