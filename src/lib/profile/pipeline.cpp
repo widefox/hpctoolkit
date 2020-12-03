@@ -466,7 +466,7 @@ File& Source::file(const stdshim::filesystem::path& p) {
 
 Metric& Source::metric(Metric::Settings s) {
   if(!limit().hasAttributes())
-    util::log::fatal() << "Source did not register for `attributes` emission!";\
+    util::log::fatal() << "Source did not register for `attributes` emission!";
   auto x = pipe->mets.emplace(pipe->structs.metric, std::move(s));
   slocal->thawedMetrics.insert(&x.first());
   if(!x.second) return x.first();

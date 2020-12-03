@@ -95,13 +95,22 @@ Metric::Metric(Metric&& o)
   : userdata(std::move(o.userdata), std::cref(*this)),
     u_settings(std::move(o.u_settings)),
     m_thawed_stats(std::move(o.m_thawed_stats)),
+    m_thawed_sumPartial(o.m_thawed_sumPartial),
     m_frozen(o.m_frozen.load(std::memory_order_relaxed)),
     m_partials(std::move(o.m_partials)),
     m_stats(std::move(o.m_stats)) {};
 
 Metric::Metric(ud_t::struct_t& rs, Settings s)
   : userdata(rs, std::cref(*this)), u_settings(std::move(s)),
+    m_thawed_sumPartial(std::numeric_limits<std::size_t>::max()),
     m_frozen(false) {};
+
+std::unique_lock<std::mutex> Metric::StatsAccess::synchronize() {
+  if(m.m_frozen.load(std::memory_order_acquire)) return {};
+  std::unique_lock<std::mutex> l{m.m_frozen_lock};
+  if(m.m_frozen.load(std::memory_order_relaxed)) return {};
+  return l;
+}
 
 void Metric::StatsAccess::requestStatistics(Statistics ss) {
   // If the Metric is invisible, we don't actually need to do anything
@@ -111,7 +120,8 @@ void Metric::StatsAccess::requestStatistics(Statistics ss) {
     return;
   }
 
-  auto check = [&]{
+  auto l = synchronize();
+  if(!l) {
     // If we're already frozen, this operation must be idempotent.
     // This is really just a vauge attempt at sanity checking.
     if(ss.sum && !m.m_thawed_stats.sum)
@@ -126,16 +136,27 @@ void Metric::StatsAccess::requestStatistics(Statistics ss) {
       util::log::fatal{} << "Attempt to request :StdDev from a frozen Metric!";
     if(ss.cfvar && !m.m_thawed_stats.cfvar)
       util::log::fatal{} << "Attempt to request :CfVar from a frozen Metric!";
-  };
-  if(m.m_frozen.load(std::memory_order_acquire)) return check();
-  std::unique_lock<std::mutex> l{m.m_frozen_lock};
-  if(m.m_frozen.load(std::memory_order_relaxed)) return check();
+    return;
+  }
   m.m_thawed_stats.sum = m.m_thawed_stats.sum || ss.sum;
   m.m_thawed_stats.mean = m.m_thawed_stats.mean || ss.mean;
   m.m_thawed_stats.min = m.m_thawed_stats.min || ss.min;
   m.m_thawed_stats.max = m.m_thawed_stats.max || ss.max;
   m.m_thawed_stats.stddev = m.m_thawed_stats.stddev || ss.stddev;
   m.m_thawed_stats.cfvar = m.m_thawed_stats.cfvar || ss.cfvar;
+}
+
+std::size_t Metric::StatsAccess::requestSumPartial() {
+  auto l = synchronize();
+  if(m.m_thawed_sumPartial != std::numeric_limits<std::size_t>::max())
+    return m.m_thawed_sumPartial;
+  if(!l)
+    util::log::fatal{} << "Unable to satifify :Sum Partial request on frozen Metric!";
+
+  m.m_thawed_sumPartial = m.m_partials.size();
+  m.m_partials.push_back({[](double x) -> double { return x; },
+                          Statistic::combination_t::sum, m.m_thawed_sumPartial});
+  return m.m_thawed_sumPartial;
 }
 
 bool Metric::freeze() {
@@ -151,11 +172,11 @@ bool Metric::freeze() {
     m_partials.push_back({[](double x) -> double { return x == 0 ? 0 : 1; },
                           Statistic::combination_t::sum, cntIdx});
   }
-  size_t xIdx = -1;
-  if(ss.sum || ss.mean || ss.stddev || ss.cfvar) {
-    xIdx = m_partials.size();
+  if(m_thawed_sumPartial == std::numeric_limits<std::size_t>::max()
+     && (ss.sum || ss.mean || ss.stddev || ss.cfvar)) {
+    m_thawed_sumPartial = m_partials.size();
     m_partials.push_back({[](double x) -> double { return x; },
-                          Statistic::combination_t::sum, xIdx});
+                          Statistic::combination_t::sum, m_thawed_sumPartial});
   }
   size_t x2Idx = -1;
   if(ss.stddev || ss.cfvar) {
@@ -177,18 +198,18 @@ bool Metric::freeze() {
   }
 
   if(ss.sum)
-    m_stats.push_back({"Sum", true, {(Statistic::formula_t::value_type)xIdx},
+    m_stats.push_back({"Sum", true, {(Statistic::formula_t::value_type)m_thawed_sumPartial},
                        u_settings().visibility == Settings::visibility_t::shownByDefault});
   if(ss.mean)
-    m_stats.push_back({"Mean", false, {xIdx, "/", cntIdx},
+    m_stats.push_back({"Mean", false, {m_thawed_sumPartial, "/", cntIdx},
                        u_settings().visibility == Settings::visibility_t::shownByDefault});
   if(ss.stddev)
     m_stats.push_back({"StdDev", false,
-      {"sqrt((", x2Idx, "/", cntIdx, ") - pow(", xIdx, "/", cntIdx, ", 2))"},
+      {"sqrt((", x2Idx, "/", cntIdx, ") - pow(", m_thawed_sumPartial, "/", cntIdx, ", 2))"},
       u_settings().visibility == Settings::visibility_t::shownByDefault});
   if(ss.cfvar)
     m_stats.push_back({"CfVar", false,
-      {"sqrt((", x2Idx, "/", cntIdx, ") - pow(", xIdx, "/", cntIdx, ", 2)) / (", xIdx, "/", cntIdx, ")"},
+      {"sqrt((", x2Idx, "/", cntIdx, ") - pow(", m_thawed_sumPartial, "/", cntIdx, ", 2)) / (", m_thawed_sumPartial, "/", cntIdx, ")"},
       u_settings().visibility == Settings::visibility_t::shownByDefault});
   if(ss.min)
     m_stats.push_back({"Min", false, {(Statistic::formula_t::value_type)minIdx},

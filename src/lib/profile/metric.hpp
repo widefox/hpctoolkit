@@ -176,6 +176,11 @@ public:
       description = std::move(d);
     }
 
+    Settings(Settings&&) = default;
+    Settings(const Settings&) = default;
+    Settings& operator=(Settings&&) = default;
+    Settings& operator=(const Settings&) = default;
+
     std::string name;
     std::string description;
 
@@ -245,8 +250,14 @@ public:
     // MT: Internally Synchronized
     void requestStatistics(Statistics);
 
+    /// Request a Partial representing the sum of relavent values.
+    // MT: Internally Synchronized
+    std::size_t requestSumPartial();
+
   private:
     Metric& m;
+
+    std::unique_lock<std::mutex> synchronize();
   };
 
   /// Convience function to generate a StatsAccess handle.
@@ -255,6 +266,7 @@ public:
 private:
   util::uniqable_key<Settings> u_settings;
   Statistics m_thawed_stats;
+  std::size_t m_thawed_sumPartial;
   std::mutex m_frozen_lock;
   std::atomic<bool> m_frozen;
   std::vector<StatisticPartial> m_partials;
