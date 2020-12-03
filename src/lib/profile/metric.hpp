@@ -336,6 +336,10 @@ public:
     /// Formula used to calculate the values for the ExtraStatistic.
     formula_t formula;
 
+    /// Printf-style format string to use when rendering resulting values.
+    /// This should only contain a single conversion specification (argument)
+    std::string format;
+
     bool operator==(const Settings& o) const noexcept;
   };
 
@@ -348,6 +352,7 @@ public:
   Settings::visibility_t visibility() const noexcept { return u_settings().visibility; }
   bool showPercent() const noexcept { return u_settings().showPercent; }
   const formula_t& formula() const noexcept { return u_settings().formula; }
+  const std::string& format() const noexcept { return u_settings().format; }
 
   /// Get whether this Statistic should be presented by default.
   // MT: Safe (const)

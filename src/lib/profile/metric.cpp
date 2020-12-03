@@ -91,6 +91,19 @@ ExtraStatistic::ExtraStatistic(Settings s)
   : u_settings(std::move(s)) {
   if(u_settings().formula.empty())
     util::log::fatal{} << "ExtraStatistics must have a non-empty formula!";
+
+  const auto& fmt = u_settings().format;
+  size_t pos = 0;
+  bool found = false;
+  while((pos = fmt.find('%', pos)) != std::string::npos) {
+    if(fmt[pos+1] == '%') pos += 2;
+    else {
+      if(found)
+        util::log::fatal{} << "Multiple arguments in format string: " << fmt;
+      found = true;
+      pos += 1;
+    }
+  }
 }
 
 bool ExtraStatistic::Settings::operator==(const Settings& o) const noexcept {

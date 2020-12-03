@@ -314,7 +314,10 @@ std::string ExperimentXML4::eStatMetricTags(const ExtraStatistic& es, unsigned i
                         "v=\"derived-incr\" "
                         "t=\"" << type << "\" partner=\"" << p_id << "\" "
                         "show=\"" << (es.visibleByDefault() ? "1" : "0") << "\" "
-                        "show-percent=\"" << (es.showPercent() ? "1" : "0") << "\">\n"
+                        "show-percent=\"" << (es.showPercent() ? "1" : "0") << "\" ";
+      if(!es.format().empty())
+        ss << "fmt=" << util::xmlquoted(es.format()) << " ";
+      ss << ">\n"
             "<MetricFormula t=\"view\" frm=\"";
       for(const auto& e: es.formula()) {
         if(std::holds_alternative<std::string>(e)) {

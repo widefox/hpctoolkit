@@ -242,6 +242,7 @@ void Hpcrun4::read(const DataClass& needed) {
       if(m.formula != nullptr && m.formula[0] != '\0') {
         ExtraStatistic::Settings es_settings{std::move(settings)};
         es_settings.showPercent = m.flags.fields.showPercent;
+        es_settings.format = m.format;
         estats.emplace_back(m.formula, std::move(es_settings));
       } else {
         bool isInt = false;
