@@ -111,6 +111,10 @@ public:
   // MT: Internally Synchronized
   virtual void notifyMetric(const Metric&);
 
+  /// Notify the Sink that a new ExtraStatistic has been created.
+  // MT: Internally Synchronized
+  virtual void notifyExtraStatistic(const ExtraStatistic&);
+
   /// Notify the Sink that a new Context has been created.
   // MT: Internally Synchronized
   virtual void notifyContext(const Context&);

@@ -287,12 +287,94 @@ private:
   util::uniqable_key<Settings>& uniqable_key() { return u_settings; }
 };
 
+/// On occasion there is a need to add new Statistics that are based on values
+/// from multiple Metrics instead of just one, usually to present abstract
+/// overview values that can't be processed any other way. These are written
+/// as "Extra" Statistics, which are much like Statistics but are not bound
+/// to any particular Metric.
+class ExtraStatistic final {
+public:
+  ExtraStatistic(ExtraStatistic&& o) = default;
+  ExtraStatistic(const ExtraStatistic&) = delete;
+
+  struct MetricPartialRef final {
+    MetricPartialRef(const Metric& m, std::size_t i)
+      : metric(m), partialIdx(i) {};
+    const Metric& metric;
+    std::size_t partialIdx;
+
+    const StatisticPartial& partial() const noexcept {
+      return metric.partials()[partialIdx];
+    }
+
+    bool operator==(const MetricPartialRef& o) const noexcept {
+      return &metric == &o.metric && partialIdx == o.partialIdx;
+    }
+  };
+
+  /// Every ExtraStatistic is defined by a formula like this. If every
+  /// Metric/Partial pair is replaced by a variable name and the entire vector
+  /// concatinated, the result is a C-like math formula.
+  using formula_t = std::vector<std::variant<std::string, MetricPartialRef>>;
+
+  /// The Settings for an ExtraStatistic are much like those for standard
+  /// Metrics, with a few additions.
+  struct Settings : public Metric::Settings {
+    Settings() : Metric::Settings(), showPercent(true) {};
+    Settings(Metric::Settings&& s)
+      : Metric::Settings(std::move(s)), showPercent(true) {};
+
+    Settings(Settings&& o) = default;
+    Settings(const Settings&) = default;
+    Settings& operator=(Settings&&) = default;
+    Settings& operator=(const Settings&) = default;
+
+    /// Whether the percentage should be shown for this ExtraStatistic.
+    /// TODO: Figure out what property this indicates mathematically
+    bool showPercent : 1;
+
+    /// Formula used to calculate the values for the ExtraStatistic.
+    formula_t formula;
+
+    bool operator==(const Settings& o) const noexcept;
+  };
+
+  /// ExtraStatistics are only ever created by the Pipeline.
+  ExtraStatistic() = delete;
+
+  const std::string& name() const noexcept { return u_settings().name; }
+  const std::string& description() const noexcept { return u_settings().description; }
+  MetricScopeSet scopes() const noexcept { return u_settings().scopes; }
+  Settings::visibility_t visibility() const noexcept { return u_settings().visibility; }
+  bool showPercent() const noexcept { return u_settings().showPercent; }
+  const formula_t& formula() const noexcept { return u_settings().formula; }
+
+  /// Get whether this Statistic should be presented by default.
+  // MT: Safe (const)
+  bool visibleByDefault() const noexcept { return u_settings().visibility == Settings::visibility_t::shownByDefault; }
+
+private:
+  util::uniqable_key<Settings> u_settings;
+
+  friend class ProfilePipeline;
+  ExtraStatistic(Settings);
+
+  friend class util::uniqued<ExtraStatistic>;
+  util::uniqable_key<Settings>& uniqable_key() { return u_settings; }
+};
+
 }
 
 namespace std {
   using namespace hpctoolkit;
   template<> struct hash<Metric::Settings> {
     std::size_t operator()(const Metric::Settings&) const noexcept;
+  };
+  template<> struct hash<ExtraStatistic::Settings> {
+    std::hash<Metric::Settings> h;
+    std::size_t operator()(const ExtraStatistic::Settings& s) const noexcept {
+      return h(s);
+    }
   };
 }
 

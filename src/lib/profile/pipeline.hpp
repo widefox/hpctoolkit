@@ -319,6 +319,11 @@ public:
     // MT: Externally Synchronized (this), Internally Synchronized
     Metric& metric(Metric::Settings);
 
+    /// Emit a new ExtraStatistic into the Pipeline.
+    /// DataClass: `attributes`
+    // MT: Externally Synchronized (this), Internally Synchronized
+    ExtraStatistic& extraStatistic(ExtraStatistic::Settings);
+
     /// "Freeze" the given previously emitted Metric. All requests through
     /// Metric::StatsAccess must complete prior to this call.
     /// DataClass: `attributes`
@@ -428,6 +433,7 @@ public:
     const util::locked_unordered_uniqued_set<Module>& modules();
     const util::locked_unordered_uniqued_set<File>& files();
     const util::locked_unordered_uniqued_set<Metric>& metrics();
+    const util::locked_unordered_uniqued_set<ExtraStatistic>& extraStatistics();
     const Context& contexts();
     const util::locked_unordered_set<std::unique_ptr<Thread>>& threads();
 
@@ -487,6 +493,7 @@ private:
   util::locked_unordered_uniqued_set<Module> mods;
   util::locked_unordered_uniqued_set<File> files;
   util::locked_unordered_uniqued_set<Metric> mets;
+  util::locked_unordered_uniqued_set<ExtraStatistic> estats;
   std::unique_ptr<Context> cct;
 };
 

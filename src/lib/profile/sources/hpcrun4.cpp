@@ -214,11 +214,8 @@ void Hpcrun4::read(const DataClass& needed) {
     int id;
     metric_desc_t m;
     metric_aux_info_t maux;
+    std::vector<std::pair<std::string, ExtraStatistic::Settings>> estats;
     while((id = hpcrun_sparse_next_metric(file, &m, &maux, 4.0)) > 0) {
-      bool isInt = false;
-      if(m.flags.fields.valFmt == MetricFlags_ValFmt_Real) isInt = false;
-      else if(m.flags.fields.valFmt == MetricFlags_ValFmt_Int) isInt = true;
-      else util::log::fatal() << "Invalid metric value format!";
       Metric::Settings settings{m.name, m.description};
       switch(m.flags.fields.show) {
       case HPCRUN_FMT_METRIC_SHOW: break;  // Default
@@ -241,11 +238,58 @@ void Hpcrun4::read(const DataClass& needed) {
                            << ", " << m.name << " may be presented incorrectly.";
         break;
       }
-      metrics.emplace(id, sink.metric(std::move(settings)));
-      metricInt.emplace(id, isInt);
+
+      if(m.formula != nullptr && m.formula[0] != '\0') {
+        ExtraStatistic::Settings es_settings{std::move(settings)};
+        es_settings.showPercent = m.flags.fields.showPercent;
+        estats.emplace_back(m.formula, std::move(es_settings));
+      } else {
+        bool isInt = false;
+        if(m.flags.fields.valFmt == MetricFlags_ValFmt_Real) isInt = false;
+        else if(m.flags.fields.valFmt == MetricFlags_ValFmt_Int) isInt = true;
+        else util::log::fatal() << "Invalid metric value format!";
+        metricInt.emplace(id, isInt);
+        metrics.emplace(id, sink.metric(std::move(settings)));
+      }
       hpcrun_fmt_metricDesc_free(&m, std::free);
     }
     if(id < 0) util::log::fatal() << "Hpcrun4: Error reading metric entry!";
+
+    for(auto&& [rawFormula, es_settings]: std::move(estats)) {
+      const auto& ct = std::use_facet<std::ctype<char>>(std::locale::classic());
+      std::size_t idx = 0;
+      while(idx != std::string::npos && idx < rawFormula.size()) {
+        if(rawFormula[idx] == '#' || rawFormula[idx] == '$'
+           || rawFormula[idx] == '@') {
+          // Variable specification, collect the digits and decode
+          auto id = ({
+            idx++;
+            std::string id;
+            while(idx < rawFormula.size()
+                  && ct.is(std::ctype<char>::digit, rawFormula[idx])) {
+              id += rawFormula[idx];
+              idx++;
+            }
+            if(id.size() == 0) util::log::fatal{} << "Invalid formula string!";
+            std::stoll(id);
+          });
+          id += 1;  // Adjust to sparse metric ids
+          const auto it = metrics.find(id);
+          if(it == metrics.end()) util::log::fatal{} << "Unknown metric id " << id;
+          es_settings.formula.emplace_back(ExtraStatistic::MetricPartialRef{
+            it->second, it->second.statsAccess().requestSumPartial()});
+        } else {
+          // C-like formula components
+          std::size_t next = rawFormula.find_first_of("#$@", idx);
+          if(next == std::string::npos)
+            es_settings.formula.emplace_back(rawFormula.substr(idx));
+          else
+            es_settings.formula.emplace_back(rawFormula.substr(idx, next-idx));
+          idx = next;
+        }
+      }
+      sink.extraStatistic(std::move(es_settings));
+    }
     for(const auto& im: metrics) sink.metricFreeze(im.second);
   }
   if(needed.hasReferences()) {

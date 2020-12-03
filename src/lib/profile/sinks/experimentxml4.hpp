@@ -122,7 +122,9 @@ private:
 
     std::string metricdb_tags;
     std::string metric_tags;
+    unsigned int maxId;
   };
+  std::string eStatMetricTags(const ExtraStatistic&, unsigned int&);
 
   struct Proc {
     Proc() = default;

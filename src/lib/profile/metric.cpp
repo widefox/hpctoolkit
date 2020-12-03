@@ -87,6 +87,43 @@ unsigned int Metric::ScopedIdentifiers::get(MetricScope s) const noexcept {
   std::abort();  // unreachable
 }
 
+ExtraStatistic::ExtraStatistic(Settings s)
+  : u_settings(std::move(s)) {
+  if(u_settings().formula.empty())
+    util::log::fatal{} << "ExtraStatistics must have a non-empty formula!";
+}
+
+bool ExtraStatistic::Settings::operator==(const Settings& o) const noexcept {
+  bool res = Metric::Settings::operator==(o);
+  if(res && formula != o.formula) {
+      util::log::fatal f{};
+      f << "EStats with the same name but different formulas: ";
+      if(formula.size() != o.formula.size()) {
+        f << "#" << formula.size() << " != " << o.formula.size();
+      } else {
+        f << "\n";
+        for(size_t i = 0; i < formula.size(); i++) {
+          f << "  " << i << ": ";
+          if(std::holds_alternative<std::string>(formula[i])) {
+            f << std::get<std::string>(formula[i]);
+          } else {
+            const auto& mp = std::get<ExtraStatistic::MetricPartialRef>(formula[i]);
+            f << "[" <<  mp.metric.name() << "]." << mp.partialIdx;
+          }
+          f << " " << (formula[i] == o.formula[i] ? "=" : "!") << "= ";
+          if(std::holds_alternative<std::string>(o.formula[i])) {
+            f << std::get<std::string>(o.formula[i]);
+          } else {
+            const auto& mp = std::get<ExtraStatistic::MetricPartialRef>(o.formula[i]);
+            f << "[" <<  mp.metric.name() << "]." << mp.partialIdx;
+          }
+          f << "\n";
+        }
+      }
+  }
+  return res;
+}
+
 Statistic::Statistic(std::string suff, bool showp, formula_t form, bool showBD)
   : m_suffix(std::move(suff)), m_showPerc(showp), m_formula(std::move(form)),
     m_visibleByDefault(showBD) {};

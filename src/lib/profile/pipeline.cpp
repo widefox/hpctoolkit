@@ -475,6 +475,18 @@ Metric& Source::metric(Metric::Settings s) {
   return x.first();
 }
 
+ExtraStatistic& Source::extraStatistic(ExtraStatistic::Settings s) {
+  if(!limit().hasAttributes())
+    util::log::fatal() << "Source did not register for `attributes` emission!";
+  auto x = pipe->estats.emplace(std::move(s));
+  if(x.second) {
+    for(auto& s: pipe->sinks) {
+      if(s.dataLimit.hasAttributes()) s().notifyExtraStatistic(x.first());
+    }
+  }
+  return x.first();
+}
+
 void Source::metricFreeze(Metric& m) {
   if(m.freeze()) {
     for(auto& s: pipe->sinks) {
@@ -656,6 +668,12 @@ const util::locked_unordered_uniqued_set<Metric>& Sink::metrics() {
   if(!dataLimit.hasAttributes())
     util::log::fatal() << "Sink did not register for `attributes` absorption!";
   return pipe->mets;
+}
+
+const util::locked_unordered_uniqued_set<ExtraStatistic>& Sink::extraStatistics() {
+  if(!dataLimit.hasAttributes())
+    util::log::fatal() << "Sink did not register for `attributes` absorption!";
+  return pipe->estats;
 }
 
 const Context& Sink::contexts() {

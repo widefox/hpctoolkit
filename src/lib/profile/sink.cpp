@@ -76,6 +76,7 @@ void ProfileSink::notifyWavefront(DataClass) {};
 void ProfileSink::notifyModule(const Module&) {};
 void ProfileSink::notifyFile(const File&) {};
 void ProfileSink::notifyMetric(const Metric&) {};
+void ProfileSink::notifyExtraStatistic(const ExtraStatistic&) {};
 void ProfileSink::notifyContext(const Context&) {};
 void ProfileSink::notifyThread(const Thread&) {};
 void ProfileSink::notifyTimepoint(std::chrono::nanoseconds) {};
