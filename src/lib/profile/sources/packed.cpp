@@ -63,6 +63,10 @@ std::string unpack<std::string>(std::vector<uint8_t>::const_iterator& it) noexce
   return out;
 }
 template<>
+std::uint8_t unpack<std::uint8_t>(std::vector<uint8_t>::const_iterator& it) noexcept {
+  return *(it++);
+}
+template<>
 std::uint64_t unpack<std::uint64_t>(std::vector<uint8_t>::const_iterator& it) noexcept {
   // Little-endian order. Same as in sinks/packed.cpp.
   std::uint64_t out = 0;
@@ -99,6 +103,7 @@ std::vector<uint8_t>::const_iterator Packed::unpackAttributes(iter_t it) noexcep
   }
   sink.attributes(std::move(attr));
 
+  // TODO: Add [scopes] to the below
   // Format: [cnt] ([metric name] [metric description]...)
   metrics.clear();
   cnt = unpack<std::uint64_t>(it);
@@ -108,6 +113,36 @@ std::vector<uint8_t>::const_iterator Packed::unpackAttributes(iter_t it) noexcep
     s.description = unpack<std::string>(it);
     metrics.emplace_back(sink.metric(s));
   }
+
+  // TODO: Add [scopes] to the below
+  // Format: [cnt] ([estat name] [estat description] [cnt] ([isString ? 1 : 0] ([string] | [metric id])...)...)
+  cnt = unpack<std::uint64_t>(it);
+  for(std::size_t i = 0; i < cnt; i++) {
+    ExtraStatistic::Settings s;
+    s.name = unpack<std::string>(it);
+    s.description = unpack<std::string>(it);
+
+    auto ecnt = unpack<std::uint64_t>(it);
+    s.formula.reserve(ecnt);
+    for(std::size_t ei = 0; ei < ecnt; ei++) {
+      switch(unpack<std::uint8_t>(it)) {
+      case 1:  // string
+        s.formula.emplace_back(unpack<std::string>(it));
+        break;
+      case 0: {  // metric id
+        Metric& m = metrics.at(unpack<std::uint64_t>(it));
+        s.formula.emplace_back(ExtraStatistic::MetricPartialRef{
+            m, m.statsAccess().requestSumPartial()});
+        break;
+      }
+      default: util::log::fatal{} << "unreachable!";
+      }
+    }
+
+    sink.extraStatistic(std::move(s));
+  }
+
+  for(auto& m: metrics) sink.metricFreeze(m);
   return it;
 }
 

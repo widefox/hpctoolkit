@@ -62,6 +62,9 @@ static void pack(std::vector<std::uint8_t>& out, const std::string& s) noexcept 
   }
   out.push_back('\0');
 }
+static void pack(std::vector<std::uint8_t>& out, const std::uint8_t v) noexcept {
+  out.push_back(v);
+}
 static void pack(std::vector<std::uint8_t>& out, const std::uint64_t v) noexcept {
   // Little-endian order. Just in case the compiler can optimize it away.
   for(int shift = 0x00; shift < 0x40; shift += 0x08)
@@ -90,13 +93,36 @@ void Packed::packAttributes(std::vector<std::uint8_t>& out) noexcept {
     pack(out, kv.second);
   }
 
+  // TODO: Add [scopes] to the below
   // Format: [cnt] ([metric name] [metric description]...)
   metrics.clear();
   pack(out, src.metrics().size());
+  std::unordered_map<const Metric*, size_t> metids;
   for(const Metric& m: src.metrics().citerate()) {
+    metids.emplace(&m, metrics.size());
     metrics.emplace_back(m);
     pack(out, m.name());
     pack(out, m.description());
+  }
+
+  // TODO: Add [scopes] to the below
+  // Format: [cnt] ([estat name] [estat description] [cnt] ([isString ? 1 : 0] ([string] | [metric id])...)...)
+  pack(out, src.extraStatistics().size());
+  for(const ExtraStatistic& es: src.extraStatistics().citerate()) {
+    pack(out, es.name());
+    pack(out, es.description());
+    const auto& form = es.formula();
+    pack(out, form.size());
+    for(const auto& e: form) {
+      if(std::holds_alternative<std::string>(e)) {
+        pack(out, (std::uint8_t)1);
+        pack(out, std::get<std::string>(e));
+      } else {
+        pack(out, (std::uint8_t)0);
+        const auto& mp = std::get<ExtraStatistic::MetricPartialRef>(e);
+        pack(out, metids.find(&mp.metric)->second);
+      }
+    }
   }
 }
 
