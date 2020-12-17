@@ -89,7 +89,7 @@ struct ClassificationTransformer : public ProfileTransformer {
 protected:
   Context& context(Context& c, Scope& s, std::vector<std::reference_wrapper<Context>>& v) {
     Context* p = &c;
-    if(s.type() == Scope::Type::point) {
+    if(s.type() == Scope::Type::point || s.type() == Scope::Type::call) {
       auto mo = s.point_data();
       const auto& c = mo.first.userdata[sink.classification()];
       auto ss = c.getScopes(mo.second);
@@ -98,8 +98,11 @@ protected:
         v.emplace_back(*p);
       }
       auto fl = c.getLine(mo.second);
-      if(fl.first != nullptr)
-        s = {mo.first, mo.second, *fl.first, fl.second};
+      if(fl.first != nullptr) {
+        s = s.type() == Scope::Type::call
+            ? Scope{Scope::call, mo.first, mo.second, *fl.first, fl.second}
+            : Scope{mo.first, mo.second, *fl.first, fl.second};
+      }
     }
     return *p;
   }

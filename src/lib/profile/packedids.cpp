@@ -94,7 +94,8 @@ Context& IdPacker::Classifier::context(Context& c, Scope& s) {
   // Format: [parent id] (Scope) [cnt] ([type] [child id])...
   auto cid = c.userdata[sink.identifier()];
   pack(buffer, (std::uint64_t)cid);
-  if(s.type() == Scope::Type::point || s.type() == Scope::Type::classified_point) {
+  if(s.type() == Scope::Type::point || s.type() == Scope::Type::classified_point
+     || s.type() == Scope::Type::call || s.type() == Scope::Type::classified_call) {
     // Format: [module id] [offset]
     auto mo = s.point_data();
     pack(buffer, (std::uint64_t)mo.first.userdata[sink.identifier()]);
@@ -111,8 +112,10 @@ Context& IdPacker::Classifier::context(Context& c, Scope& s) {
       util::log::fatal{} << "Global Contexts shouldn't come out of expansion!";
       break;
     case Scope::Type::unknown:
-    case Scope::Type::classified_point:
     case Scope::Type::point:
+    case Scope::Type::classified_point:
+    case Scope::Type::call:
+    case Scope::Type::classified_call:
       buffer.emplace_back(0);
       break;
     case Scope::Type::function:

@@ -73,6 +73,15 @@ public:
   /// Constructor for point Scopes with additional line information.
   Scope(const Module&, uint64_t offset, const File&, uint64_t line);
 
+  struct call_t {};
+  static inline constexpr call_t call = {};
+
+  /// Constructor for call Scopes.
+  Scope(call_t, const Module&, uint64_t offset);
+
+  /// Constructor for call Scopes with additional line information.
+  Scope(call_t, const Module&, uint64_t offset, const File&, uint64_t line);
+
   /// Constructor for Function-wide Scopes.
   explicit Scope(const Function&);
 
@@ -83,7 +92,7 @@ public:
   static inline constexpr loop_t loop = {};
 
   /// Constructor for loop-construct Scopes.
-  Scope(const loop_t&, const File&, uint64_t line);
+  Scope(loop_t, const File&, uint64_t line);
 
   /// Constructor for single-line Scopes.
   Scope(const File&, uint64_t line);
@@ -100,7 +109,9 @@ public:
     unknown,  ///< Some amount of missing Context data, of unknown depth.
     global,  ///< Scope of the global Context, root of the entire execution.
     point,  ///< A single instruction within the application, thus a "point".
+    call,  ///< A point Scope, limited to call or similar control-flow instructions.
     classified_point,  ///< A single instruction with a known source line.
+    classified_call,  ///< Same as classified_point + call.
     function,  ///< A normal ordinary function within the application.
     inlined_function,  ///< A function that has been inlined into an inclosing function Scope.
     loop,  ///< A loop-like construct, potentially source-level.

@@ -377,6 +377,8 @@ static bool pullsFunction(const Context& parent, const Context& child) {
     return false;
   case Scope::Type::point:
   case Scope::Type::classified_point:
+  case Scope::Type::call:
+  case Scope::Type::classified_call:
   case Scope::Type::loop:
   case Scope::Type::line:
   case Scope::Type::concrete_line:
@@ -392,6 +394,8 @@ static bool pullsFunction(const Context& parent, const Context& child) {
     case Scope::Type::global:
     case Scope::Type::point:
     case Scope::Type::classified_point:
+    case Scope::Type::call:
+    case Scope::Type::classified_call:
       return false;
     }
     break;

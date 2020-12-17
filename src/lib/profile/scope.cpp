@@ -53,17 +53,19 @@
 
 using namespace hpctoolkit;
 
-constexpr Scope::loop_t Scope::loop;
-
 Scope::Scope() : ty(Type::unknown), data() {};
 Scope::Scope(const Module& m, uint64_t o)
   : ty(Type::point), data(m, o) {};
 Scope::Scope(const Module& m, uint64_t o, const File& s, uint64_t l)
   : ty(Type::classified_point), data(m, o, s, l) {};
+Scope::Scope(call_t, const Module& m, uint64_t o)
+  : ty(Type::call), data(m, o) {};
+Scope::Scope(call_t, const Module& m, uint64_t o, const File& s, uint64_t l)
+  : ty(Type::classified_call), data(m, o, s, l) {};
 Scope::Scope(const Function& f) : ty(Type::function), data(f) {};
 Scope::Scope(const Function& f, const File& s, uint64_t l)
   : ty(Type::inlined_function), data(f,s,l) {};
-Scope::Scope(const Scope::loop_t&, const File& s, uint64_t l)
+Scope::Scope(loop_t, const File& s, uint64_t l)
   : ty(Type::loop), data(s,l) {};
 Scope::Scope(const File& s, uint64_t l)
   : ty(Type::line), data(s,l) {};
@@ -73,8 +75,11 @@ Scope::Scope(ProfilePipeline&) : ty(Type::global), data() {};
 
 std::pair<const Module&, uint64_t> Scope::point_data() const {
   switch(ty) {
-  case Type::point: return data.point;
+  case Type::point:
+  case Type::call:
+    return data.point;
   case Type::classified_point:
+  case Type::classified_call:
   case Type::concrete_line:
     return data.point_line.point;
   default: break;
@@ -96,6 +101,7 @@ const Function& Scope::function_data() const {
 std::pair<const File&, uint64_t> Scope::line_data() const {
   switch(ty) {
   case Type::classified_point:
+  case Type::classified_call:
   case Type::concrete_line:
     return data.point_line.line;
   case Type::inlined_function: return data.function_line.line;
@@ -113,8 +119,12 @@ bool Scope::operator==(const Scope& o) const noexcept {
   switch(ty) {
   case Type::unknown: return true;
   case Type::global: return true;
-  case Type::point: return data.point == o.data.point;
-  case Type::classified_point: return data.point_line == o.data.point_line;
+  case Type::point:
+  case Type::call:
+    return data.point == o.data.point;
+  case Type::classified_point:
+  case Type::classified_call:
+    return data.point_line == o.data.point_line;
   case Type::concrete_line: return data.point_line.line == o.data.point_line.line;
   case Type::function: return data.function == o.data.function;
   case Type::inlined_function: return data.function_line == o.data.function_line;
@@ -137,14 +147,16 @@ operator()(const Scope &l) const noexcept {
   switch(l.ty) {
   case Scope::Type::unknown: return 0x5;
   case Scope::Type::global: return 0x3;
-  case Scope::Type::point: {
-    std::size_t sponge = 0x9;
+  case Scope::Type::point:
+  case Scope::Type::call: {
+    std::size_t sponge = l.ty == Scope::Type::point ? 0x9 : 0x19;
     sponge = rotl(sponge ^ h_mod(l.data.point.m), 1);
     sponge = rotl(sponge ^ h_u64(l.data.point.offset), 3);
     return sponge;
   }
-  case Scope::Type::classified_point: {
-    std::size_t sponge = 0xC;
+  case Scope::Type::classified_point:
+  case Scope::Type::classified_call: {
+    std::size_t sponge = l.ty == Scope::Type::classified_point ? 0xC : 0x1C;
     sponge = rotl(sponge ^ h_mod(l.data.point_line.point.m), 1);
     sponge = rotl(sponge ^ h_u64(l.data.point_line.point.offset), 3);
     sponge = rotl(sponge ^ h_file(l.data.point_line.line.s), 5);
@@ -182,7 +194,9 @@ std::ostream& std::operator<<(std::ostream& os, const Scope& s) noexcept {
   case Scope::Type::unknown: return os << "(unknown)";
   case Scope::Type::global: return os << "(global)";
   case Scope::Type::point: return os << "(point)";
+  case Scope::Type::call: return os << "(call)";
   case Scope::Type::classified_point: return os << "(classified point)";
+  case Scope::Type::classified_call: return os << "(classified call)";
   case Scope::Type::function: return os << "(func)";
   case Scope::Type::inlined_function: return os << "(inlined_func)";
   case Scope::Type::loop: return os << "(loop)";

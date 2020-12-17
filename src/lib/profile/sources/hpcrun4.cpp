@@ -332,8 +332,16 @@ void Hpcrun4::read(const DataClass& needed) {
         par = &sink.context(sink.global(), {});
       } else {  // Just nab its parent
         auto ppar = nodes.find(n.id_parent);
-        if(ppar == nodes.end())
-          util::log::fatal() << "CCT nodes not in a preorder!";
+        if(ppar == nodes.end()) {
+          // It may be in template form, in which case promote it to a call
+          auto tmp = templates.find(n.id_parent);
+          if(tmp == templates.end())
+              util::log::fatal() << "CCT nodes not in a preorder!";
+          templates.erase(tmp);
+          auto mo = tmp->second.second.point_data();
+          ppar = nodes.emplace(n.id_parent,
+            sink.context(tmp->second.first, {Scope::call, mo.first, mo.second})).first;
+        }
         par = &ppar->second;
       }
 
@@ -350,10 +358,20 @@ void Hpcrun4::read(const DataClass& needed) {
         continue;
       }
 
-      // Emit the Context and record for later.
-      nodes.emplace(id, sink.context(*par, scope));
+      if(scope.type() == Scope::Type::point) {
+        // It might be a call node, it might not. Delay it until we know whether it has children.
+        templates.insert({id, {*par, scope}});
+      } else {  // Just emit it, it doesn't need much thought
+        nodes.emplace(id, sink.context(*par, scope));
+      }
     }
     if(id < 0) util::log::fatal() << "Hpcrun4: Error reading context entry!";
+
+    // If there are remaining unpromoted templates, emit them as normal points.
+    for(const auto& tmp: templates) {
+      nodes.emplace(tmp.first, sink.context(tmp.second.first, tmp.second.second));
+    }
+    templates.clear();
   }
   if(needed.hasMetrics()) {
     int cid;

@@ -393,7 +393,9 @@ ExperimentXML4::udContext::udContext(const Context& c, ExperimentXML4& exml)
   case Scope::Type::point:
   case Scope::Type::classified_point:
   case Scope::Type::line:
-  case Scope::Type::concrete_line: {
+  case Scope::Type::concrete_line:
+  case Scope::Type::call:
+  case Scope::Type::classified_call: {
     std::pair<const Module*, uint64_t> mo{nullptr, 0};
     if(s.type() != Scope::Type::line) {
       auto mmo = s.point_data();
@@ -401,7 +403,7 @@ ExperimentXML4::udContext::udContext(const Context& c, ExperimentXML4& exml)
       mo.second = mmo.second;
     }
     std::pair<const File*, uint64_t> fl{nullptr, 0};
-    if(s.type() != Scope::Type::point) {
+    if(s.type() != Scope::Type::point && s.type() != Scope::Type::call) {
       auto ffl = s.line_data();
       fl.first = &ffl.first;
       fl.second = ffl.second;
@@ -621,6 +623,8 @@ void ExperimentXML4::write() {
       break;
     case Scope::Type::point:
     case Scope::Type::classified_point:
+    case Scope::Type::call:
+    case Scope::Type::classified_call:
     case Scope::Type::line:
     case Scope::Type::concrete_line:
       of << (c.children().empty() ? 'S' : 'C') << udc.attr;
@@ -651,6 +655,8 @@ void ExperimentXML4::write() {
       break;
     case Scope::Type::point:
     case Scope::Type::classified_point:
+    case Scope::Type::call:
+    case Scope::Type::classified_call:
     case Scope::Type::line:
     case Scope::Type::concrete_line:
       of << "</" << (c.children().empty() ? 'S' : 'C') << ">\n";
