@@ -130,36 +130,60 @@ private:
   Type ty;
   union Data {
     struct {} empty;
-    struct {
+    struct point_u {
       const Module* m;
       uint64_t offset;
+      bool operator==(const point_u& o) const {
+        return m == o.m && offset == o.offset;
+      }
+      operator std::pair<const Module&, uint64_t>() const {
+        return {*m, offset};
+      }
     } point;
-    struct {
+    struct function_u {
       const Function* f;
+      bool operator==(const function_u& o) const {
+        return f == o.f;
+      }
+      operator const Function&() const {
+        return *f;
+      }
     } function;
-    struct {
-      const Function* f;
+    struct line_u {
       const File* s;
       uint64_t l;
-    } inlined_function;
-    struct {
-      const File* s;
-      uint64_t l;
+      bool operator==(const line_u& o) const {
+        return s == o.s && l == o.l;
+      }
+      operator std::pair<const File&, uint64_t>() const {
+        return {*s, l};
+      }
     } line;
-    struct {
-      const Module* m;
-      uint64_t offset;
-      const File* s;
-      uint64_t l;
+    struct function_line_u {
+      function_u function;
+      line_u line;
+      bool operator==(const function_line_u& o) const {
+        return function == o.function && line == o.line;
+      }
+    } function_line;
+    struct point_line_u {
+      point_u point;
+      line_u line;
+      bool operator==(const point_line_u& o) const {
+        return point == o.point && line == o.line;
+      }
     } point_line;
     Data() : empty{} {};
-    Data(const Module& m, uint64_t o) : point{&m, o} {};
+    Data(const Module& m, uint64_t o)
+      : point{&m, o} {};
     Data(const Module& m, uint64_t o, const File& s, uint64_t l)
-      : point_line{&m, o, &s, l} {};
-    Data(const Function& f) : function{&f} {};
+      : point_line{{&m, o}, {&s, l}} {};
+    Data(const Function& f)
+      : function{&f} {};
     Data(const Function& f, const File& s, uint64_t l)
-      : inlined_function{&f,&s,l} {};
-    Data(const File& s, uint64_t l) : line{&s,l} {};
+      : function_line{{&f}, {&s, l}} {};
+    Data(const File& s, uint64_t l)
+      : line{&s, l} {};
   } data;
 
   friend class std::hash<Scope>;

@@ -56,7 +56,8 @@ using namespace hpctoolkit;
 constexpr Scope::loop_t Scope::loop;
 
 Scope::Scope() : ty(Type::unknown), data() {};
-Scope::Scope(const Module& m, uint64_t o) : ty(Type::point), data(m, o) {};
+Scope::Scope(const Module& m, uint64_t o)
+  : ty(Type::point), data(m, o) {};
 Scope::Scope(const Module& m, uint64_t o, const File& s, uint64_t l)
   : ty(Type::classified_point), data(m, o, s, l) {};
 Scope::Scope(const Function& f) : ty(Type::function), data(f) {};
@@ -72,10 +73,10 @@ Scope::Scope(ProfilePipeline&) : ty(Type::global), data() {};
 
 std::pair<const Module&, uint64_t> Scope::point_data() const {
   switch(ty) {
-  case Type::point: return {*data.point.m, data.point.offset};
+  case Type::point: return data.point;
   case Type::classified_point:
   case Type::concrete_line:
-    return {*data.point_line.m, data.point_line.offset};
+    return data.point_line.point;
   default: break;
   }
   util::log::fatal() << "point_data() called on non-point Scope!";
@@ -84,8 +85,8 @@ std::pair<const Module&, uint64_t> Scope::point_data() const {
 
 const Function& Scope::function_data() const {
   switch(ty) {
-  case Type::function: return *data.function.f;
-  case Type::inlined_function: return *data.inlined_function.f;
+  case Type::function: return data.function;
+  case Type::inlined_function: return data.function_line.function;
   default: break;
   }
   util::log::fatal() << "function_data() called on non-function Scope!";
@@ -96,15 +97,14 @@ std::pair<const File&, uint64_t> Scope::line_data() const {
   switch(ty) {
   case Type::classified_point:
   case Type::concrete_line:
-    return {*data.point_line.s, data.point_line.l};
-  case Type::inlined_function:
-    return {*data.inlined_function.s, data.inlined_function.l};
+    return data.point_line.line;
+  case Type::inlined_function: return data.function_line.line;
   case Type::loop:
   case Type::line:
-    return {*data.line.s, data.line.l};
+    return data.line;
   default: break;
   }
-  util::log::fatal() << "line_data() called on non-line-based Scope!";
+  util::log::fatal() << "line_data() called on non-line Scope!";
   std::exit(-1);
 }
 
@@ -113,25 +113,14 @@ bool Scope::operator==(const Scope& o) const noexcept {
   switch(ty) {
   case Type::unknown: return true;
   case Type::global: return true;
-  case Type::point:
-    return data.point.m == o.data.point.m
-        && data.point.offset == o.data.point.offset;
-  case Type::classified_point:
-    return data.point_line.m == o.data.point_line.m
-        && data.point_line.offset == o.data.point_line.offset
-        && data.point_line.s == o.data.point_line.s
-        && data.point_line.l == o.data.point_line.l;
-  case Type::concrete_line:
-    return data.point_line.s == o.data.point_line.s
-        && data.point_line.l == o.data.point_line.l;
-  case Type::function: return data.function.f == o.data.function.f;
-  case Type::inlined_function:
-    return data.inlined_function.f == o.data.inlined_function.f
-        && data.inlined_function.s == o.data.inlined_function.s
-        && data.inlined_function.l == o.data.inlined_function.l;
+  case Type::point: return data.point == o.data.point;
+  case Type::classified_point: return data.point_line == o.data.point_line;
+  case Type::concrete_line: return data.point_line.line == o.data.point_line.line;
+  case Type::function: return data.function == o.data.function;
+  case Type::inlined_function: return data.function_line == o.data.function_line;
   case Type::loop:
   case Type::line:
-    return data.line.s == o.data.line.s && data.line.l == o.data.line.l;
+    return data.line == o.data.line;
   }
   return false;  // unreachable
 }
@@ -156,18 +145,18 @@ operator()(const Scope &l) const noexcept {
   }
   case Scope::Type::classified_point: {
     std::size_t sponge = 0xC;
-    sponge = rotl(sponge ^ h_mod(l.data.point_line.m), 1);
-    sponge = rotl(sponge ^ h_u64(l.data.point_line.offset), 3);
-    sponge = rotl(sponge ^ h_file(l.data.point_line.s), 5);
-    sponge = rotl(sponge ^ h_u64(l.data.point_line.l), 7);
+    sponge = rotl(sponge ^ h_mod(l.data.point_line.point.m), 1);
+    sponge = rotl(sponge ^ h_u64(l.data.point_line.point.offset), 3);
+    sponge = rotl(sponge ^ h_file(l.data.point_line.line.s), 5);
+    sponge = rotl(sponge ^ h_u64(l.data.point_line.line.l), 7);
     return sponge;
   }
   case Scope::Type::function: return h_func(l.data.function.f);
   case Scope::Type::inlined_function: {
     std::size_t sponge = 0xE;
-    sponge = rotl(sponge ^ h_func(l.data.inlined_function.f), 1);
-    sponge = rotl(sponge ^ h_file(l.data.inlined_function.s), 3);
-    sponge = rotl(sponge ^ h_u64(l.data.inlined_function.l), 5);
+    sponge = rotl(sponge ^ h_func(l.data.function_line.function.f), 1);
+    sponge = rotl(sponge ^ h_file(l.data.function_line.line.s), 3);
+    sponge = rotl(sponge ^ h_u64(l.data.function_line.line.l), 5);
     return sponge;
   }
   case Scope::Type::loop:
@@ -179,8 +168,8 @@ operator()(const Scope &l) const noexcept {
   }
   case Scope::Type::concrete_line: {
     std::size_t sponge = 0x17;
-    sponge = rotl(sponge ^ h_file(l.data.point_line.s), 1);
-    sponge = rotl(sponge ^ h_u64(l.data.point_line.l), 3);
+    sponge = rotl(sponge ^ h_file(l.data.point_line.line.s), 1);
+    sponge = rotl(sponge ^ h_u64(l.data.point_line.line.l), 3);
     return sponge;
   }
   }
