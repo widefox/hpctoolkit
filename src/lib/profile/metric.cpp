@@ -376,16 +376,22 @@ static bool pullsFunction(const Context& parent, const Context& child) {
   case Scope::Type::unknown:
     return false;
   case Scope::Type::point:
+  case Scope::Type::classified_point:
   case Scope::Type::loop:
+  case Scope::Type::line:
+  case Scope::Type::concrete_line:
     switch(parent.scope().type()) {
     // Function-type scopes, and unknown (which could be a function)
+    case Scope::Type::unknown:
     case Scope::Type::function:
     case Scope::Type::inlined_function:
     case Scope::Type::loop:
-    case Scope::Type::unknown:
+    case Scope::Type::line:
+    case Scope::Type::concrete_line:
       return true;
-    case Scope::Type::point:
     case Scope::Type::global:
+    case Scope::Type::point:
+    case Scope::Type::classified_point:
       return false;
     }
     break;

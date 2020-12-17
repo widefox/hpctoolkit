@@ -68,39 +68,59 @@ public:
   Scope();
 
   /// Constructor for single-instruction "point" Scopes.
-  Scope(const Module& module, uint64_t offset);
+  Scope(const Module&, uint64_t offset);
+
+  /// Constructor for point Scopes with additional line information.
+  Scope(const Module&, uint64_t offset, const File&, uint64_t line);
 
   /// Constructor for Function-wide Scopes.
   explicit Scope(const Function&);
 
   /// Constructor for inlined Function call Scopes.
-  Scope(const Function&, const File&, uint64_t);
+  Scope(const Function&, const File&, uint64_t line);
 
   struct loop_t {};
   static inline constexpr loop_t loop = {};
 
   /// Constructor for loop-construct Scopes.
-  Scope(const loop_t&, const File&, uint64_t);
+  Scope(const loop_t&, const File&, uint64_t line);
+
+  /// Constructor for single-line Scopes.
+  Scope(const File&, uint64_t line);
+
+  /// Constructor for single-line Scopes with an associated instruction.
+  Scope(const File&, uint64_t line, const Module&, uint64_t offset);
 
   /// Copy constructors
   Scope(const Scope& s) = default;
   Scope& operator=(const Scope&) = default;
 
   /// Types of possible Scopes, roughly corrosponding to their sources.
-  enum class Type { unknown, global, point, function, inlined_function, loop };
+  enum class Type {
+    unknown,  ///< Some amount of missing Context data, of unknown depth.
+    global,  ///< Scope of the global Context, root of the entire execution.
+    point,  ///< A single instruction within the application, thus a "point".
+    classified_point,  ///< A single instruction with a known source line.
+    function,  ///< A normal ordinary function within the application.
+    inlined_function,  ///< A function that has been inlined into an inclosing function Scope.
+    loop,  ///< A loop-like construct, potentially source-level.
+    line,  ///< A single line within the original source.
+    concrete_line,  ///< A single line, that has a representative instruction.
+  };
 
   /// Get the Type of this Location. In case that happens to be interesting.
   Type type() const noexcept { return ty; }
 
   /// For 'point' scopes, get the Module and offset of this Scope.
-  /// Throws if the Scope is not a 'point' Scope.
+  /// Throws if the Scope is not a 'point' or 'line_point' Scope.
   std::pair<const Module&, uint64_t> point_data() const;
 
   /// For '*function' scopes, get the Function that created this Scope.
-  /// Throws if the Scope is not a 'function' Scope.
+  /// Throws if the Scope is not a 'function' or 'inlined_function' Scope.
   const Function& function_data() const;
 
   /// For Scopes with line info, get the line that created this Scope.
+  /// Throws if the Scope does not have line information.
   std::pair<const File&, uint64_t> line_data() const;
 
   // Comparison, as usual
@@ -111,9 +131,9 @@ private:
   union Data {
     struct {} empty;
     struct {
-      const Module* module;
+      const Module* m;
       uint64_t offset;
-    } module;
+    } point;
     struct {
       const Function* f;
     } function;
@@ -126,8 +146,16 @@ private:
       const File* s;
       uint64_t l;
     } line;
+    struct {
+      const Module* m;
+      uint64_t offset;
+      const File* s;
+      uint64_t l;
+    } point_line;
     Data() : empty{} {};
-    Data(const Module& m, uint64_t o) : module{&m, o} {};
+    Data(const Module& m, uint64_t o) : point{&m, o} {};
+    Data(const Module& m, uint64_t o, const File& s, uint64_t l)
+      : point_line{&m, o, &s, l} {};
     Data(const Function& f) : function{&f} {};
     Data(const Function& f, const File& s, uint64_t l)
       : inlined_function{&f,&s,l} {};

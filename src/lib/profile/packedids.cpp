@@ -94,7 +94,7 @@ Context& IdPacker::Classifier::context(Context& c, Scope& s) {
   // Format: [parent id] (Scope) [cnt] ([type] [child id])...
   auto cid = c.userdata[sink.identifier()];
   pack(buffer, (std::uint64_t)cid);
-  if(s.type() == Scope::Type::point) {
+  if(s.type() == Scope::Type::point || s.type() == Scope::Type::classified_point) {
     // Format: [module id] [offset]
     auto mo = s.point_data();
     pack(buffer, (std::uint64_t)mo.first.userdata[sink.identifier()]);
@@ -111,6 +111,7 @@ Context& IdPacker::Classifier::context(Context& c, Scope& s) {
       util::log::fatal{} << "Global Contexts shouldn't come out of expansion!";
       break;
     case Scope::Type::unknown:
+    case Scope::Type::classified_point:
     case Scope::Type::point:
       buffer.emplace_back(0);
       break;
@@ -119,6 +120,8 @@ Context& IdPacker::Classifier::context(Context& c, Scope& s) {
       buffer.emplace_back(1);
       break;
     case Scope::Type::loop:
+    case Scope::Type::line:
+    case Scope::Type::concrete_line:
       buffer.emplace_back(2);
       break;
     }
@@ -236,8 +239,8 @@ void IdUnpacker::unpack(ProfilePipeline::Source& sink) {
       case 1:  // function or inlined_function -> inlined_function
         scopes.emplace_back(*exfunc, *exfile, id);
         break;
-      case 2:  // loop -> loop
-        scopes.emplace_back(Scope::loop, *exfile, id);
+      case 2:  // loop or line -> line
+        scopes.emplace_back(*exfile, id);
         break;
       default:
         util::log::fatal{} << "Unrecognized packed Scope type " << ty;

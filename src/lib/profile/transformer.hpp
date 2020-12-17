@@ -91,25 +91,31 @@ protected:
     Context* p = &c;
     if(s.type() == Scope::Type::point) {
       auto mo = s.point_data();
-      auto ss = mo.first.userdata[sink.classification()].getScopes(mo.second);
+      const auto& c = mo.first.userdata[sink.classification()];
+      auto ss = c.getScopes(mo.second);
       for(auto it = ss.crbegin(); it != ss.crend(); ++it) {
         p = &sink.context(*p, *it);
         v.emplace_back(*p);
       }
+      auto fl = c.getLine(mo.second);
+      if(fl.first != nullptr)
+        s = {mo.first, mo.second, *fl.first, fl.second};
     }
     return *p;
   }
 };
 
-/// Transformer for merging `module` Contexts based on their line information.
+/// Transformer for merging `classified_point` Contexts based on their line information.
 struct LineMergeTransformer final : public ProfileTransformer {
   LineMergeTransformer() = default;
   ~LineMergeTransformer() = default;
 
   Context& context(Context& c, Scope& s) override {
-    if(s.type() == Scope::Type::point) {
+    if(s.type() == Scope::Type::classified_point) {
       auto mo = s.point_data();
-      s = {mo.first, mo.first.userdata[sink.classification()].getCanonicalAddr(mo.second)};
+      auto fl = s.line_data();
+      // Change it to a concrete_line, which merges based on the line.
+      s = {fl.first, fl.second, mo.first, mo.second};
     }
     return c;
   }

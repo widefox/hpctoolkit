@@ -155,6 +155,7 @@ private:
   class udModule {
   public:
     udModule(const Module&, ExperimentXML4&);
+    udModule(ExperimentXML4&);
     ~udModule() = default;
 
     void incr(const Module&, ExperimentXML4&);
@@ -167,6 +168,9 @@ private:
   private:
     std::atomic<bool> used;
   };
+
+  util::OnceFlag mod_unknown_flag;
+  udModule unknown_module;
 
   std::atomic<unsigned int> next_cid;
   class udContext {

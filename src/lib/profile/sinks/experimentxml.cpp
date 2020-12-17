@@ -221,7 +221,9 @@ ExperimentXML::udContext::udContext(const Context& c, ExperimentXML& exml)
     close = "</PF>\n";
     break;
   }
-  case Scope::Type::loop: {
+  case Scope::Type::loop:
+  case Scope::Type::line:
+  case Scope::Type::concrete_line: {
     auto fl = s.line_data();
     std::ostringstream ss;
     ss << "<L i=\"" << id << "\" s=\"" << proc.id << "\" v=\"0\""
@@ -235,9 +237,15 @@ ExperimentXML::udContext::udContext(const Context& c, ExperimentXML& exml)
     open = "<SecCallPathProfileData";
     close = "</SecCallPathProfileData>\n";
     break;
+  case Scope::Type::classified_point:
   case Scope::Type::point: {
     const auto& mo = s.point_data();
-    auto fl = mo.first.userdata[exml.src.classification()].getLine(mo.second);
+    std::pair<const File*, uint64_t> fl{nullptr, 0};
+    if(s.type() == Scope::Type::classified_point) {
+      auto ffl = s.line_data();
+      fl.first = &ffl.first;
+      fl.second = ffl.second;
+    }
     if(c.direct_parent()->scope().type() == Scope::Type::point) {
       if(proc.prep()) {  // We're in charge of the tag, and this is a tag we want.
         std::ostringstream ss;
@@ -463,10 +471,13 @@ void ExperimentXML::emit(const Context& c) {
   case Scope::Type::unknown:
   case Scope::Type::global:
   case Scope::Type::loop:
+  case Scope::Type::line:
+  case Scope::Type::concrete_line:
   case Scope::Type::inlined_function:
   case Scope::Type::function:
     break;
   case Scope::Type::point:
+  case Scope::Type::classified_point:
     of << (c.children().empty() ? 'S' : 'C') << udc.attr;
     // C nodes don't emit metrics, but S nodes do.
     emitmetrics = emitmetrics && c.children().empty();
@@ -495,8 +506,11 @@ void ExperimentXML::emit(const Context& c) {
   case Scope::Type::function:
   case Scope::Type::inlined_function:
   case Scope::Type::loop:
+  case Scope::Type::line:
+  case Scope::Type::concrete_line:
     break;
   case Scope::Type::point:
+  case Scope::Type::classified_point:
     of << "</" << (c.children().empty() ? 'S' : 'C') << ">\n";
     break;
   }

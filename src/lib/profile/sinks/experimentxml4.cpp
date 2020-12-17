@@ -120,8 +120,15 @@ static const std::unordered_map<std::string, const fancynames::type&> nametrans 
 // ud Module bits
 
 ExperimentXML4::udModule::udModule(const Module& m, ExperimentXML4& exml)
-  : id(m.userdata[exml.src.identifier()]), unknown_file(exml, m),
+  : id(m.userdata[exml.src.identifier()]+1), unknown_file(exml, m),
     used(false) {};
+
+ExperimentXML4::udModule::udModule(ExperimentXML4& exml)
+  : id(0), unknown_file(exml), used(true) {
+  std::ostringstream ss;
+  ss << "<LoadModule i=\"" << id << "\" n=" << util::xmlquoted("unknown module") << "/>\n";
+  tag = ss.str();
+}
 
 void ExperimentXML4::udModule::incr(const Module& mod, ExperimentXML4&) {
   if(!used.exchange(true, std::memory_order_relaxed)) {
@@ -385,18 +392,33 @@ ExperimentXML4::udContext::udContext(const Context& c, ExperimentXML4& exml)
     open = "<SecCallPathProfileData";
     close = "</SecCallPathProfileData>\n";
     break;
-  case Scope::Type::point: {
-    const auto& mo = s.point_data();
-    auto fl = mo.first.userdata[exml.src.classification()].getLine(mo.second);
-    if(c.direct_parent()->scope().type() == Scope::Type::point) {
+  case Scope::Type::point:
+  case Scope::Type::classified_point:
+  case Scope::Type::line:
+  case Scope::Type::concrete_line: {
+    std::pair<const Module*, uint64_t> mo{nullptr, 0};
+    if(s.type() != Scope::Type::line) {
+      auto mmo = s.point_data();
+      mo.first = &mmo.first;
+      mo.second = mmo.second;
+    }
+    std::pair<const File*, uint64_t> fl{nullptr, 0};
+    if(s.type() != Scope::Type::point) {
+      auto ffl = s.line_data();
+      fl.first = &ffl.first;
+      fl.second = ffl.second;
+    }
+    const auto pty = c.direct_parent()->scope().type();
+    if(pty == Scope::Type::point || pty == Scope::Type::classified_point
+       || pty == Scope::Type::line) {
       if(proc.prep()) {  // We're in charge of the tag, and this is a tag we want.
         std::ostringstream ss;
         ss << fancynames::unknown_proc.first << " "
               "0x" << std::hex << mo.second << " "
-              "[" << mo.first.path().filename().string() << "]";
+              "[" << (mo.first ? mo.first->path().filename().string() : "unknown module") << "]";
         proc.setTag(ss.str(), mo.second, fancynames::unknown_proc.second);
       }
-      auto& udm = mo.first.userdata[exml.ud];
+      auto& udm = mo.first ? mo.first->userdata[exml.ud] : exml.unknown_module;
       auto& udf = fl.first ? fl.first->userdata[exml.ud] : udm.unknown_file;
       udf.incr(exml);
       std::ostringstream ss;
@@ -415,7 +437,7 @@ ExperimentXML4::udContext::udContext(const Context& c, ExperimentXML4& exml)
           " s=\"" << proc.id << "\""
           " l=\"" << fl.second << "\"";
     attr = ss.str();
-    mo.first.userdata[exml.ud].incr(mo.first, exml);
+    if(mo.first) mo.first->userdata[exml.ud].incr(*mo.first, exml);
     break;
   }
   case Scope::Type::inlined_function: {
@@ -469,7 +491,8 @@ ExperimentXML4::udContext::udContext(const Context& c, ExperimentXML4& exml)
 ExperimentXML4::ExperimentXML4(const fs::path& out, bool srcs, HPCTraceDB2* db)
   : ProfileSink(), dir(out), of(), next_id(0x7FFFFFFF), tracedb(db),
     include_sources(srcs), file_unknown(*this), next_procid(2),
-    proc_unknown_proc(0), proc_partial_proc(1), next_cid(0x7FFFFFFF) {
+    proc_unknown_proc(0), proc_partial_proc(1), unknown_module(*this),
+    next_cid(0x7FFFFFFF) {
   if(dir.empty()) {  // Dry run
     util::log::info() << "ExperimentXML4 issuing a dry run!";
   } else {
@@ -548,6 +571,7 @@ void ExperimentXML4::write() {
     of << "<TraceDBTable>\n" << tracedb->exmlTag() << "</TraceDBTable>\n";
   of << "<LoadModuleTable>\n";
   // LoadModuleTable: from the Modules
+  if(unknown_module) of << unknown_module.tag;
   for(const auto& m: src.modules().iterate()) {
     auto& udm = m().userdata[ud];
     if(!udm) continue;
@@ -598,6 +622,9 @@ void ExperimentXML4::write() {
     case Scope::Type::function:
       break;
     case Scope::Type::point:
+    case Scope::Type::classified_point:
+    case Scope::Type::line:
+    case Scope::Type::concrete_line:
       of << (c.children().empty() ? 'S' : 'C') << udc.attr;
       break;
     }
@@ -625,6 +652,9 @@ void ExperimentXML4::write() {
     case Scope::Type::loop:
       break;
     case Scope::Type::point:
+    case Scope::Type::classified_point:
+    case Scope::Type::line:
+    case Scope::Type::concrete_line:
       of << "</" << (c.children().empty() ? 'S' : 'C') << ">\n";
       break;
     }
