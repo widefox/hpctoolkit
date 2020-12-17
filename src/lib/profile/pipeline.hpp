@@ -47,12 +47,13 @@
 #ifndef HPCTOOLKIT_PROFILE_PIPELINE_H
 #define HPCTOOLKIT_PROFILE_PIPELINE_H
 
-#include "context.hpp"
-#include "metric.hpp"
-#include "util/locked_unordered.hpp"
-#include "module.hpp"
 #include "attributes.hpp"
+#include "context.hpp"
 #include "dataclass.hpp"
+#include "metric.hpp"
+#include "module.hpp"
+
+#include "util/locked_unordered.hpp"
 
 #include <map>
 #include <bitset>

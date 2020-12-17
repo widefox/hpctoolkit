@@ -50,9 +50,7 @@
 
 #include "lib/profile/pipeline.hpp"
 #include "lib/profile/source.hpp"
-#include "lib/profile/sinks/experimentxml.hpp"
-#include "lib/profile/sinks/hpctracedb.hpp"
-#include "lib/profile/sinks/hpcmetricdb.hpp"
+#include "lib/profile/sink.hpp"
 #include "lib/profile/finalizers/denseids.hpp"
 #include "lib/profile/finalizers/directclassification.hpp"
 #include "lib/profile/transformer.hpp"
@@ -98,23 +96,6 @@ int main(int argc, char* const argv[]) {
   pipelineB << ctrans;
 
   switch(args.format) {
-  case ProfArgs::Format::exmldb: {
-    std::unique_ptr<sinks::HPCTraceDB> tdb;
-    if(args.include_traces)
-      tdb = make_unique_x<sinks::HPCTraceDB>(args.output, true);
-    std::unique_ptr<sinks::HPCMetricDB> mdb;
-    if(args.include_thread_local)
-      mdb = make_unique_x<sinks::HPCMetricDB>(args.output);
-    auto exml = make_unique_x<sinks::ExperimentXML>(args.output, args.include_sources,
-                                                    tdb.get(), mdb.get());
-    pipelineB << std::move(tdb) << std::move(mdb) << std::move(exml);
-
-    // ExperimentXML doesn't support instruction-level metrics, so we need
-    // a line-merging transformer.
-    if(!args.instructionGrain)
-      pipelineB << make_unique_x<LineMergeTransformer>();
-    break;
-  }
   case ProfArgs::Format::sparse:
     util::log::fatal{} << "Sparse output currently only for Prof2-MPI!";
     break;

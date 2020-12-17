@@ -154,7 +154,7 @@ const bool string_ends_with(const std::string& a, const std::string& n) {
 ProfArgs::ProfArgs(int argc, char* const argv[])
   : title(), threads(1), instructionGrain(false), output(),
     include_sources(true), include_traces(true), include_thread_local(true),
-    format(Format::exmldb), dwarfMaxSize(100*1024*1024), valgrindUnclean(false),
+    format(Format::sparse), dwarfMaxSize(100*1024*1024), valgrindUnclean(false),
     sparse_debug(false) {
   int arg_instructionGrain = instructionGrain;
   int arg_includeSources = include_sources;
@@ -273,8 +273,7 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
       break;
     case 'f': {
       std::string form(optarg);
-      if(form == "exmldb") format = Format::exmldb;
-      else if(form == "sparse") format = Format::sparse;
+      if(form == "sparse") format = Format::sparse;
       else {
         std::cerr << "Unrecognized output format '" << form << "'!\n";
         std::exit(2);

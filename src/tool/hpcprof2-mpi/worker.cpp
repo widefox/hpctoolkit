@@ -54,9 +54,7 @@
 #include "lib/profile/source.hpp"
 #include "lib/profile/packedids.hpp"
 #include "lib/profile/sinks/packed.hpp"
-#include "lib/profile/sinks/hpctracedb.hpp"
 #include "lib/profile/sinks/hpctracedb2.hpp"
-#include "lib/profile/sinks/hpcmetricdb.hpp"
 #include "lib/profile/finalizers/denseids.hpp"
 #include "lib/profile/finalizers/directclassification.hpp"
 #include "lib/profile/transformer.hpp"
@@ -183,12 +181,6 @@ int rankN(ProfArgs&& args) {
     // We only emit our part of the MetricDB and TraceDB.
     std::unique_ptr<SparseDB> sdb;
     switch(args.format) {
-    case ProfArgs::Format::exmldb:
-      if(args.include_traces)
-        pipelineB2 << make_unique_x<sinks::HPCTraceDB>(args.output, false);
-      if(args.include_thread_local)
-        pipelineB2 << make_unique_x<sinks::HPCMetricDB>(args.output);
-      break;
     case ProfArgs::Format::sparse:
       if(args.include_traces)
         pipelineB2 << make_unique_x<sinks::HPCTraceDB2>(args.output) >> mpiDep;      

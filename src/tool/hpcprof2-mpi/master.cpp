@@ -54,11 +54,8 @@
 #include "lib/profile/packedids.hpp"
 #include "lib/profile/source.hpp"
 #include "lib/profile/sources/packed.hpp"
-#include "lib/profile/sinks/experimentxml.hpp"
 #include "lib/profile/sinks/experimentxml4.hpp"
-#include "lib/profile/sinks/hpctracedb.hpp"
 #include "lib/profile/sinks/hpctracedb2.hpp"
-#include "lib/profile/sinks/hpcmetricdb.hpp"
 #include "lib/profile/finalizers/denseids.hpp"
 #include "lib/profile/finalizers/directclassification.hpp"
 #include "lib/profile/transformer.hpp"
@@ -167,24 +164,6 @@ int rank0(ProfArgs&& args) {
   // Finally, eventually we get to actually write stuff out.
   std::unique_ptr<SparseDB> sdb;
   switch(args.format) {
-  case ProfArgs::Format::exmldb: {
-    std::unique_ptr<sinks::HPCTraceDB> tdb;
-    if(args.include_traces)
-      tdb = make_unique_x<sinks::HPCTraceDB>(args.output, false);
-    std::unique_ptr<sinks::HPCMetricDB> mdb;
-    if(args.include_thread_local)
-      mdb = make_unique_x<sinks::HPCMetricDB>(args.output);
-    auto exml = make_unique_x<sinks::ExperimentXML>(args.output, args.include_sources,
-                                                    tdb.get(), mdb.get());
-    pipelineB << std::move(tdb) << std::move(mdb) << std::move(exml);
-
-    // ExperimentXML doesn't support instruction-level metrics, so we need a
-    // line-merging transformer. Since this only changes the Scope, we don't
-    // need to track it.
-    if(!args.instructionGrain)
-      pipelineB << make_unique_x<LineMergeTransformer>();
-    break;
-  }
   case ProfArgs::Format::sparse: {
     std::unique_ptr<sinks::HPCTraceDB2> tdb;
     if(args.include_traces)
