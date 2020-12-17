@@ -171,9 +171,9 @@ void StructFile::module(const Module& m, Classification& c) {
   struct Ctx {
     char tag;
     const File* file;
-    std::size_t scope;
+    Classification::Block* scope;
     uint64_t a_line;
-    Ctx() : tag('R'), file(nullptr), scope(Classification::scopenone), a_line(0) {};
+    Ctx() : tag('R'), file(nullptr), scope(nullptr), a_line(0) {};
     Ctx(const Ctx& o, char t) : tag(t), file(o.file), scope(o.scope), a_line(o.a_line) {};
   };
   std::stack<Ctx, std::vector<Ctx>> stack;

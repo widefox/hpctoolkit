@@ -52,11 +52,12 @@
 #include "util/locked_unordered.hpp"
 #include "util/once.hpp"
 
+#include "stdshim/filesystem.hpp"
+#include <forward_list>
+#include <future>
 #include <map>
 #include <unordered_set>
 #include <vector>
-#include <future>
-#include "stdshim/filesystem.hpp"
 
 namespace hpctoolkit {
 
@@ -78,6 +79,24 @@ public:
 
     bool contains(const Interval& o) const { return lo <= o.lo && o.hi <= hi; }
     bool contains(uint64_t a) const { return lo <= a && a <= hi; }
+  };
+
+  class Block {
+  public:
+    ~Block() = default;
+    Block(Block&&) = default;
+    Block& operator=(Block&&) = default;
+
+  private:
+    friend class Classification;
+    Block* const parent;
+    Scope const scope;
+    Block(Function& f, Block* p = nullptr)
+      : parent(p), scope(f) {};
+    Block(Function& f, const File& fn, uint64_t l, Block* p = nullptr)
+      : parent(p), scope(f, fn, l) {};
+    Block(Scope::loop_t, const File& fn, uint64_t l, Block* p = nullptr)
+      : parent(p), scope(Scope::loop, fn, l) {};
   };
 
   /// Look up the stack of Scopes for the given address. If the address
@@ -103,22 +122,19 @@ public:
     return *functions.emplace(new Function(std::forward<Args>(args)...)).first->get();
   }
 
-  /// Special identifier for the NULL Scope trie node.
-  static constexpr std::size_t scopenone = std::numeric_limits<std::size_t>::max();
-
   /// Add a new entry to the Scope trie. Returns an identifier for the resulting
   /// node.
   // MT: Externally Synchronized
   template<class... Args>
-  std::size_t addScope(Args&&... args) noexcept {
-    std::size_t r = scopechains.size();
-    scopechains.emplace_back(std::forward<Args>(args)...);
-    return r;
+  Block* addScope(Args&&... args) noexcept {
+    Block b(std::forward<Args>(args)...);
+    blocks.emplace_front(std::move(b));
+    return &blocks.front();
   }
 
   /// Overwrite the lowest-level Scope for the given range.
   // MT: Externally Synchronized
-  void setScope(const Interval&, std::size_t) noexcept;
+  void setScope(const Interval&, Block*) noexcept;
 
   /// Check whether an Interval has a remaining gap within it somewhere.
   // MT: Safe (const)
@@ -154,18 +170,8 @@ public:
   void setLines(std::vector<LineScope>&& lscopes);
 
 private:
-  struct ScopeChain {
-    std::size_t parentidx;
-    Scope scope;
-    ScopeChain(Function& f, std::size_t p)
-      : parentidx(p), scope(f) {};
-    ScopeChain(Function& f, const File& fn, uint64_t l, std::size_t p)
-      : parentidx(p), scope(f, fn, l) {};
-    ScopeChain(const Scope::loop_t&, const File& fn, uint64_t l, std::size_t p)
-      : parentidx(p), scope(Scope::loop, fn, l) {};
-  };
-  std::map<Interval, std::size_t> ll_scopeidxs;
-  std::vector<ScopeChain> scopechains;
+  std::map<Interval, Block*> ll_scopeblocks;
+  std::forward_list<Block> blocks;
   std::vector<LineScope> lll_scopes;
 };
 

@@ -65,16 +65,12 @@ extern "C" {
 
 using namespace hpctoolkit;
 
-constexpr std::size_t Classification::scopenone;
-
 std::vector<Scope> Classification::getScopes(uint64_t pos) const noexcept {
   std::vector<Scope> res;
-  auto it = ll_scopeidxs.find({pos, pos});
-  if(it != ll_scopeidxs.end()) {
-    for(std::size_t scidx = it->second; scidx != scopenone;
-        scidx = scopechains[scidx].parentidx) {
-      res.push_back(scopechains[scidx].scope);
-    }
+  auto it = ll_scopeblocks.find({pos, pos});
+  if(it != ll_scopeblocks.end()) {
+    for(Block* sc = it->second; sc != nullptr; sc = sc->parent)
+      res.push_back(sc->scope);
   }
   return res;
 }
@@ -94,25 +90,25 @@ const Classification::LineScope* Classification::getLineScope(uint64_t pos) cons
   return &*it;
 }
 
-void Classification::setScope(const Interval& i, std::size_t scidx) noexcept {
+void Classification::setScope(const Interval& i, Block* sc) noexcept {
   // First just try inserting. It might not overlap with anything.
-  auto x = ll_scopeidxs.emplace(i, scidx);
+  auto x = ll_scopeblocks.emplace(i, sc);
   if(x.second) return;
   // For each interval it overlaps with, try to find the gap before it.
   Interval gap(i.lo, 0);
-  auto eqrange = ll_scopeidxs.equal_range(i);
+  auto eqrange = ll_scopeblocks.equal_range(i);
   for(auto& it = eqrange.first; it != eqrange.second; it++) {
     gap.hi = it->first.lo - 1;
-    if(gap.lo < gap.hi) ll_scopeidxs.emplace_hint(it, gap, scidx);
+    if(gap.lo < gap.hi) ll_scopeblocks.emplace_hint(it, gap, sc);
     gap.lo = it->first.hi + 1;
   }
   // Final gap to the end of i.
   gap.hi = i.hi;
-  if(gap.lo < gap.hi) ll_scopeidxs.emplace(gap, scidx);
+  if(gap.lo < gap.hi) ll_scopeblocks.emplace(gap, sc);
 }
 
 bool Classification::filled(const Interval& i) const noexcept {
-  auto eqrange = ll_scopeidxs.equal_range(i);
+  auto eqrange = ll_scopeblocks.equal_range(i);
   if(eqrange.first == eqrange.second) return false;
   Interval gap(i.lo, 0);
   for(auto& it = eqrange.first; it != eqrange.second; it++) {
@@ -124,7 +120,7 @@ bool Classification::filled(const Interval& i) const noexcept {
 }
 
 bool Classification::empty() const noexcept {
-  return ll_scopeidxs.empty() && lll_scopes.empty();
+  return ll_scopeblocks.empty() && lll_scopes.empty();
 }
 
 void Classification::setLines(std::vector<LineScope>&& lscopes) {

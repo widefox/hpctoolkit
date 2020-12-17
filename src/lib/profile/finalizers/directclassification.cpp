@@ -236,7 +236,7 @@ void DirectClassification::symtab(void* elf_vp, const Module& m, Classification&
     }
 
     // Add our Classification as usual.
-    c.setScope(range, c.addScope(func, Classification::scopenone));
+    c.setScope(range, c.addScope(func));
   }
 }
 
@@ -319,18 +319,18 @@ void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classificati
   Dwarf_CU* cu = nullptr;
   Dwarf_Die root;
   while(dwarf_get_units(dbg, cu, &cu, nullptr, nullptr, &root, nullptr) == 0) {
-    dwarfwalk<std::size_t>(root,
-      [&](Dwarf_Die& die, std::size_t paridx) -> std::size_t {
+    dwarfwalk<Classification::Block*>(root,
+      [&](Dwarf_Die& die, Classification::Block* par) -> Classification::Block* {
         // Check that the DIE is a function-like thing. Skip if not.
         int tag = dwarf_tag(&die);
         if(tag != DW_TAG_subprogram && tag != DW_TAG_inlined_subroutine)
-          return paridx;
+          return par;
 
         // Skip declarations. They'll be added when we find them.
-        if(dwarf_hasattr(&die, DW_AT_declaration)) return paridx;
+        if(dwarf_hasattr(&die, DW_AT_declaration)) return par;
 
         // Skip any abstract instances. We want only the concrete ones.
-        if(dwarf_func_inline(&die)) return paridx;
+        if(dwarf_func_inline(&die)) return par;
 
         Dwarf_Attribute attr_mem;
         Dwarf_Attribute* attr;
@@ -377,7 +377,7 @@ void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classificati
 
         // If this is not an inlined call, just emit as a normal Scope
         if(tag != DW_TAG_inlined_subroutine)
-          return c.addScope(func, paridx);
+          return c.addScope(func, par);
 
         // Try to find the file for this inlined call.
         const File* srcf = nullptr;
@@ -395,16 +395,16 @@ void DirectClassification::fullDwarf(void* dbg_vp, const Module& m, Classificati
           if(dwarf_formudata(attr, &word) == 0) linenum = word;
         }
 
-        return c.addScope(func, *srcf, linenum, paridx);
-    }, [&](Dwarf_Die& die, std::size_t idx, std::size_t paridx) {
+        return c.addScope(func, *srcf, linenum, par);
+    }, [&](Dwarf_Die& die, Classification::Block* here, Classification::Block* par) {
         // Mark all remaining ranges as being from this tail
         ptrdiff_t offset = 0;
         Dwarf_Addr base, start, end;
         while((offset = dwarf_ranges(&die, offset, &base, &start, &end)) > 0) {
           if(start != end) end -= 1;
-          c.setScope({start, end}, idx);
+          c.setScope({start, end}, here);
         }
-    }, Classification::scopenone);
+    }, nullptr);
 
     // Now that the scopes are in place for this CU, load in the line info.
     Dwarf_Lines* lines = nullptr;
