@@ -85,11 +85,6 @@ std::pair<const File*, uint64_t> Classification::getLine(uint64_t pos) const noe
   return {nullptr, 0};
 }
 
-uint64_t Classification::getCanonicalAddr(uint64_t pos) const noexcept {
-  auto lsp = getLineScope(pos);
-  return lsp ? lsp->canonicalAddr : pos;
-}
-
 const Classification::LineScope* Classification::getLineScope(uint64_t pos) const noexcept {
   auto it = std::lower_bound(lll_scopes.begin(), lll_scopes.end(),
                              LineScope(pos, nullptr, 0));
@@ -148,19 +143,4 @@ void Classification::setLines(std::vector<LineScope>&& lscopes) {
       llb = std::move(ls);
   }
   lll_scopes.shrink_to_fit();
-
-  struct flhash {
-    std::hash<const File*> h_f;
-    std::hash<uint64_t> h_l;
-    std::size_t operator()(const std::pair<const File*,uint64_t>& v) const noexcept {
-      auto y = h_l(v.second);
-      return h_f(v.first) | (y >> 9) | (y << 55);
-    }
-  };
-  std::unordered_map<std::pair<const File*,uint64_t>, uint64_t, flhash> canon;
-
-  for(auto& ls : lll_scopes) {
-    auto x = canon.insert({{ls.file, ls.line}, ls.addr});
-    ls.canonicalAddr = x.first->second;
-  }
 }

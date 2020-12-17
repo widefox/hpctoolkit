@@ -60,8 +60,8 @@
 
 namespace hpctoolkit {
 
-// Classifications represent the binding from offsets within a Module to the
-// structural Contexts that we often want to insert.
+/// Classifications represent the binding from offsets within a Module to the
+/// structural Scopes that represent its source-level context.
 class Classification {
 public:
   Classification() = default;
@@ -90,11 +90,6 @@ public:
   /// with a `nullptr` file at line 0.
   // MT: Safe (const)
   std::pair<const File*, uint64_t> getLine(uint64_t) const noexcept;
-
-  /// Look up the canonical address for the given address. If unknown, responds
-  /// with the original address.
-  // MT: Safe (const)
-  uint64_t getCanonicalAddr(uint64_t) const noexcept;
 
   /// The master table for Functions. These can be used to generate Scopes for
   /// various addScope and setScope.
@@ -137,9 +132,8 @@ public:
     uint64_t addr;
     const File* file;
     uint64_t line;
-    uint64_t canonicalAddr;
     LineScope(uint64_t a, const File* f, uint64_t l)
-      : addr(a), file(f), line(l), canonicalAddr(0) {};
+      : addr(a), file(f), line(l) {};
     bool operator<(const LineScope& o) const noexcept {
       if(addr != o.addr) return addr < o.addr;
       if(file != o.file) {
