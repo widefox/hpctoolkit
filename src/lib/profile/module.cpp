@@ -90,6 +90,49 @@ const Classification::LineScope* Classification::getLineScope(uint64_t pos) cons
   return &*it;
 }
 
+void Classification::Block::addRoute(std::vector<route_t> from) noexcept {
+  if(parent != nullptr)
+    util::log::fatal{} << "Attempt to add route to a non-root Block!";
+  if(from.empty()) return;
+  routes.emplace_front(std::move(from));
+  routeCnt += 1;
+}
+
+std::vector<std::vector<Scope>> Classification::getRoutes(uint64_t addr) const noexcept {
+  Block& b = *({
+    auto it = ll_scopeblocks.find({addr, addr});
+    if(it == ll_scopeblocks.end() || it->second == nullptr) {
+      return {};
+    }
+    Block* p = it->second;
+    while(p->parent != nullptr) p = p->parent;
+    p;
+  });
+  std::vector<std::vector<Scope>> routes;
+  routes.reserve(b.routeCnt);
+  for(const auto& r: b.routes) {
+    routes.emplace_back();
+    for(const auto vhop: r) {
+      if(std::holds_alternative<uint64_t>(vhop)) {
+        const auto hop = std::get<uint64_t>(vhop);
+        const auto* line = getLineScope(hop);
+        if(line != nullptr && line->file != nullptr)
+          routes.back().push_back({Scope::call, mod, hop, *line->file, line->line});
+        else
+          routes.back().push_back({Scope::call, mod, hop});
+        const auto scopes = getScopes(hop);
+        routes.back().insert(routes.back().end(), scopes.begin(), scopes.end());
+      } else if(std::holds_alternative<const Block*>(vhop)) {
+        for(const Block* hop = std::get<const Block*>(vhop); hop != nullptr;
+            hop = hop->parent)
+          routes.back().push_back(hop->scope);
+      } else std::abort();
+    }
+    routes.back().shrink_to_fit();
+  }
+  return routes;
+}
+
 void Classification::setScope(const Interval& i, Block* sc) noexcept {
   // First just try inserting. It might not overlap with anything.
   auto x = ll_scopeblocks.emplace(i, sc);

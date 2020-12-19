@@ -93,6 +93,14 @@ protected:
       auto mo = s.point_data();
       const auto& c = mo.first.userdata[sink.classification()];
       auto ss = c.getScopes(mo.second);
+      auto routes = c.getRoutes(mo.second);
+      if(!routes.empty()) {
+        for(const auto& r: routes) {
+          util::log::debug d{true};
+          d << std::hex << mo.second << " has route:";
+          for(const auto& s: r) d << " " << s;
+        }
+      }
       for(auto it = ss.crbegin(); it != ss.crend(); ++it) {
         p = &sink.context(*p, *it);
         v.emplace_back(*p);

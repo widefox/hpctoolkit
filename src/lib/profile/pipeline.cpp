@@ -163,7 +163,7 @@ ProfilePipeline::ProfilePipeline(Settings&& b, std::size_t team_sz)
   using namespace literals::data;
   // Prep the Extensions first thing.
   if(requested.hasClassification()) {
-    uds.classification = structs.module.add_default<Classification>(
+    uds.classification = structs.module.add_initializer<Classification>(
       [this](Classification& cl, const Module& m){
         for(ProfileFinalizer& fp: finalizers.classification) fp.module(m, cl);
       });

@@ -176,10 +176,18 @@ void StructFile::module(const Module& m, Classification& c) {
     Ctx() : tag('R'), file(nullptr), scope(nullptr), a_line(0) {};
     Ctx(const Ctx& o, char t) : tag(t), file(o.file), scope(o.scope), a_line(o.a_line) {};
   };
-  std::stack<Ctx, std::vector<Ctx>> stack;
+  struct Stack : public std::stack<Ctx, std::vector<Ctx>> {
+    Classification::Block* rootScope() const {
+      for(const auto& ctx: c)
+        if(ctx.scope != nullptr) return ctx.scope;
+      util::log::fatal{} << "No root Scope!";
+    }
+  } stack;
   bool seenhts = false;
   bool seenlm = false;
   std::vector<Classification::LineScope> lscopes;
+  std::unordered_map<uint64_t, Classification::Block*> funcs;
+  std::forward_list<std::tuple<Classification::Block*, uint64_t, uint64_t>> cfg;
   LHandler handler([&](const std::string& ename, const Attributes& attr) {
     if(ename == "HPCToolkitStructure") {
       stack.emplace();
@@ -199,6 +207,7 @@ void StructFile::module(const Module& m, Classification& c) {
       f.line = std::stoll(xmlstr(attr.getValue(XMLStr("l"))));
       stack.emplace(stack.top(), 'P');
       stack.top().scope = c.addScope(f, stack.top().scope);
+      funcs.emplace(f.offset, stack.top().scope);
     } else if(ename == "L") {
       const auto& f = sink.file(xmlstr(attr.getValue(XMLStr("f"))));
       auto l = std::stoll(xmlstr(attr.getValue(XMLStr("l"))));
@@ -226,7 +235,13 @@ void StructFile::module(const Module& m, Classification& c) {
         stack.top().scope = c.addScope(f, *stack.top().file, stack.top().a_line, stack.top().scope);
       }
     } else if(ename == "C") {
-      // This one we might not care as much about
+      auto l = std::stoll(xmlstr(attr.getValue(XMLStr("l"))));
+      auto i = parseVs(xmlstr(attr.getValue(XMLStr("v")))).at(0);
+      lscopes.emplace_back(i.lo, stack.top().file, l);
+      c.setScope(i, stack.top().scope);
+      auto tstr = xmlstr(attr.getValue(XMLStr("t")));
+      auto t = std::strtoll(&tstr.c_str()[2], nullptr, 16);
+      cfg.emplace_front(stack.rootScope(), i.lo, t);
     } else util::log::fatal() << "Unknown tag in struct file!";
   }, [&](const std::string& ename){
     if(ename == "LM") return;
@@ -240,4 +255,49 @@ void StructFile::module(const Module& m, Classification& c) {
   parser->parse(XMLStr(path.string()));
   if(stack.size() != 0) util::log::fatal() << "Too many pushes!";
   c.setLines(std::move(lscopes));
+
+  // Build the reverse call graph/CFG from the data we've gathered thus far
+  std::unordered_multimap<Classification::Block*,
+                          std::pair<Classification::Block*, uint64_t>> rcfg;
+  while(!cfg.empty()) {
+    const auto [in, from, to] = cfg.front();
+    rcfg.insert({funcs.at(to), {in, from}});
+    cfg.pop_front();
+  }
+
+  // Map out the possible routes from each top-level block. We assume all routes
+  // present in the static CFG are possible.
+  // TODO: Apply some SCC handling around here, and some general optimizations.
+  auto* unknown_block = c.addScope(Scope{});
+  for(const auto [offset, root]: funcs) {
+    util::log::debug{true} << "Scanning from " << std::hex << offset << ": " << root->getScope().function_data().name;
+    std::vector<Classification::Block::route_t> route;
+    std::unordered_set<Classification::Block*> seen;
+    std::function<void(Classification::Block*)> dfs = [&](Classification::Block* b) {
+      auto range = rcfg.equal_range(b);
+      if(range.first == range.second) {
+        // Terminate the route, we have nowhere else to go
+        if(route.empty()) return;
+        root->addRoute(route);
+        util::log::debug{true} << "Adding route of length " << route.size() << " to " << root << " due to dead end";
+      } else {
+        for(auto it = range.first; it != range.second; ++it) {
+          const auto [from, addr] = it->second;
+          if(!seen.emplace(from).second) {
+            // Terminate the route, we've looped on ourselves.
+            route.push_back(unknown_block);
+            root->addRoute(route);
+            util::log::debug{true} << "Adding route of length " << route.size() << " to " << root << " due to recursion";
+            route.pop_back();
+          } else {
+            route.push_back(addr);
+            dfs(from);
+            route.pop_back();
+          }
+          seen.erase(from);
+        }
+      }
+    };
+    dfs(root);
+  }
 }

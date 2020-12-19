@@ -57,15 +57,18 @@
 #include <future>
 #include <map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 namespace hpctoolkit {
+
+class Module;
 
 /// Classifications represent the binding from offsets within a Module to the
 /// structural Scopes that represent its source-level context.
 class Classification {
 public:
-  Classification() = default;
+  Classification(const Module& m) : mod(m) {};
   ~Classification() = default;
 
   struct Interval {
@@ -87,10 +90,26 @@ public:
     Block(Block&&) = default;
     Block& operator=(Block&&) = default;
 
+    using route_t = std::variant<uint64_t, const Block*>;
+
+    /// Add a "route" by which this Block can be called, in terms of other
+    /// addresses within this Module or other Blocks.
+    /// The offsets will be converted into call Scopes with the result of
+    /// getScopes attached, while the Blocks will be inserted as-is.
+    // MT: Externally Synchronized
+    void addRoute(std::vector<route_t>) noexcept;
+
+    /// Get the Scope for this Block
+    Scope getScope() const noexcept { return scope; }
+
   private:
     friend class Classification;
     Block* const parent;
     Scope const scope;
+    std::size_t routeCnt = 0;
+    std::forward_list<std::vector<route_t>> routes;
+    Block(Scope s, Block* p = nullptr)
+      : parent(p), scope(s) {};
     Block(Function& f, Block* p = nullptr)
       : parent(p), scope(f) {};
     Block(Function& f, const File& fn, uint64_t l, Block* p = nullptr)
@@ -104,6 +123,12 @@ public:
   /// If only the lowest-level Scope is needed, see getScope.
   // MT: Safe (const)
   std::vector<Scope> getScopes(uint64_t) const noexcept;
+
+  /// Look up all the possible routes to the particular address, to be appended
+  /// to the prefix given by getScopes().
+  /// If empty, there are no meaningful routes to the given address.
+  // MT: Safe (const)
+  std::vector<std::vector<Scope>> getRoutes(uint64_t) const noexcept;
 
   /// Look up the file and line info for the given address. If unknown, responds
   /// with a `nullptr` file at line 0.
@@ -170,6 +195,7 @@ public:
   void setLines(std::vector<LineScope>&& lscopes);
 
 private:
+  const Module& mod;
   std::map<Interval, Block*> ll_scopeblocks;
   std::forward_list<Block> blocks;
   std::vector<LineScope> lll_scopes;

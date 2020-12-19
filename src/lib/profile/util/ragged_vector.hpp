@@ -251,6 +251,20 @@ public:
     });
   }
 
+  /// Register a typed memory block for future ragged_vectors. Uses the
+  /// constructor add() would use, but still calls a custom function after.
+  // MT: Internally Synchonized
+  template<class T, class... Args>
+  generic_typed_member<T> add_initializer(
+      std::function<void(T&, InitArgs&&...)>&& init, Args&&... args) {
+    return add(sizeof(T), [init, args...](void* v, InitArgs&&... iargs){
+      new(v) T(std::forward<InitArgs>(iargs)..., args...);
+      init(*(T*)v, std::forward<InitArgs>(iargs)...);
+    }, [](void* v){
+      ((T*)v)->~T();
+    });
+  }
+
   /// Freeze additions to the struct, allowing ragged_vectors to be generated.
   // MT: Externally Synchonized
   void freeze() noexcept { complete = true; }
