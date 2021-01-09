@@ -307,7 +307,7 @@ void Hpcrun4::read(const DataClass& needed) {
     hpcrun_fmt_cct_node_t n;
     while((id = hpcrun_sparse_next_context(file, &n)) > 0) {
       // Figure out the parent of this node, if it has one.
-      Context* par;
+      std::optional<ContextRef> par;
       if(n.id_parent == 0) {  // Root of some kind
         if(n.lm_id == 0) {  // Synthetic root, remap to something useful.
           if(n.lm_ip == HPCRUN_FMT_LMIp_NULL) {
@@ -325,11 +325,11 @@ void Hpcrun4::read(const DataClass& needed) {
         } else {
           // If it looks like a sample but doesn't have a parent,
           // stitch it to the global unknown.
-          par = &sink.context(sink.global(), {});
+          par = sink.context(sink.global(), {});
         }
       } else if(n.id_parent == partial_node_id || n.id_parent == unknown_node_id) {
         // Global unknown Scope, emitted lazily.
-        par = &sink.context(sink.global(), {});
+        par = sink.context(sink.global(), {});
       } else {  // Just nab its parent
         auto ppar = nodes.find(n.id_parent);
         if(ppar == nodes.end()) {
@@ -342,7 +342,7 @@ void Hpcrun4::read(const DataClass& needed) {
           ppar = nodes.emplace(n.id_parent,
             sink.context(tmp->second.first, {Scope::call, mo.first, mo.second})).first;
         }
-        par = &ppar->second;
+        par = ppar->second;
       }
 
       // Figure out the Scope for this node, if it has one.
@@ -352,7 +352,7 @@ void Hpcrun4::read(const DataClass& needed) {
         if(it == modules.end())
           util::log::fatal() << "Erroneous module id " << n.lm_id << " in " << path.string() << "!";
         scope = {it->second, n.lm_ip};
-      } else if(par == nullptr) {
+      } else if(!par) {
         // Special case: merge global -> unknown to the global unknown.
         unknown_node_id = id;
         continue;
@@ -379,11 +379,11 @@ void Hpcrun4::read(const DataClass& needed) {
       hpcrun_metricVal_t val;
       int mid = hpcrun_sparse_next_entry(file, &val);
       if(mid == 0) continue;
-      auto& here = !sink.limit().hasContexts() ? sink.global() : *({
+      ContextRef here = !sink.limit().hasContexts() ? sink.global() : ({
         auto it = nodes.find(cid);
         if(it == nodes.end())
           util::log::fatal() << "Erroneous CCT id " << cid << " in " << path.string() << "!";
-        &it->second;
+        it->second;
       });
       auto accum = sink.accumulateTo(here, *thread);
       while(mid > 0) {
@@ -397,7 +397,7 @@ void Hpcrun4::read(const DataClass& needed) {
   hpcrun_sparse_pause(file);
 
   if(needed.hasTimepoints() && !tracepath.empty()) {
-    std::vector<std::pair<std::chrono::nanoseconds, std::reference_wrapper<Context>>> tps;
+    std::vector<std::pair<std::chrono::nanoseconds, ContextRef>> tps;
 
     std::FILE* f = std::fopen(tracepath.c_str(), "rb");
     std::fseek(f, trace_off, SEEK_SET);

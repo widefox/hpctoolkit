@@ -498,52 +498,55 @@ void Source::metricFreeze(Metric& m) {
 }
 
 Context& Source::global() { return *pipe->cct; }
-Context& Source::context(Context& p, const Scope& s) {
+ContextRef Source::context(ContextRef p, const Scope& s) {
   if(!limit().hasContexts())
     util::log::fatal() << "Source did not register for `contexts` emission!";
-  Context* rc = &p;
   Scope rs = s;
   for(std::size_t i = 0; i < pipe->transformers.size(); i++)
-    try {
-      if(i != tskip)
-        rc = &pipe->transformers[i].get().context(*rc, rs);
-    } catch(std::exception& e) {
-      util::log::fatal() << "Exception caught while processing context"
-                         << " through transformer " << i << "\n"
-                         << "  what(): " << e.what();
+    if(i != tskip)
+      p = pipe->transformers[i].get().context(p, rs);
+  if(auto pc = std::get_if<Context>(p)) {
+    auto x = pc->ensure(rs);
+    if(x.second) {
+      for(auto& s: pipe->sinks) {
+        if(s.dataLimit.hasContexts()) s().notifyContext(x.first);
+      }
+      x.first.userdata.initialize();
     }
-  auto x = rc->ensure(rs);
-  if(x.second) {
-    for(auto& s: pipe->sinks) {
-      if(s.dataLimit.hasContexts()) s().notifyContext(x.first);
-    }
-    x.first.userdata.initialize();
-  }
-  return x.first;
+    return x.first;
+  } else abort();  // unreachable
 }
 
-Source::AccumulatorsRef Source::accumulateTo(Context& c, Thread::Temporary& t) {
+Source::AccumulatorsRef Source::accumulateTo(ContextRef c, Thread::Temporary& t) {
   if(!limit().hasMetrics())
     util::log::fatal() << "Source did not register for `metrics` emission!";
-  return t.data[&c];
+  return t.data[&std::get<Context>(c)];
 }
 
 void Source::AccumulatorsRef::add(Metric& m, double v) {
   map[&m].add(v);
 }
 
-Source::StatisticsRef Source::accumulateTo(Context& c) {
+Source::StatisticsRef Source::accumulateTo(ContextRef c) {
   if(!limit().hasMetrics())
     util::log::fatal() << "Source did not register for `metrics` emission!";
+  if(!std::holds_alternative<Context>(c))
+    util::log::fatal{} << "Statistics are only present on proper Contexts!";
   return {c};
 }
 
+template<class T>
+void Source::StatisticsRef::add(T& ctx, Metric& m, const StatisticPartial& sp,
+                                MetricScope ms, double v) {
+  auto& a = ctx.data.emplace(std::piecewise_construct,
+                             std::forward_as_tuple(&m),
+                             std::forward_as_tuple(m)).first;
+  a.get(sp).add(ms, v);
+}
 void Source::StatisticsRef::add(Metric& m, const StatisticPartial& sp,
                                 MetricScope ms, double v) {
-  auto& a = c.data.emplace(std::piecewise_construct,
-                           std::forward_as_tuple(&m),
-                           std::forward_as_tuple(m)).first;
-  a.get(sp).add(ms, v);
+  if(auto pc = std::get_if<Context>(c)) add(*pc, m, sp, ms, v);
+  else abort();  // unreachable
 }
 
 Thread::Temporary& Source::thread(const ThreadAttributes& o) {
@@ -558,7 +561,7 @@ Thread::Temporary& Source::thread(const ThreadAttributes& o) {
   return slocal->threads.back();
 }
 
-void Source::timepoint(Thread::Temporary& tt, Context& c, std::chrono::nanoseconds tm) {
+void Source::timepoint(Thread::Temporary& tt, ContextRef c, std::chrono::nanoseconds tm) {
   if(!limit().hasTimepoints())
     util::log::fatal() << "Source did not register for `timepoints` emission!";
   for(auto& s: pipe->sinks) {
@@ -586,7 +589,7 @@ void Source::timepoint(Thread::Temporary& tt, std::chrono::nanoseconds tm) {
   }
 }
 
-void Source::timepoint(Context& c, std::chrono::nanoseconds tm) {
+void Source::timepoint(ContextRef c, std::chrono::nanoseconds tm) {
   if(!limit().hasTimepoints())
     util::log::fatal() << "Source did not register for `timepoints` emission!";
   for(auto& s: pipe->sinks) {

@@ -95,8 +95,8 @@ private:
   std::unordered_map<unsigned int, Metric&> metrics;
   std::unordered_map<unsigned int, bool> metricInt;
   std::unordered_map<unsigned int, Module&> modules;
-  std::unordered_map<unsigned int, Context&> nodes;
-  std::unordered_map<unsigned int, std::pair<Context&, Scope>> templates;
+  std::unordered_map<unsigned int, ContextRef> nodes;
+  std::unordered_map<unsigned int, std::pair<ContextRef, Scope>> templates;
   unsigned int partial_node_id;  // ID for the partial unwind fake root node
   unsigned int unknown_node_id;  // ID for unwinds that start from "nowhere," but somehow aren't partial.
 

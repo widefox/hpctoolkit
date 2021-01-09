@@ -158,8 +158,7 @@ std::vector<uint8_t>::const_iterator Packed::unpackReferences(iter_t it) noexcep
 }
 
 std::vector<uint8_t>::const_iterator Packed::unpackContexts(iter_t it) noexcept {
-  std::stack<std::reference_wrapper<Context>,
-    std::vector<std::reference_wrapper<Context>>> tip;
+  std::stack<ContextRef, std::vector<ContextRef>> tip;
   // Format: children... [sentinal]
   while(1) {
     auto next = unpack<std::uint64_t>(it);
@@ -178,7 +177,7 @@ std::vector<uint8_t>::const_iterator Packed::unpackContexts(iter_t it) noexcept 
       auto off = unpack<std::uint64_t>(it);
       s = Scope{modules.at(next), off};  // Module scope
     }
-    auto& c = sink.context(tip.empty() ? sink.global() : tip.top().get(), s);
+    auto c = sink.context(tip.empty() ? sink.global() : (ContextRef)tip.top(), s);
     tip.push(c);
   }
   return it;

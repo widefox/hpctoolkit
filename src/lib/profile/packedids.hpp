@@ -64,7 +64,7 @@ public:
     Classifier(IdPacker& s) : shared(s) {};
     ~Classifier() = default;
 
-    Context& context(Context&, Scope&) override;
+    ContextRef context(ContextRef, Scope&) noexcept override;
 
   private:
     IdPacker& shared;
@@ -117,7 +117,7 @@ public:
     Expander(IdUnpacker& s) : shared(s) {};
     ~Expander() = default;
 
-    Context& context(Context&, Scope&) override;
+    ContextRef context(ContextRef, Scope&) noexcept override;
 
   private:
     IdUnpacker& shared;

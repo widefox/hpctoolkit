@@ -83,10 +83,10 @@ void ProfileSink::notifyTimepoint(std::chrono::nanoseconds) {};
 void ProfileSink::notifyTimepoint(const Thread&, std::chrono::nanoseconds n) {
   notifyTimepoint(n);
 }
-void ProfileSink::notifyTimepoint(const Context&, std::chrono::nanoseconds n) {
+void ProfileSink::notifyTimepoint(ContextRef::const_t, std::chrono::nanoseconds n) {
   notifyTimepoint(n);
 }
-void ProfileSink::notifyTimepoint(const Thread& t, const Context& c, std::chrono::nanoseconds n) {
+void ProfileSink::notifyTimepoint(const Thread& t, ContextRef::const_t c, std::chrono::nanoseconds n) {
   notifyTimepoint(t, n);
   notifyTimepoint(c, n);
 }

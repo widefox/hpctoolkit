@@ -53,6 +53,7 @@
 #include "util/atomic_unordered.hpp"
 #include "scope.hpp"
 #include "util/ragged_vector.hpp"
+#include "util/ref_wrappers.hpp"
 
 namespace hpctoolkit {
 
@@ -61,9 +62,6 @@ class Context {
 public:
   using ud_t = util::ragged_vector<const Context&>;
 
-  Context(ud_t::struct_t& rs) : userdata(rs, std::ref(*this)) {};
-  Context(ud_t::struct_t& rs, const Scope& l) : Context(rs, nullptr, l) {};
-  Context(ud_t::struct_t& rs, Scope&& l) : Context(rs, nullptr, l) {};
   ~Context() noexcept;
 
 private:
@@ -103,6 +101,9 @@ public:
 private:
   std::unique_ptr<children_t> children_p;
 
+  Context(ud_t::struct_t& rs) : userdata(rs, std::ref(*this)) {};
+  Context(ud_t::struct_t& rs, const Scope& l) : Context(rs, nullptr, l) {};
+  Context(ud_t::struct_t& rs, Scope&& l) : Context(rs, nullptr, l) {};
   Context(ud_t::struct_t& rs, Context* p, const Scope& l)
     : Context(rs, p, Scope(l)) {};
   Context(ud_t::struct_t&, Context*, Scope&&);
@@ -125,6 +126,13 @@ private:
   friend class util::uniqued<Context>;
   util::uniqable_key<Scope>& uniqable_key() { return u_scope; }
 };
+
+/// Generic reference to any of the Context-like classes.
+/// Since its a variant_ref, also supports the following additional forms:
+///   ::const_t - constant reference to a Context-like class.
+///   ::opt_t - reference with a valid default-initialization.
+using ContextRef = util::variant_ref<Context>;
+
 }
 
 #endif // HPCTOOLKIT_PROFILE_CONTEXT_H

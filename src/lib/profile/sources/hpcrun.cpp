@@ -337,7 +337,7 @@ void HpcrunFSv2::read(const DataClass& needed) {
             if(hpcrun_fmt_cct_node_fread(&n, {0}, f.file) != HPCFMT_OK)
               util::log::fatal() << "Error reading CCT node!";
 
-            Context* here = nullptr;
+            std::optional<ContextRef> here;
             if(sink.limit().hasContexts()) {
               if(epoch.read_cct) {
                 // We already read this part, so just use the cached result
@@ -346,11 +346,12 @@ void HpcrunFSv2::read(const DataClass& needed) {
                 auto it = epoch.node_ids.find(n.id);
                 if(it == epoch.node_ids.end())
                   util::log::fatal() << "Unknown node ID " << n.id << "!";
-                here = &it->second;
-                if(here->scope().type() == Scope::Type::global) continue;  // Global
+                here = it->second;
+                if(auto chere = std::get_if<Context>(*here))
+                  if(chere->scope().type() == Scope::Type::global) continue;  // Global
               } else {
                 // Figure out the parent of this node, if it has one.
-                Context* par;
+                util::optional_ref<Context> par;
                 if(n.id_parent == 0) {  // Root of some kind
                   if(n.lm_id == 0) {  // Synthetic root, remap to something useful.
                     if(n.lm_ip == HPCRUN_FMT_LMIp_NULL) {
@@ -370,17 +371,23 @@ void HpcrunFSv2::read(const DataClass& needed) {
                   } else {
                     // If it looks like a sample but doesn't have a parent,
                     // stitch it to the global unknown (a la /lost+found).
-                    par = &sink.context(sink.global(), {});
+                    auto r = sink.context(sink.global(), {});
+                    if(!std::holds_alternative<Context>(r))
+                      util::log::fatal{} << "Global unknown is not a valid Context!";
+                    par = std::get<Context>(r);
                   }
                 } else if(n.id_parent == epoch.partial_node_id ||
                           n.id_parent == epoch.unknown_node_id) {
                   // Global unknown Scope, emitted lazily.
-                  par = &sink.context(sink.global(), {});
+                  auto r = sink.context(sink.global(), {});
+                  if(!std::holds_alternative<Context>(r))
+                    util::log::fatal{} << "Global unknown is not a valid Context!";
+                  par = std::get<Context>(r);
                 } else {  // Just nab its parent.
                   auto ppar = epoch.node_ids.find(n.id_parent);
                   if(ppar == epoch.node_ids.end())
                     util::log::fatal() << "CCT nodes not in a preorder!";
-                  par = &ppar->second;
+                  par = std::get<Context>(ppar->second);
                 }
 
                 // Figure out the Scope for this node, if it has one.
@@ -398,7 +405,7 @@ void HpcrunFSv2::read(const DataClass& needed) {
                 }
 
                 // Emit the Context and record it for later
-                here = &sink.context(*par, scope);
+                here = sink.context(*par, scope);
                 epoch.node_ids.emplace(n.id, *here);
               }
             }
@@ -411,7 +418,9 @@ void HpcrunFSv2::read(const DataClass& needed) {
                 auto val = metric_int[i] ? (double)ms[i].i : ms[i].r;
                 if(val == 0) continue;
                 if(!accum) accum.emplace(sink.accumulateTo(
-                  sink.limit().hasContexts() ? *here : sink.global(), *thread));
+                  sink.limit().hasContexts() ? *here
+                                             : sink.global(),
+                  *thread));
                 accum->add(*metric_order[i], val);
               }
             }

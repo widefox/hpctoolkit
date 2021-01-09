@@ -338,7 +338,7 @@ public:
     /// Emit a new Context into the Pipeline, as a child of another.
     /// DataClass: `contexts`
     // MT: Externally Synchronized (this), Internally Synchronized
-    Context& context(Context&, const Scope&);
+    ContextRef context(ContextRef, const Scope&);
 
     /// Emit a new Thread into the Pipeline.
     /// DataClass: `threads`
@@ -348,9 +348,9 @@ public:
     /// Emit a timepoint into the Pipeline. Overloads allow for less data.
     /// DataClass: `timepoints`
     // MT: Externally Synchronized (this), Internally Synchronized
-    void timepoint(Thread::Temporary&, Context&, std::chrono::nanoseconds);
+    void timepoint(Thread::Temporary&, ContextRef, std::chrono::nanoseconds);
     void timepoint(Thread::Temporary&, std::chrono::nanoseconds);
-    void timepoint(Context&, std::chrono::nanoseconds);
+    void timepoint(ContextRef, std::chrono::nanoseconds);
     void timepoint(std::chrono::nanoseconds);
 
     /// Reference to the Thread-local metric data for a particular Context.
@@ -373,7 +373,7 @@ public:
     /// Obtain a AccumulatorsRef for the given Thread and Context.
     /// DataClass: `metrics`
     // MT: Externally Synchronized (this), Internally Synchronized
-    AccumulatorsRef accumulateTo(Context& c, Thread::Temporary& t);
+    AccumulatorsRef accumulateTo(ContextRef c, Thread::Temporary& t);
 
     /// Reference to the Statistic data for a particular Context.
     /// Allows for efficient emmission of multiple Statistics' data to one location.
@@ -386,15 +386,18 @@ public:
       void add(Metric& m, const StatisticPartial& sp, MetricScope ms, double v);
 
     private:
+      template<class T>
+      void add(T&, Metric&, const StatisticPartial&, MetricScope, double);
+
       friend class ProfilePipeline::Source;
-      Context& c;
-      StatisticsRef(Context& ctx) : c(ctx) {};
+      ContextRef c;
+      StatisticsRef(ContextRef ctx) : c(ctx) {};
     };
 
     /// Obtain a StatisticsRef for the given Context.
     /// DataClass: `metrics`
     // MT: Externally Synchronized (this), Internally Synchronized
-    StatisticsRef accumulateTo(Context& c);
+    StatisticsRef accumulateTo(ContextRef c);
 
     // Disable copy-assignment, and allow move assignment.
     Source& operator=(const Source&) = delete;

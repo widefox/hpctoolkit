@@ -142,7 +142,11 @@ void HPCTraceDB2::notifyThread(const Thread& t) {
   t.userdata[uds.thread].has_trace = false; 
 }
 
-void HPCTraceDB2::notifyTimepoint(const Thread& t, const Context& c, std::chrono::nanoseconds tm) {
+void HPCTraceDB2::notifyTimepoint(const Thread& t, ContextRef::const_t cr, std::chrono::nanoseconds tm) {
+  // Skip timepoints at locations we can't represent currently.
+  if(!std::holds_alternative<const Context>(cr)) return;
+
+  const Context& c = std::get<const Context>(cr);
   threadsReady.wait();
   auto& ud = t.userdata[uds.thread];
   if(!ud.has_trace) {

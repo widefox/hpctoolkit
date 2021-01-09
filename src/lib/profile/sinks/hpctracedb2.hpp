@@ -80,7 +80,7 @@ public:
   void notifyWavefront(DataClass) override;
   void notifyThread(const Thread&) override;
   void notifyTimepoint(std::chrono::nanoseconds);
-  void notifyTimepoint(const Thread&, const Context&, std::chrono::nanoseconds) override;
+  void notifyTimepoint(const Thread&, ContextRef::const_t, std::chrono::nanoseconds) override;
   void notifyThreadFinal(const Thread::Temporary&) override;
 
   /// Check whether a Context ever appears in the traces.

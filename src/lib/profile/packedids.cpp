@@ -67,73 +67,76 @@ static void pack(std::vector<std::uint8_t>& out, const std::uint64_t v) noexcept
 
 IdPacker::IdPacker() : stripcnt(0), buffersize(0) {};
 
-Context& IdPacker::Classifier::context(Context& c, Scope& s) {
-  std::vector<std::reference_wrapper<Context>> v;
-  auto& cc = ClassificationTransformer::context(c, s, v);
+ContextRef IdPacker::Classifier::context(ContextRef c, Scope& s) noexcept {
+  if(auto co = std::get_if<Context>(c)) {
+    std::vector<std::reference_wrapper<Context>> v;
+    auto& cc = ClassificationTransformer::context(*co, s, v);
 
-  // We also need the ID of the final child Context. So we just emit it
-  // and let the anti-recursion keep us from spinning out of control.
-  v.emplace_back(sink.context(cc, s));
+    // We also need the ID of the final child Context. So we just emit it
+    // and let the anti-recursion keep us from spinning out of control.
+    v.emplace_back(std::get<Context>(sink.context(cc, s)));
 
-  // Check that we haven't handled this particular Context already
-  if(!c.userdata[shared.udOnce].seen.emplace(s).second) return cc;
-  shared.stripcnt.fetch_add(1, std::memory_order_relaxed);
+    // Check that we haven't handled this particular Context already
+    if(!co->userdata[shared.udOnce].seen.emplace(s).second) return cc;
+    shared.stripcnt.fetch_add(1, std::memory_order_relaxed);
 
-  // Nab a pseudo-random buffer to fill with our data
-  auto hash = std::hash<Context*>{}(&c) ^ std::hash<Scope>{}(s);
-  static_assert(std::numeric_limits<decltype(hash)>::radix == 2, "Non-binary architecture?");
-  unsigned char idx = hash & 0xff;
-  for(int i = 8; i < std::numeric_limits<decltype(hash)>::digits; i += 8)
-    idx ^= (hash >> i) & 0xff;
+    // Nab a pseudo-random buffer to fill with our data
+    auto hash = std::hash<Context*>{}(&*co) ^ std::hash<Scope>{}(s);
+    static_assert(std::numeric_limits<decltype(hash)>::radix == 2, "Non-binary architecture?");
+    unsigned char idx = hash & 0xff;
+    for(int i = 8; i < std::numeric_limits<decltype(hash)>::digits; i += 8)
+      idx ^= (hash >> i) & 0xff;
 
-  auto& buffer = shared.stripbuffers[idx].second;
-  std::unique_lock<std::mutex> lock(shared.stripbuffers[idx].first);
-  auto oldsz = buffer.size();
+    auto& buffer = shared.stripbuffers[idx].second;
+    std::unique_lock<std::mutex> lock(shared.stripbuffers[idx].first);
+    auto oldsz = buffer.size();
 
-  // Now we can write the entry for out friends to work with.
-  // Format: [parent id] (Scope) [cnt] ([type] [child id])...
-  auto cid = c.userdata[sink.identifier()];
-  pack(buffer, (std::uint64_t)cid);
-  if(s.type() == Scope::Type::point || s.type() == Scope::Type::classified_point
-     || s.type() == Scope::Type::call || s.type() == Scope::Type::classified_call) {
-    // Format: [module id] [offset]
-    auto mo = s.point_data();
-    pack(buffer, (std::uint64_t)mo.first.userdata[sink.identifier()]);
-    pack(buffer, (std::uint64_t)mo.second);
-  } else if(s.type() == Scope::Type::unknown) {
-    // Format: [magic]
-    pack(buffer, (std::uint64_t)0xF0F1F2F3ULL << 32);
-  } else
-    util::log::fatal{} << "PackedIds can't handle non-point Contexts!";
-  pack(buffer, (std::uint64_t)v.size());
-  for(Context& ct: v) {
-    switch(ct.scope().type()) {
-    case Scope::Type::global:
-      util::log::fatal{} << "Global Contexts shouldn't come out of expansion!";
-      break;
-    case Scope::Type::unknown:
-    case Scope::Type::point:
-    case Scope::Type::classified_point:
-    case Scope::Type::call:
-    case Scope::Type::classified_call:
-      buffer.emplace_back(0);
-      break;
-    case Scope::Type::function:
-    case Scope::Type::inlined_function:
-      buffer.emplace_back(1);
-      break;
-    case Scope::Type::loop:
-    case Scope::Type::line:
-    case Scope::Type::concrete_line:
-      buffer.emplace_back(2);
-      break;
+    // Now we can write the entry for out friends to work with.
+    // Format: [parent id] (Scope) [cnt] ([type] [child id])...
+    auto cid = co->userdata[sink.identifier()];
+    pack(buffer, (std::uint64_t)cid);
+    if(s.type() == Scope::Type::point || s.type() == Scope::Type::classified_point
+       || s.type() == Scope::Type::call || s.type() == Scope::Type::classified_call) {
+      // Format: [module id] [offset]
+      auto mo = s.point_data();
+      pack(buffer, (std::uint64_t)mo.first.userdata[sink.identifier()]);
+      pack(buffer, (std::uint64_t)mo.second);
+    } else if(s.type() == Scope::Type::unknown) {
+      // Format: [magic]
+      pack(buffer, (std::uint64_t)0xF0F1F2F3ULL << 32);
+    } else
+      util::log::fatal{} << "PackedIds can't handle non-point Contexts!";
+    pack(buffer, (std::uint64_t)v.size());
+    for(Context& ct: v) {
+      switch(ct.scope().type()) {
+      case Scope::Type::global:
+        util::log::fatal{} << "Global Contexts shouldn't come out of expansion!";
+        break;
+      case Scope::Type::unknown:
+      case Scope::Type::point:
+      case Scope::Type::classified_point:
+      case Scope::Type::call:
+      case Scope::Type::classified_call:
+        buffer.emplace_back(0);
+        break;
+      case Scope::Type::function:
+      case Scope::Type::inlined_function:
+        buffer.emplace_back(1);
+        break;
+      case Scope::Type::loop:
+      case Scope::Type::line:
+      case Scope::Type::concrete_line:
+        buffer.emplace_back(2);
+        break;
+      }
+      pack(buffer, (std::uint64_t)ct.userdata[sink.identifier()]);
     }
-    pack(buffer, (std::uint64_t)ct.userdata[sink.identifier()]);
+
+    shared.buffersize.fetch_add(buffer.size() - oldsz, std::memory_order_relaxed);
+
+    return cc;
   }
-
-  shared.buffersize.fetch_add(buffer.size() - oldsz, std::memory_order_relaxed);
-
-  return cc;
+  return c;
 }
 
 IdPacker::Sink::Sink(IdPacker& s) : shared(s) {};
@@ -265,20 +268,23 @@ void IdUnpacker::unpack(ProfilePipeline::Source& sink) {
   ctxtree.clear();
 }
 
-Context& IdUnpacker::Expander::context(Context& c, Scope& s) {
-  util::call_once(shared.once, [this]{ shared.unpack(sink); });
-  Context* cp = &c;
-  bool first = true;
-  auto x = shared.exmap.find(c.userdata[sink.identifier()]);
-  if(x == shared.exmap.end()) util::log::fatal{} << "No data for context id " << c.userdata[sink.identifier()];
-  auto y = x->second.find(s);
-  if(y == x->second.end()) util::log::fatal{} << "No data for scope " << s.point_data().second << " from context " << c.userdata[sink.identifier()];
-  for(const auto& next: y->second) {
-    if(!first) cp = &sink.context(*cp, s);
-    s = next;
-    first = false;
+ContextRef IdUnpacker::Expander::context(ContextRef c, Scope& s) noexcept {
+  if(auto co = std::get_if<Context>(c)) {
+    util::call_once(shared.once, [this]{ shared.unpack(sink); });
+    bool first = true;
+    auto x = shared.exmap.find(co->userdata[sink.identifier()]);
+    if(x == shared.exmap.end()) util::log::fatal{} << "No data for context id " << co->userdata[sink.identifier()];
+    auto y = x->second.find(s);
+    if(y == x->second.end()) util::log::fatal{} << "No data for scope " << s.point_data().second << " from context " << co->userdata[sink.identifier()];
+    ContextRef r = *co;
+    for(const auto& next: y->second) {
+      if(!first) r = sink.context(r, s);
+      s = next;
+      first = false;
+    }
+    return r;
   }
-  return *cp;
+  return c;
 }
 
 void IdUnpacker::Finalizer::context(const Context& c, unsigned int& id) {

@@ -128,8 +128,8 @@ public:
   // MT: Internally Synchronized
   virtual void notifyTimepoint(std::chrono::nanoseconds);
   virtual void notifyTimepoint(const Thread&, std::chrono::nanoseconds);
-  virtual void notifyTimepoint(const Context&, std::chrono::nanoseconds);
-  virtual void notifyTimepoint(const Thread&, const Context&, std::chrono::nanoseconds);
+  virtual void notifyTimepoint(ContextRef::const_t, std::chrono::nanoseconds);
+  virtual void notifyTimepoint(const Thread&, ContextRef::const_t, std::chrono::nanoseconds);
 
   /// Notify the Sink that a Thread has finished.
   // MT: Internally Synchronized

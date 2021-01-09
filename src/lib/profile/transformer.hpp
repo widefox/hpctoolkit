@@ -66,7 +66,7 @@ public:
 
   /// Callback issued when a new Context is emitted into the Pipe.
   // MT: Internally Synchronized
-  virtual Context& context(Context& c, Scope&) { return c; }
+  virtual ContextRef context(ContextRef c, Scope&) noexcept { return c; }
 
 protected:
   // Use a subclass to implement the bits.
@@ -76,19 +76,48 @@ protected:
   ProfilePipeline::Source sink;
 };
 
-/// Transformer for expanding `module` Contexts with Classification data.
+/// Transformer for expanding routes for `point` Contexts.
+struct RouteExpansionTransformer : public ProfileTransformer {
+  RouteExpansionTransformer() = default;
+  ~RouteExpansionTransformer() = default;
+
+  ContextRef context(ContextRef c, Scope& s) noexcept override {
+    if(auto co = std::get_if<Context>(c)) {
+      if(s.type() == Scope::Type::point || s.type() == Scope::Type::call) {
+        auto mo = s.point_data();
+        const auto& c = mo.first.userdata[sink.classification()];
+        auto ss = c.getScopes(mo.second);
+        auto routes = c.getRoutes(mo.second);
+        if(!routes.empty()) {
+          for(const auto& r: routes) {
+            util::log::debug d{true};
+            d << std::hex << mo.second << " has route:";
+            for(const auto& s: r) d << " " << s;
+          }
+        }
+      }
+      return c;
+    }
+    return c;
+  }
+};
+
+/// Transformer for expanding `point` Contexts with Classification data.
 struct ClassificationTransformer : public ProfileTransformer {
   ClassificationTransformer() = default;
   ~ClassificationTransformer() = default;
 
-  Context& context(Context& c, Scope& s) override {
-    std::vector<std::reference_wrapper<Context>> v;
-    return context(c, s, v);
+  ContextRef context(ContextRef c, Scope& s) noexcept override {
+    if(auto co = std::get_if<Context>(c)) {
+      std::vector<std::reference_wrapper<Context>> v;
+      return context(*co, s, v);
+    }
+    return c;
   }
 
 protected:
   Context& context(Context& c, Scope& s, std::vector<std::reference_wrapper<Context>>& v) {
-    Context* p = &c;
+    std::reference_wrapper<Context> p = c;
     if(s.type() == Scope::Type::point || s.type() == Scope::Type::call) {
       auto mo = s.point_data();
       const auto& c = mo.first.userdata[sink.classification()];
@@ -102,8 +131,8 @@ protected:
         }
       }
       for(auto it = ss.crbegin(); it != ss.crend(); ++it) {
-        p = &sink.context(*p, *it);
-        v.emplace_back(*p);
+        p = std::get<Context>(sink.context(p, *it));
+        v.emplace_back(p);
       }
       auto fl = c.getLine(mo.second);
       if(fl.first != nullptr) {
@@ -112,7 +141,7 @@ protected:
             : Scope{mo.first, mo.second, *fl.first, fl.second};
       }
     }
-    return *p;
+    return p;
   }
 };
 
@@ -121,8 +150,9 @@ struct LineMergeTransformer final : public ProfileTransformer {
   LineMergeTransformer() = default;
   ~LineMergeTransformer() = default;
 
-  Context& context(Context& c, Scope& s) override {
-    if(s.type() == Scope::Type::classified_point) {
+  ContextRef context(ContextRef c, Scope& s) noexcept override {
+    if(std::holds_alternative<Context>(c)
+       && s.type() == Scope::Type::classified_point) {
       auto mo = s.point_data();
       auto fl = s.line_data();
       // Change it to a concrete_line, which merges based on the line.
