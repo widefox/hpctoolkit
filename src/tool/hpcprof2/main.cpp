@@ -92,8 +92,9 @@ int main(int argc, char* const argv[]) {
 
   // Now that Modules will be Classified during Finalization, add a Transformer
   // to expand the Contexts as they enter the Pipe.
+  RouteExpansionTransformer retrans;
   ClassificationTransformer ctrans;
-  pipelineB << ctrans;
+  pipelineB << retrans << ctrans;
 
   switch(args.format) {
   case ProfArgs::Format::sparse:

@@ -135,3 +135,19 @@ std::pair<Context&,bool> Context::ensure(Scope&& s) {
   auto x = children_p->emplace(userdata.base(), this, std::move(s));
   return {x.first(), x.second};
 }
+
+SuperpositionedContext& Context::superposition(std::vector<std::reference_wrapper<Context>> targets) {
+  if(!std::all_of(targets.begin(), targets.end(), [&](Context& t) -> bool{
+    Context* c = &t;
+    for(; c != nullptr && c != this; c = c->direct_parent());
+    return c != nullptr;
+  }))
+    util::log::fatal{} << "Attempt to target an non-decendant Context in a Superposition!";
+
+  auto c = new SuperpositionedContext(std::move(targets));
+  superpositionRoots.emplace(c);
+  return *c;
+}
+
+SuperpositionedContext::SuperpositionedContext(std::vector<std::reference_wrapper<Context>> ts)
+  : targets(std::move(ts)) {};

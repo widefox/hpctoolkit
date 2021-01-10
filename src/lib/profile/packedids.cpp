@@ -68,6 +68,9 @@ static void pack(std::vector<std::uint8_t>& out, const std::uint64_t v) noexcept
 IdPacker::IdPacker() : stripcnt(0), buffersize(0) {};
 
 ContextRef IdPacker::Classifier::context(ContextRef c, Scope& s) noexcept {
+  // TEMP until this is upgraded properly
+  return ClassificationTransformer::context(c, s);
+
   if(auto co = std::get_if<Context>(c)) {
     std::vector<std::reference_wrapper<Context>> v;
     auto& cc = ClassificationTransformer::context(*co, s, v);

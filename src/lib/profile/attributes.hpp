@@ -61,6 +61,7 @@
 namespace hpctoolkit {
 
 class Context;
+class SuperpositionedContext;
 class Metric;
 
 /// Attributes unique to a particular thread within a profile. Whether this is
@@ -171,6 +172,8 @@ public:
     friend class Metric;
     util::locked_unordered_map<const Context*,
       util::locked_unordered_map<const Metric*, MetricAccumulator>> data;
+    util::locked_unordered_map<const SuperpositionedContext*,
+      util::locked_unordered_map<const Metric*, MetricAccumulator>> sp_data;
   };
 };
 

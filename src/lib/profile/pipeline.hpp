@@ -340,6 +340,11 @@ public:
     // MT: Externally Synchronized (this), Internally Synchronized
     ContextRef context(ContextRef, const Scope&);
 
+    /// Emit a new SuperpositionedContext into the Pipeline.
+    /// DataClass: `contexts`
+    // MT: Externally Synchronized (this), Internally Synchronized
+    ContextRef superposContext(ContextRef, std::vector<ContextRef>);
+
     /// Emit a new Thread into the Pipeline.
     /// DataClass: `threads`
     // MT: Externally Synchronized (this), Internally Synchronized

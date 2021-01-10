@@ -505,8 +505,9 @@ ContextRef Source::context(ContextRef p, const Scope& s) {
   for(std::size_t i = 0; i < pipe->transformers.size(); i++)
     if(i != tskip)
       p = pipe->transformers[i].get().context(p, rs);
-  if(auto pc = std::get_if<Context>(p)) {
-    auto x = pc->ensure(rs);
+
+  auto newCtx = [&](Context& p, const Scope& s) -> Context&{
+    auto x = p.ensure(rs);
     if(x.second) {
       for(auto& s: pipe->sinks) {
         if(s.dataLimit.hasContexts()) s().notifyContext(x.first);
@@ -514,13 +515,40 @@ ContextRef Source::context(ContextRef p, const Scope& s) {
       x.first.userdata.initialize();
     }
     return x.first;
+  };
+
+  if(auto pc = std::get_if<Context>(p)) {
+    return newCtx(*pc, rs);
+  } else if(auto pc = std::get_if<SuperpositionedContext>(p)) {
+    for(auto& t: pc->targets) t = newCtx(t.get(), rs);
+    return *pc;
   } else abort();  // unreachable
+}
+
+ContextRef Source::superposContext(ContextRef root, std::vector<ContextRef> targets) {
+  if(!limit().hasContexts())
+    util::log::fatal() << "Source did not register for `contexts` emission!";
+  if(!std::holds_alternative<Context>(root))
+    util::log::fatal{} << "Attempt to root a Superposition on an improper Context!";
+
+  std::vector<std::reference_wrapper<Context>> tars;
+  for(const auto& r: targets) {
+    if(auto pc = std::get_if<Context>(r))
+      tars.emplace_back(*pc);
+    else
+      util::log::fatal{} << "Attempt to target an improper Context in a Superposition!";
+  }
+  return std::get<Context>(root).superposition(std::move(tars));
 }
 
 Source::AccumulatorsRef Source::accumulateTo(ContextRef c, Thread::Temporary& t) {
   if(!limit().hasMetrics())
     util::log::fatal() << "Source did not register for `metrics` emission!";
-  return t.data[&std::get<Context>(c)];
+  if(auto pc = std::get_if<Context>(c))
+    return t.data[&*pc];
+  else if(auto pc = std::get_if<SuperpositionedContext>(c))
+    return t.sp_data[&*pc];
+  else abort();  // unreachable
 }
 
 void Source::AccumulatorsRef::add(Metric& m, double v) {

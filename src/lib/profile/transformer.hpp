@@ -81,24 +81,30 @@ struct RouteExpansionTransformer : public ProfileTransformer {
   RouteExpansionTransformer() = default;
   ~RouteExpansionTransformer() = default;
 
-  ContextRef context(ContextRef c, Scope& s) noexcept override {
-    if(auto co = std::get_if<Context>(c)) {
+  ContextRef context(ContextRef cr, Scope& s) noexcept override {
+    if(auto co = std::get_if<Context>(cr)) {
       if(s.type() == Scope::Type::point || s.type() == Scope::Type::call) {
         auto mo = s.point_data();
         const auto& c = mo.first.userdata[sink.classification()];
-        auto ss = c.getScopes(mo.second);
         auto routes = c.getRoutes(mo.second);
         if(!routes.empty()) {
+          util::log::debug d{true};
+          d << std::hex << mo.second << " " << s << " has routes:";
+          std::vector<ContextRef> tips;
           for(const auto& r: routes) {
-            util::log::debug d{true};
-            d << std::hex << mo.second << " has route:";
-            for(const auto& s: r) d << " " << s;
+            ContextRef tip = cr;
+            d << "\n  " << &std::get<Context>(tip);
+            for(const auto& s: r) {
+              tip = sink.context(tip, s);
+              d << " -> " << &std::get<Context>(tip) << " " << s;
+            }
+            tips.emplace_back(tip);
           }
+          return sink.superposContext(cr, std::move(tips));
         }
       }
-      return c;
     }
-    return c;
+    return cr;
   }
 };
 
@@ -112,6 +118,19 @@ struct ClassificationTransformer : public ProfileTransformer {
       std::vector<std::reference_wrapper<Context>> v;
       return context(*co, s, v);
     }
+    if(s.type() == Scope::Type::point || s.type() == Scope::Type::call) {
+      auto mo = s.point_data();
+      const auto& cl = mo.first.userdata[sink.classification()];
+      auto ss = cl.getScopes(mo.second);
+      for(auto it = ss.crbegin(); it != ss.crend(); ++it)
+        c = sink.context(c, *it);
+      auto fl = cl.getLine(mo.second);
+      if(fl.first != nullptr) {
+        s = s.type() == Scope::Type::call
+            ? Scope{Scope::call, mo.first, mo.second, *fl.first, fl.second}
+            : Scope{mo.first, mo.second, *fl.first, fl.second};
+      }
+    }
     return c;
   }
 
@@ -122,14 +141,6 @@ protected:
       auto mo = s.point_data();
       const auto& c = mo.first.userdata[sink.classification()];
       auto ss = c.getScopes(mo.second);
-      auto routes = c.getRoutes(mo.second);
-      if(!routes.empty()) {
-        for(const auto& r: routes) {
-          util::log::debug d{true};
-          d << std::hex << mo.second << " has route:";
-          for(const auto& s: r) d << " " << s;
-        }
-      }
       for(auto it = ss.crbegin(); it != ss.crend(); ++it) {
         p = std::get<Context>(sink.context(p, *it));
         v.emplace_back(p);

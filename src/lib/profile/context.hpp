@@ -55,7 +55,11 @@
 #include "util/ragged_vector.hpp"
 #include "util/ref_wrappers.hpp"
 
+#include <unordered_set>
+
 namespace hpctoolkit {
+
+class SuperpositionedContext;
 
 // A single calling Context.
 class Context {
@@ -100,6 +104,7 @@ public:
 
 private:
   std::unique_ptr<children_t> children_p;
+  util::locked_unordered_set<std::unique_ptr<SuperpositionedContext>> superpositionRoots;
 
   Context(ud_t::struct_t& rs) : userdata(rs, std::ref(*this)) {};
   Context(ud_t::struct_t& rs, const Scope& l) : Context(rs, nullptr, l) {};
@@ -120,6 +125,11 @@ private:
     return ensure(Scope(std::forward<Args>(args)...));
   }
 
+  /// Create a child SuperpositionedContext for the given set of child Contexts.
+  /// The created Context will distribute from this location based on the
+  /// relative value of the given Metric.
+  SuperpositionedContext& superposition(std::vector<std::reference_wrapper<Context>>);
+
   util::uniqable_key<Context*> u_parent;
   util::uniqable_key<Scope> u_scope;
 
@@ -127,11 +137,39 @@ private:
   util::uniqable_key<Scope>& uniqable_key() { return u_scope; }
 };
 
+/// A calling context (similar to Context) but that is "in superposition" across
+/// multiple individual target Contexts. The thread-local metrics associated
+/// with this "Context" are distributed across the targets based on the given
+/// Metric.
+class SuperpositionedContext {
+public:
+  ~SuperpositionedContext() = default;
+
+private:
+  std::vector<std::reference_wrapper<Context>> targets;
+
+  // Compressed subtree structure overlaying the normal Context tree. Each node
+  // corresponds to a Context directly after a branching point, or otherwise in
+  // need of value distribution.
+  struct Node {
+    Node(Context& c, bool t) : location(c), target(t) {};
+    ~Node() = default;
+
+    Context& location;
+    bool target;
+    std::unordered_set<std::unique_ptr<Node>> children;
+  };
+  std::unordered_set<std::unique_ptr<Node>> m_subtree;
+
+  friend class ProfilePipeline;
+  friend class Context;
+  friend class Metric;
+  SuperpositionedContext(std::vector<std::reference_wrapper<Context>>);
+};
+
 /// Generic reference to any of the Context-like classes.
-/// Since its a variant_ref, also supports the following additional forms:
-///   ::const_t - constant reference to a Context-like class.
-///   ::opt_t - reference with a valid default-initialization.
-using ContextRef = util::variant_ref<Context>;
+/// Use ContextRef::const_t for a constant reference to a Context-like.
+using ContextRef = util::variant_ref<Context, SuperpositionedContext>;
 
 }
 

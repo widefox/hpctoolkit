@@ -120,8 +120,8 @@ std::vector<std::vector<Scope>> Classification::getRoutes(uint64_t addr) const n
           routes.back().push_back({Scope::call, mod, hop, *line->file, line->line});
         else
           routes.back().push_back({Scope::call, mod, hop});
-        const auto scopes = getScopes(hop);
-        routes.back().insert(routes.back().end(), scopes.begin(), scopes.end());
+        // const auto scopes = getScopes(hop);
+        // routes.back().insert(routes.back().end(), scopes.begin(), scopes.end());
       } else if(std::holds_alternative<const Block*>(vhop)) {
         for(const Block* hop = std::get<const Block*>(vhop); hop != nullptr;
             hop = hop->parent)

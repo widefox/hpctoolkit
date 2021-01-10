@@ -102,6 +102,10 @@ int rank0(ProfArgs&& args) {
   finalizers::DirectClassification dc(args.dwarfMaxSize);
   pipelineB << dc;
 
+  // TEMP until the IDPacker is upgraded to support this too
+  RouteExpansionTransformer retrans;
+  pipelineB << retrans;
+
   // Do the Classification-based expansions, but pack them up for later.
   IdPacker packer;
   IdPacker::Classifier cpacker(packer);
