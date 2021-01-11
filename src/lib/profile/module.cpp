@@ -114,19 +114,12 @@ std::vector<std::vector<Scope>> Classification::getRoutes(uint64_t addr) const n
     routes.emplace_back();
     for(const auto vhop: r) {
       if(std::holds_alternative<uint64_t>(vhop)) {
-        const auto hop = std::get<uint64_t>(vhop);
-        const auto* line = getLineScope(hop);
-        if(line != nullptr && line->file != nullptr)
-          routes.back().push_back({Scope::call, mod, hop, *line->file, line->line});
-        else
-          routes.back().push_back({Scope::call, mod, hop});
-        // const auto scopes = getScopes(hop);
-        // routes.back().insert(routes.back().end(), scopes.begin(), scopes.end());
+        routes.back().push_back({Scope::call, mod, std::get<uint64_t>(vhop)});
       } else if(std::holds_alternative<const Block*>(vhop)) {
         for(const Block* hop = std::get<const Block*>(vhop); hop != nullptr;
             hop = hop->parent)
           routes.back().push_back(hop->scope);
-      } else std::abort();
+      } else std::abort();  // unreachable
     }
     routes.back().shrink_to_fit();
   }
