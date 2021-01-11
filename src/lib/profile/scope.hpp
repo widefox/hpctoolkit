@@ -123,7 +123,7 @@ public:
   Type type() const noexcept { return ty; }
 
   /// For 'point' scopes, get the Module and offset of this Scope.
-  /// Throws if the Scope is not a 'point' or 'line_point' Scope.
+  /// Throws if the Scope is not a '*_point', '*_call' or 'concrete_line' Scope.
   std::pair<const Module&, uint64_t> point_data() const;
 
   /// For '*function' scopes, get the Function that created this Scope.
@@ -131,7 +131,7 @@ public:
   const Function& function_data() const;
 
   /// For Scopes with line info, get the line that created this Scope.
-  /// Throws if the Scope does not have line information.
+  /// Throws if the Scope is not a '*_line', 'loop' or 'classified_*' Scope.
   std::pair<const File&, uint64_t> line_data() const;
 
   // Comparison, as usual

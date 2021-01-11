@@ -190,18 +190,43 @@ operator()(const Scope &l) const noexcept {
 
 // Stringification
 std::ostream& std::operator<<(std::ostream& os, const Scope& s) noexcept {
+  auto point_str = [&]() -> std::string {
+    std::ostringstream ss;
+    auto mo = s.point_data();
+    ss << "/" << mo.first.path().filename().string() << "+" << std::hex << mo.second;
+    return ss.str();
+  };
+  auto func_str = [&]() -> std::string {
+    std::ostringstream ss;
+    const auto& f = s.function_data();
+    ss << f.name;
+    if(f.file)
+      ss << "@/" << f.file->path().filename().string() << ":" << f.line;
+    return ss.str();
+  };
+  auto line_str = [&]() -> std::string {
+    std::ostringstream ss;
+    auto fl = s.line_data();
+    ss << fl.first.path().filename().string() << ":" << fl.second;
+    return ss.str();
+  };
+
   switch(s.type()) {
   case Scope::Type::unknown: return os << "(unknown)";
   case Scope::Type::global: return os << "(global)";
-  case Scope::Type::point: return os << "(point)";
-  case Scope::Type::call: return os << "(call)";
-  case Scope::Type::classified_point: return os << "(classified point)";
-  case Scope::Type::classified_call: return os << "(classified call)";
-  case Scope::Type::function: return os << "(func)";
-  case Scope::Type::inlined_function: return os << "(inlined_func)";
-  case Scope::Type::loop: return os << "(loop)";
-  case Scope::Type::line: return os << "(line)";
-  case Scope::Type::concrete_line: return os << "(concrete line)";
+  case Scope::Type::point: return os << "(point){" << point_str() << "}";
+  case Scope::Type::call: return os << "(call){" << point_str() << "}";
+  case Scope::Type::classified_point:
+    return os << "(point){" << point_str() << " @ " << line_str() << "}";
+  case Scope::Type::classified_call:
+    return os << "(call){" << point_str() << " @ " << line_str() << "}";
+  case Scope::Type::function: return os << "(func){" << func_str() << "}";
+  case Scope::Type::inlined_function:
+    return os << "(inlined_func){" << func_str() << " called at " << line_str() << "}";
+  case Scope::Type::loop: return os << "(loop){" << line_str() << "}";
+  case Scope::Type::line: return os << "(line){" << line_str() << "}";
+  case Scope::Type::concrete_line:
+    return os << "(line){" << line_str() << " from " << point_str() << "}";
   }
   return os;
 }
