@@ -272,7 +272,6 @@ void StructFile::module(const Module& m, Classification& c) {
   // TODO: Apply some SCC handling around here, and some general optimizations.
   auto* unknown_block = c.addScope(Scope{});
   for(const auto [offset, root]: funcs) {
-    util::log::debug{true} << "Scanning from " << std::hex << offset << ": " << root->getScope().function_data().name;
     std::vector<Classification::Block::route_t> route;
     std::unordered_set<Classification::Block*> seen;
     std::function<void(Classification::Block*)> dfs = [&](Classification::Block* b) {
@@ -281,7 +280,6 @@ void StructFile::module(const Module& m, Classification& c) {
         // Terminate the route, we have nowhere else to go
         if(route.empty()) return;
         root->addRoute(route);
-        util::log::debug{true} << "Adding route of length " << route.size() << " to " << root << " due to dead end";
       } else {
         for(auto it = range.first; it != range.second; ++it) {
           const auto [from, addr] = it->second;
@@ -289,7 +287,6 @@ void StructFile::module(const Module& m, Classification& c) {
             // Terminate the route, we've looped on ourselves.
             route.push_back(unknown_block);
             root->addRoute(route);
-            util::log::debug{true} << "Adding route of length " << route.size() << " to " << root << " due to recursion";
             route.pop_back();
           } else {
             route.push_back(addr);
