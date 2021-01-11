@@ -114,10 +114,6 @@ struct ClassificationTransformer : public ProfileTransformer {
   ~ClassificationTransformer() = default;
 
   ContextRef context(ContextRef c, Scope& s) noexcept override {
-    if(auto co = std::get_if<Context>(c)) {
-      std::vector<std::reference_wrapper<Context>> v;
-      return context(*co, s, v);
-    }
     if(s.type() == Scope::Type::point || s.type() == Scope::Type::call) {
       auto mo = s.point_data();
       const auto& cl = mo.first.userdata[sink.classification()];
@@ -162,8 +158,7 @@ struct LineMergeTransformer final : public ProfileTransformer {
   ~LineMergeTransformer() = default;
 
   ContextRef context(ContextRef c, Scope& s) noexcept override {
-    if(std::holds_alternative<Context>(c)
-       && s.type() == Scope::Type::classified_point) {
+    if(s.type() == Scope::Type::classified_point) {
       auto mo = s.point_data();
       auto fl = s.line_data();
       // Change it to a concrete_line, which merges based on the line.
