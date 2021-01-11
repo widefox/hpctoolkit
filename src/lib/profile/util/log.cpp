@@ -58,6 +58,17 @@ MessageBuffer::MessageBuffer(bool en)
   : std::ostream(), enabled(en), sbuf(std::ios_base::out) {
   if(enabled) this->init(&sbuf);
 }
+MessageBuffer::MessageBuffer(MessageBuffer&& o)
+  : std::ostream(std::move(o)), enabled(o.enabled), sbuf(std::move(o.sbuf)) {
+  if(enabled) this->init(&sbuf);
+}
+MessageBuffer& MessageBuffer::operator=(MessageBuffer&& o) {
+  std::ostream::operator=(std::move(o));
+  enabled = o.enabled;
+  sbuf = std::move(o.sbuf);
+  if(enabled) this->init(&sbuf);
+  return *this;
+}
 
 fatal::fatal() { (*this) << "FATAL: "; }
 fatal::~fatal() {

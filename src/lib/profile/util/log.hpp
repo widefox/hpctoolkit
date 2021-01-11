@@ -62,8 +62,16 @@ protected:
 
 public:
   // Messages are movable but not copyable.
-  MessageBuffer(MessageBuffer&&) = default;
-  MessageBuffer& operator=(MessageBuffer&&) = default;
+  MessageBuffer(MessageBuffer&&);
+  MessageBuffer(const MessageBuffer&) = delete;
+  MessageBuffer& operator=(MessageBuffer&&);
+  MessageBuffer& operator=(const MessageBuffer&) = delete;
+
+  // Attempts to output are disabled if the entire Message is disabled.
+  template<class A>
+  std::ostream& operator<<(A a) {
+    return enabled ? (*(std::ostream*)this << std::forward<A>(a)) : *this;
+  }
 
 protected:
   bool enabled;
@@ -76,6 +84,11 @@ protected:
 struct fatal final : public detail::MessageBuffer {
   fatal();
   [[noreturn]] ~fatal();
+
+  fatal(fatal&&) = default;
+  fatal(const fatal&) = delete;
+  fatal& operator=(fatal&&) = default;
+  fatal& operator=(const fatal&) = delete;
 };
 
 /// Non-fatal error message buffer. For cases where things probably aren't going
@@ -83,6 +96,11 @@ struct fatal final : public detail::MessageBuffer {
 struct error final : public detail::MessageBuffer {
   error();
   ~error();
+
+  error(error&&) = default;
+  error(const error&) = delete;
+  error& operator=(error&&) = default;
+  error& operator=(const error&) = delete;
 };
 
 /// Warning message buffer. For cases where something went wrong, but it should
@@ -90,6 +108,11 @@ struct error final : public detail::MessageBuffer {
 struct warning final : public detail::MessageBuffer {
   warning();
   ~warning();
+
+  warning(warning&&) = default;
+  warning(const warning&) = delete;
+  warning& operator=(warning&&) = default;
+  warning& operator=(const warning&) = delete;
 };
 
 /// Info message buffer. To describe what's going on when its going on, for
@@ -97,6 +120,11 @@ struct warning final : public detail::MessageBuffer {
 struct info final : public detail::MessageBuffer {
   info();
   ~info();
+
+  info(info&&) = default;
+  info(const info&) = delete;
+  info& operator=(info&&) = default;
+  info& operator=(const info&) = delete;
 };
 
 /// Debug message buffer. To give as much data as possible about what's
@@ -105,6 +133,11 @@ struct info final : public detail::MessageBuffer {
 struct debug final : public detail::MessageBuffer {
   debug(bool);
   ~debug();
+
+  debug(debug&&) = default;
+  debug(const debug&) = delete;
+  debug& operator=(debug&&) = default;
+  debug& operator=(const debug&) = delete;
 };
 
 }

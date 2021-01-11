@@ -217,9 +217,9 @@ std::ostream& std::operator<<(std::ostream& os, const Scope& s) noexcept {
   case Scope::Type::point: return os << "(point){" << point_str() << "}";
   case Scope::Type::call: return os << "(call){" << point_str() << "}";
   case Scope::Type::classified_point:
-    return os << "(point){" << point_str() << " @ " << line_str() << "}";
+    return os << "(c_point){" << point_str() << " @ " << line_str() << "}";
   case Scope::Type::classified_call:
-    return os << "(call){" << point_str() << " @ " << line_str() << "}";
+    return os << "(c_call){" << point_str() << " @ " << line_str() << "}";
   case Scope::Type::function: return os << "(func){" << func_str() << "}";
   case Scope::Type::inlined_function:
     return os << "(inlined_func){" << func_str() << " called at " << line_str() << "}";
