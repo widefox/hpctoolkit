@@ -84,8 +84,8 @@ std::pair<const File*, uint64_t> Classification::getLine(uint64_t pos) const noe
 const Classification::LineScope* Classification::getLineScope(uint64_t pos) const noexcept {
   auto it = std::lower_bound(lll_scopes.begin(), lll_scopes.end(),
                              LineScope(pos, nullptr, 0));
-  if(it == lll_scopes.begin()) return nullptr;
   if(it != lll_scopes.end() && it->addr == pos) return &*it;
+  if(it == lll_scopes.begin()) return nullptr;
   --it;
   return &*it;
 }
@@ -167,6 +167,9 @@ bool Classification::empty() const noexcept {
 }
 
 void Classification::setLines(std::vector<LineScope>&& lscopes) {
+  if(lscopes.size() == 0) return;
+  lscopes.reserve(lscopes.size()+lll_scopes.size());
+  lscopes.insert(lscopes.end(), lll_scopes.begin(), lll_scopes.end());
   std::sort(lscopes.begin(), lscopes.end(),
             [](const LineScope& a, const LineScope& b) -> bool {
     return a.addr < b.addr;

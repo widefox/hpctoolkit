@@ -236,7 +236,9 @@ void StructFile::module(const Module& m, Classification& c) {
       }
     } else if(ename == "C") {
       auto l = std::stoll(xmlstr(attr.getValue(XMLStr("l"))));
-      auto i = parseVs(xmlstr(attr.getValue(XMLStr("v")))).at(0);
+      auto is = parseVs(xmlstr(attr.getValue(XMLStr("v"))));
+      if(is.size() != 1) util::log::fatal{} << "Structfile contains C tag with multiple v ranges!";
+      auto i = is[0];
       lscopes.emplace_back(i.lo, stack.top().file, l);
       c.setScope(i, stack.top().scope);
       auto tstr = xmlstr(attr.getValue(XMLStr("t")));
