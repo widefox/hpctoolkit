@@ -70,21 +70,22 @@ IdPacker::IdPacker() : stripcnt(0), buffersize(0) {};
 ContextRef IdPacker::Classifier::context(ContextRef c, Scope& s) noexcept {
   // TEMP until this is upgraded properly
   return ClassificationTransformer::context(c, s);
+}
 
-  if(auto co = std::get_if<Context>(c)) {
-    std::vector<std::reference_wrapper<Context>> v;
-    auto& cc = ClassificationTransformer::context(*co, s, v);
+IdPacker::Sink::Sink(IdPacker& s) : shared(s) {};
 
-    // We also need the ID of the final child Context. So we just emit it
-    // and let the anti-recursion keep us from spinning out of control.
-    v.emplace_back(std::get<Context>(sink.context(cc, s)));
+void IdPacker::Sink::notifyPipeline() noexcept {
+  shared.udOnce = src.structs().context.add<ctxonce>(std::ref(*this));
+}
 
-    // Check that we haven't handled this particular Context already
-    if(!co->userdata[shared.udOnce].seen.emplace(s).second) return cc;
+void IdPacker::Sink::notifyContextExpansion(ContextRef::const_t from, Scope s, ContextRef::const_t to) {
+  if(auto fc = std::get_if<const Context>(from)) {
+    // Check that we haven't handled this particular expansion already
+    if(!fc->userdata[shared.udOnce].seen.emplace(s).second) return;
     shared.stripcnt.fetch_add(1, std::memory_order_relaxed);
 
     // Nab a pseudo-random buffer to fill with our data
-    auto hash = std::hash<Context*>{}(&*co) ^ std::hash<Scope>{}(s);
+    auto hash = std::hash<const Context*>{}(&*fc) ^ std::hash<Scope>{}(s);
     static_assert(std::numeric_limits<decltype(hash)>::radix == 2, "Non-binary architecture?");
     unsigned char idx = hash & 0xff;
     for(int i = 8; i < std::numeric_limits<decltype(hash)>::digits; i += 8)
@@ -94,58 +95,71 @@ ContextRef IdPacker::Classifier::context(ContextRef c, Scope& s) noexcept {
     std::unique_lock<std::mutex> lock(shared.stripbuffers[idx].first);
     auto oldsz = buffer.size();
 
+    // Helper function to trace an expansion and record it
+    auto trace = [&](const Context& leaf) {
+      std::vector<std::reference_wrapper<const Context>> stack;
+      const Context* c;
+      for(c = &leaf; c != &*fc && c != nullptr; c = c->direct_parent())
+        stack.emplace_back(*c);
+      if(c == nullptr)
+        util::log::fatal{} << "Found nullptr while mapping expansion, is someone trying to be clever?";
+
+      pack(buffer, (std::uint64_t)stack.size());
+      for(auto it = stack.crbegin(), ite = stack.crend(); it != ite; ++it) {
+        const Context& c = it->get();
+        switch(c.scope().type()) {
+        case Scope::Type::global:
+          util::log::fatal{} << "Global Contexts shouldn't come out of expansion!";
+          break;
+        case Scope::Type::unknown:
+        case Scope::Type::point:
+        case Scope::Type::classified_point:
+        case Scope::Type::call:
+        case Scope::Type::classified_call:
+          buffer.emplace_back(0);
+          break;
+        case Scope::Type::function:
+        case Scope::Type::inlined_function:
+          buffer.emplace_back(1);
+          break;
+        case Scope::Type::loop:
+        case Scope::Type::line:
+        case Scope::Type::concrete_line:
+          buffer.emplace_back(2);
+          break;
+        }
+        pack(buffer, (std::uint64_t)c.userdata[src.identifier()]);
+      }
+    };
+
     // Now we can write the entry for out friends to work with.
-    // Format: [parent id] (Scope) [cnt] ([type] [child id])...
-    auto cid = co->userdata[sink.identifier()];
+    // Format: [parent id] (Scope)
+    auto cid = fc->userdata[src.identifier()];
     pack(buffer, (std::uint64_t)cid);
     if(s.type() == Scope::Type::point || s.type() == Scope::Type::classified_point
        || s.type() == Scope::Type::call || s.type() == Scope::Type::classified_call) {
       // Format: [module id] [offset]
       auto mo = s.point_data();
-      pack(buffer, (std::uint64_t)mo.first.userdata[sink.identifier()]);
+      pack(buffer, (std::uint64_t)mo.first.userdata[src.identifier()]);
       pack(buffer, (std::uint64_t)mo.second);
     } else if(s.type() == Scope::Type::unknown) {
       // Format: [magic]
       pack(buffer, (std::uint64_t)0xF0F1F2F3ULL << 32);
     } else
       util::log::fatal{} << "PackedIds can't handle non-point Contexts!";
-    pack(buffer, (std::uint64_t)v.size());
-    for(Context& ct: v) {
-      switch(ct.scope().type()) {
-      case Scope::Type::global:
-        util::log::fatal{} << "Global Contexts shouldn't come out of expansion!";
-        break;
-      case Scope::Type::unknown:
-      case Scope::Type::point:
-      case Scope::Type::classified_point:
-      case Scope::Type::call:
-      case Scope::Type::classified_call:
-        buffer.emplace_back(0);
-        break;
-      case Scope::Type::function:
-      case Scope::Type::inlined_function:
-        buffer.emplace_back(1);
-        break;
-      case Scope::Type::loop:
-      case Scope::Type::line:
-      case Scope::Type::concrete_line:
-        buffer.emplace_back(2);
-        break;
-      }
-      pack(buffer, (std::uint64_t)ct.userdata[sink.identifier()]);
-    }
+
+    if(auto tc = std::get_if<const Context>(to)) {
+      // Format: [cnt] ([type] [context id])...
+      trace(*tc);
+    } else if(auto tc = std::get_if<const SuperpositionedContext>(to)) {
+      // Format: [0] [cnt] ([cnt] ([type] [context id])...)...
+      pack(buffer, (std::uint64_t)0);
+      pack(buffer, (std::uint64_t)tc->targets().size());
+      for(const auto& t: tc->targets()) trace(t.get());
+    } else abort();  // unreachable
 
     shared.buffersize.fetch_add(buffer.size() - oldsz, std::memory_order_relaxed);
-
-    return cc;
-  }
-  return c;
-}
-
-IdPacker::Sink::Sink(IdPacker& s) : shared(s) {};
-
-void IdPacker::Sink::notifyPipeline() noexcept {
-  shared.udOnce = src.structs().context.add<ctxonce>(std::ref(*this));
+  } else util::log::fatal{} << "IdPacker does not support expansions starting at an improper Context!";
 }
 
 void IdPacker::Sink::notifyWavefront(DataClass ds) {
@@ -237,6 +251,7 @@ void IdUnpacker::unpack(ProfilePipeline::Source& sink) {
     }
     std::size_t cnt = ::unpack<std::uint64_t>(it);
     auto& scopes = exmap[parent][s];
+    if(cnt == 0) util::log::fatal{} << "TODO IdUnpacker does not support Superpositions yet!";
     for(std::size_t x = 0; x < cnt; x++) {
       auto ty = *it;
       it++;

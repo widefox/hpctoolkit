@@ -145,8 +145,12 @@ class SuperpositionedContext {
 public:
   ~SuperpositionedContext() = default;
 
+  const std::vector<std::reference_wrapper<Context>> targets() const {
+    return m_targets;
+  }
+
 private:
-  std::vector<std::reference_wrapper<Context>> targets;
+  std::vector<std::reference_wrapper<Context>> m_targets;
 
   // Compressed subtree structure overlaying the normal Context tree. Each node
   // corresponds to a Context directly after a branching point, or otherwise in

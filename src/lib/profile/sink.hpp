@@ -119,6 +119,11 @@ public:
   // MT: Internally Synchronized
   virtual void notifyContext(const Context&);
 
+  /// Notify the Sink that a Context has been created via a Transformer expansion.
+  /// Basically added only for IDPacker.
+  // MT: Internally Synchronized
+  virtual void notifyContextExpansion(ContextRef::const_t from, Scope s, ContextRef::const_t to);
+
   /// Notify the Sink that a new Thread has been created.
   // MT: Internally Synchronized
   virtual void notifyThread(const Thread&);

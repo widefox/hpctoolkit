@@ -85,6 +85,7 @@ public:
     }
 
     void notifyPipeline() noexcept override;
+    void notifyContextExpansion(ContextRef::const_t, Scope, ContextRef::const_t) override;
     void notifyWavefront(DataClass) override;
     void write() override {};
 

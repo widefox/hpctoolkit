@@ -501,10 +501,11 @@ Context& Source::global() { return *pipe->cct; }
 ContextRef Source::context(ContextRef p, const Scope& s) {
   if(!limit().hasContexts())
     util::log::fatal() << "Source did not register for `contexts` emission!";
+  ContextRef res = p;
   Scope rs = s;
   for(std::size_t i = 0; i < pipe->transformers.size(); i++)
     if(i != tskip)
-      p = pipe->transformers[i].get().context(p, rs);
+      res = pipe->transformers[i].get().context(res, rs);
 
   auto newCtx = [&](Context& p, const Scope& s) -> Context&{
     auto x = p.ensure(rs);
@@ -517,12 +518,16 @@ ContextRef Source::context(ContextRef p, const Scope& s) {
     return x.first;
   };
 
-  if(auto pc = std::get_if<Context>(p)) {
-    return newCtx(*pc, rs);
-  } else if(auto pc = std::get_if<SuperpositionedContext>(p)) {
-    for(auto& t: pc->targets) t = newCtx(t.get(), rs);
-    return *pc;
+  if(auto rc = std::get_if<Context>(res)) {
+    res = newCtx(*rc, rs);
+  } else if(auto rc = std::get_if<SuperpositionedContext>(res)) {
+    for(auto& t: rc->m_targets) t = newCtx(t.get(), rs);
   } else abort();  // unreachable
+
+  if(tskip >= pipe->transformers.size())
+    for(auto& ss: pipe->sinks)
+      ss().notifyContextExpansion(p, s, res);
+  return res;
 }
 
 ContextRef Source::superposContext(ContextRef root, std::vector<ContextRef> targets) {

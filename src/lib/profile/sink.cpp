@@ -78,6 +78,7 @@ void ProfileSink::notifyFile(const File&) {};
 void ProfileSink::notifyMetric(const Metric&) {};
 void ProfileSink::notifyExtraStatistic(const ExtraStatistic&) {};
 void ProfileSink::notifyContext(const Context&) {};
+void ProfileSink::notifyContextExpansion(ContextRef::const_t, Scope, ContextRef::const_t) {};
 void ProfileSink::notifyThread(const Thread&) {};
 void ProfileSink::notifyTimepoint(std::chrono::nanoseconds) {};
 void ProfileSink::notifyTimepoint(const Thread&, std::chrono::nanoseconds n) {

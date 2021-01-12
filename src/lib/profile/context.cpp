@@ -150,4 +150,4 @@ SuperpositionedContext& Context::superposition(std::vector<std::reference_wrappe
 }
 
 SuperpositionedContext::SuperpositionedContext(std::vector<std::reference_wrapper<Context>> ts)
-  : targets(std::move(ts)) {};
+  : m_targets(std::move(ts)) {};
