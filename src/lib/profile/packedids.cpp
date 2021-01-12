@@ -67,22 +67,15 @@ static void pack(std::vector<std::uint8_t>& out, const std::uint64_t v) noexcept
 
 IdPacker::IdPacker() : stripcnt(0), buffersize(0) {};
 
-ContextRef IdPacker::Classifier::context(ContextRef c, Scope& s) noexcept {
-  // TEMP until this is upgraded properly
-  return ClassificationTransformer::context(c, s);
+void IdPacker::notifyPipeline() noexcept {
+  udOnce = src.structs().context.add<ctxonce>(std::ref(*this));
 }
 
-IdPacker::Sink::Sink(IdPacker& s) : shared(s) {};
-
-void IdPacker::Sink::notifyPipeline() noexcept {
-  shared.udOnce = src.structs().context.add<ctxonce>(std::ref(*this));
-}
-
-void IdPacker::Sink::notifyContextExpansion(ContextRef::const_t from, Scope s, ContextRef::const_t to) {
+void IdPacker::notifyContextExpansion(ContextRef::const_t from, Scope s, ContextRef::const_t to) {
   if(auto fc = std::get_if<const Context>(from)) {
     // Check that we haven't handled this particular expansion already
-    if(!fc->userdata[shared.udOnce].seen.emplace(s).second) return;
-    shared.stripcnt.fetch_add(1, std::memory_order_relaxed);
+    if(!fc->userdata[udOnce].seen.emplace(s).second) return;
+    stripcnt.fetch_add(1, std::memory_order_relaxed);
 
     // Nab a pseudo-random buffer to fill with our data
     auto hash = std::hash<const Context*>{}(&*fc) ^ std::hash<Scope>{}(s);
@@ -91,8 +84,8 @@ void IdPacker::Sink::notifyContextExpansion(ContextRef::const_t from, Scope s, C
     for(int i = 8; i < std::numeric_limits<decltype(hash)>::digits; i += 8)
       idx ^= (hash >> i) & 0xff;
 
-    auto& buffer = shared.stripbuffers[idx].second;
-    std::unique_lock<std::mutex> lock(shared.stripbuffers[idx].first);
+    auto& buffer = stripbuffers[idx].second;
+    std::unique_lock<std::mutex> lock(stripbuffers[idx].first);
     auto oldsz = buffer.size();
 
     // Helper function to trace an expansion and record it
@@ -158,11 +151,11 @@ void IdPacker::Sink::notifyContextExpansion(ContextRef::const_t from, Scope s, C
       for(const auto& t: tc->targets()) trace(t.get());
     } else abort();  // unreachable
 
-    shared.buffersize.fetch_add(buffer.size() - oldsz, std::memory_order_relaxed);
+    buffersize.fetch_add(buffer.size() - oldsz, std::memory_order_relaxed);
   } else util::log::fatal{} << "IdPacker does not support expansions starting at an improper Context!";
 }
 
-void IdPacker::Sink::notifyWavefront(DataClass ds) {
+void IdPacker::notifyWavefront(DataClass ds) {
   if(ds.hasReferences() && ds.hasContexts()) {  // This is it!
     std::vector<uint8_t> ct;
     // Format: [global id] [mod cnt] (modules) [map cnt] (map entries...)
@@ -177,9 +170,9 @@ void IdPacker::Sink::notifyWavefront(DataClass ds) {
     pack(ct, (std::uint64_t)mods.size());
     for(auto& s: mods) pack(ct, std::move(s));
 
-    pack(ct, (std::uint64_t)shared.stripcnt.load(std::memory_order_relaxed));
-    ct.reserve(ct.size() + shared.buffersize.load(std::memory_order_relaxed));
-    for(const auto& ls: shared.stripbuffers)
+    pack(ct, (std::uint64_t)stripcnt.load(std::memory_order_relaxed));
+    ct.reserve(ct.size() + buffersize.load(std::memory_order_relaxed));
+    for(const auto& ls: stripbuffers)
       ct.insert(ct.end(), ls.second.begin(), ls.second.end());
 
     // Format: ... [met cnt] ([id] [p id] [ex id] [inc id] [name])...

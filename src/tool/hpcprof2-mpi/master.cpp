@@ -102,14 +102,11 @@ int rank0(ProfArgs&& args) {
   finalizers::DirectClassification dc(args.dwarfMaxSize);
   pipelineB << dc;
 
-  // TEMP until the IDPacker is upgraded to support this too
+  // Now that Modules will be Classified during Finalization, add a Transformer
+  // to expand the Contexts as they enter the Pipe.
   RouteExpansionTransformer retrans;
-  pipelineB << retrans;
-
-  // Do the Classification-based expansions, but pack them up for later.
-  IdPacker packer;
-  IdPacker::Classifier cpacker(packer);
-  pipelineB << cpacker;
+  ClassificationTransformer ctrans;
+  pipelineB << retrans << ctrans;
 
   // Ids for everything are pulled from the void. We call the shots here.
   finalizers::DenseIds dids;
@@ -145,14 +142,14 @@ int rank0(ProfArgs&& args) {
   pipelineB << detector;
 
   // When everything is ready, ship off the block to the workers.
-  struct Sender : public IdPacker::Sink {
-    Sender(IdPacker& s, Detector& d) : IdPacker::Sink(s), detector(d) {};
+  struct Sender : public IdPacker {
+    Sender(Detector& d) : detector(d) {};
     void notifyPacked(std::vector<uint8_t>&& block) override {
       mpi::bcast(std::move(block), 0);
       mpi::bcast((uint8_t)(detector.needsTimepoints() ? 1 : 0), 0);
     }
     Detector& detector;
-  } spacker(packer, detector);
+  } spacker(detector);
   pipelineB << spacker << mpiDep >> mpiDep;
 
   // For unpacking metrics, we need to be able to map the IDs back to their

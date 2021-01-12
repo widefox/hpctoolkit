@@ -54,52 +54,33 @@
 
 namespace hpctoolkit {
 
-class IdPacker final {
+class IdPacker : public ProfileSink {
 public:
   IdPacker();
   ~IdPacker() = default;
 
-  class Classifier final : public ClassificationTransformer {
-  public:
-    Classifier(IdPacker& s) : shared(s) {};
-    ~Classifier() = default;
+  DataClass accepts() const noexcept override {
+    return DataClass::references + DataClass::contexts + DataClass::attributes;
+  }
+  ExtensionClass requires() const noexcept override {
+    return ExtensionClass::identifier + ExtensionClass::mscopeIdentifiers;
+  }
+  DataClass wavefronts() const noexcept override {
+    return DataClass::references + DataClass::contexts + DataClass::attributes;
+  }
 
-    ContextRef context(ContextRef, Scope&) noexcept override;
+  void notifyPipeline() noexcept override;
+  void notifyContextExpansion(ContextRef::const_t, Scope, ContextRef::const_t) override;
+  void notifyWavefront(DataClass) override;
+  void write() override {};
 
-  private:
-    IdPacker& shared;
-  };
-
-  class Sink : public ProfileSink {
-  public:
-    Sink(IdPacker& s);
-
-    DataClass accepts() const noexcept override {
-      return DataClass::references + DataClass::contexts + DataClass::attributes;
-    }
-    ExtensionClass requires() const noexcept override {
-      return ExtensionClass::identifier + ExtensionClass::mscopeIdentifiers;
-    }
-    DataClass wavefronts() const noexcept override {
-      return DataClass::references + DataClass::contexts + DataClass::attributes;
-    }
-
-    void notifyPipeline() noexcept override;
-    void notifyContextExpansion(ContextRef::const_t, Scope, ContextRef::const_t) override;
-    void notifyWavefront(DataClass) override;
-    void write() override {};
-
-  protected:
-    virtual void notifyPacked(std::vector<uint8_t>&&) = 0;
-
-  private:
-    IdPacker& shared;
-  };
+protected:
+  virtual void notifyPacked(std::vector<uint8_t>&&) = 0;
 
 private:
   std::atomic<std::size_t> stripcnt;
   struct ctxonce {
-    ctxonce(const Context&, Sink&) {};
+    ctxonce(const Context&, IdPacker&) {};
     util::locked_unordered_set<Scope> seen;
   };
   Context::ud_t::typed_member_t<ctxonce> udOnce;
