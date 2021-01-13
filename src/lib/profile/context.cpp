@@ -136,11 +136,14 @@ std::pair<Context&,bool> Context::ensure(Scope&& s) {
   return {x.first(), x.second};
 }
 
-SuperpositionedContext& Context::superposition(std::vector<std::reference_wrapper<Context>> targets) {
-  if(!std::all_of(targets.begin(), targets.end(), [&](Context& t) -> bool{
-    Context* c = &t;
-    for(; c != nullptr && c != this; c = c->direct_parent());
-    return c != nullptr;
+SuperpositionedContext& Context::superposition(std::vector<ContextRef> targets) {
+  if(!std::all_of(targets.begin(), targets.end(), [&](ContextRef t) -> bool{
+    if(auto tc = std::get_if<Context>(t)) {
+      Context* c = &*tc;
+      for(; c != nullptr && c != this; c = c->direct_parent());
+      return c != nullptr;
+    } else
+      util::log::fatal{} << "Attempt to target a non-proper Context in a Superposition!";
   }))
     util::log::fatal{} << "Attempt to target an non-decendant Context in a Superposition!";
 
@@ -149,5 +152,8 @@ SuperpositionedContext& Context::superposition(std::vector<std::reference_wrappe
   return *c;
 }
 
-SuperpositionedContext::SuperpositionedContext(std::vector<std::reference_wrapper<Context>> ts)
-  : m_targets(std::move(ts)) {};
+SuperpositionedContext::SuperpositionedContext(std::vector<ContextRef> ts)
+  : m_targets(std::move(ts)) {
+  if(m_targets.size() < 2)
+    util::log::fatal{} << "Attempt to create a Superposition without enough proper Contexts!";
+}

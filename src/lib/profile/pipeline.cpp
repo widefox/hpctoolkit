@@ -507,21 +507,24 @@ ContextRef Source::context(ContextRef p, const Scope& s) {
     if(i != tskip)
       res = pipe->transformers[i].get().context(res, rs);
 
-  auto newCtx = [&](Context& p, const Scope& s) -> Context&{
-    auto x = p.ensure(rs);
-    if(x.second) {
-      for(auto& s: pipe->sinks) {
-        if(s.dataLimit.hasContexts()) s().notifyContext(x.first);
+  auto newCtx = [&](ContextRef p, const Scope& s) -> ContextRef {
+    if(auto pc = std::get_if<Context>(p)) {
+      auto x = pc->ensure(rs);
+      if(x.second) {
+        for(auto& s: pipe->sinks) {
+          if(s.dataLimit.hasContexts()) s().notifyContext(x.first);
+        }
+        x.first.userdata.initialize();
       }
-      x.first.userdata.initialize();
-    }
-    return x.first;
+      return x.first;
+    } else
+      util::log::fatal{} << "Attempt to create a Context from an improper Context!";
   };
 
   if(auto rc = std::get_if<Context>(res)) {
     res = newCtx(*rc, rs);
   } else if(auto rc = std::get_if<SuperpositionedContext>(res)) {
-    for(auto& t: rc->m_targets) t = newCtx(t.get(), rs);
+    for(auto& t: rc->m_targets) t = newCtx(t, rs);
   } else abort();  // unreachable
 
   if(tskip >= pipe->transformers.size())
@@ -535,15 +538,7 @@ ContextRef Source::superposContext(ContextRef root, std::vector<ContextRef> targ
     util::log::fatal() << "Source did not register for `contexts` emission!";
   if(!std::holds_alternative<Context>(root))
     util::log::fatal{} << "Attempt to root a Superposition on an improper Context!";
-
-  std::vector<std::reference_wrapper<Context>> tars;
-  for(const auto& r: targets) {
-    if(auto pc = std::get_if<Context>(r))
-      tars.emplace_back(*pc);
-    else
-      util::log::fatal{} << "Attempt to target an improper Context in a Superposition!";
-  }
-  return std::get<Context>(root).superposition(std::move(tars));
+  return std::get<Context>(root).superposition(std::move(targets));
 }
 
 Source::AccumulatorsRef Source::accumulateTo(ContextRef c, Thread::Temporary& t) {

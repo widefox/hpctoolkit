@@ -148,7 +148,7 @@ void IdPacker::notifyContextExpansion(ContextRef::const_t from, Scope s, Context
       // Format: [0] [cnt] ([cnt] ([type] [context id])...)...
       pack(buffer, (std::uint64_t)0);
       pack(buffer, (std::uint64_t)tc->targets().size());
-      for(const auto& t: tc->targets()) trace(t.get());
+      for(const auto& t: tc->targets()) trace(std::get<Context>(t));
     } else abort();  // unreachable
 
     buffersize.fetch_add(buffer.size() - oldsz, std::memory_order_relaxed);

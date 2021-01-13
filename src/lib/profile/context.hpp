@@ -59,7 +59,12 @@
 
 namespace hpctoolkit {
 
+class Context;
 class SuperpositionedContext;
+
+/// Generic reference to any of the Context-like classes.
+/// Use ContextRef::const_t for a constant reference to a Context-like.
+using ContextRef = util::variant_ref<Context, SuperpositionedContext>;
 
 // A single calling Context.
 class Context {
@@ -128,7 +133,7 @@ private:
   /// Create a child SuperpositionedContext for the given set of child Contexts.
   /// The created Context will distribute from this location based on the
   /// relative value of the given Metric.
-  SuperpositionedContext& superposition(std::vector<std::reference_wrapper<Context>>);
+  SuperpositionedContext& superposition(std::vector<ContextRef>);
 
   util::uniqable_key<Context*> u_parent;
   util::uniqable_key<Scope> u_scope;
@@ -145,12 +150,12 @@ class SuperpositionedContext {
 public:
   ~SuperpositionedContext() = default;
 
-  const std::vector<std::reference_wrapper<Context>> targets() const {
+  const std::vector<ContextRef>& targets() const noexcept {
     return m_targets;
   }
 
 private:
-  std::vector<std::reference_wrapper<Context>> m_targets;
+  std::vector<ContextRef> m_targets;
 
   // Compressed subtree structure overlaying the normal Context tree. Each node
   // corresponds to a Context directly after a branching point, or otherwise in
@@ -168,12 +173,8 @@ private:
   friend class ProfilePipeline;
   friend class Context;
   friend class Metric;
-  SuperpositionedContext(std::vector<std::reference_wrapper<Context>>);
+  SuperpositionedContext(std::vector<ContextRef>);
 };
-
-/// Generic reference to any of the Context-like classes.
-/// Use ContextRef::const_t for a constant reference to a Context-like.
-using ContextRef = util::variant_ref<Context, SuperpositionedContext>;
 
 }
 
