@@ -130,10 +130,11 @@ private:
     return ensure(Scope(std::forward<Args>(args)...));
   }
 
-  /// Create a child SuperpositionedContext for the given set of child Contexts.
-  /// The created Context will distribute from this location based on the
-  /// relative value of the given Metric.
-  SuperpositionedContext& superposition(std::vector<ContextRef>);
+  /// Create a child SuperpositionedContext for the given set of child routes.
+  /// The created Context will distribute from this Context based on the
+  /// relative value of the given Metric along each of the given paths,
+  /// depositing onto the last element of each route.
+  SuperpositionedContext& superposition(std::vector<std::vector<ContextRef>>);
 
   util::uniqable_key<Context*> u_parent;
   util::uniqable_key<Scope> u_scope;
@@ -155,25 +156,16 @@ public:
   }
 
 private:
+  Context& m_root;
   std::vector<ContextRef> m_targets;
 
-  // Compressed subtree structure overlaying the normal Context tree. Each node
-  // corresponds to a Context directly after a branching point, or otherwise in
-  // need of value distribution.
-  struct Node {
-    Node(Context& c, bool t) : location(c), target(t) {};
-    ~Node() = default;
-
-    Context& location;
-    bool target;
-    std::unordered_set<std::unique_ptr<Node>> children;
-  };
-  std::unordered_set<std::unique_ptr<Node>> m_subtree;
+  // Deciding routes, one per target.
+  std::vector<std::vector<ContextRef>> m_routes;
 
   friend class ProfilePipeline;
   friend class Context;
   friend class Metric;
-  SuperpositionedContext(std::vector<ContextRef>);
+  SuperpositionedContext(Context&, std::vector<std::vector<ContextRef>>);
 };
 
 }

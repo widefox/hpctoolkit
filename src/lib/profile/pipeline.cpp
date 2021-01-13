@@ -517,8 +517,10 @@ ContextRef Source::context(ContextRef p, const Scope& s) {
         x.first.userdata.initialize();
       }
       return x.first;
-    } else
+    } else {
       util::log::fatal{} << "Attempt to create a Context from an improper Context!";
+      abort();  // unreachable
+    }
   };
 
   if(auto rc = std::get_if<Context>(res)) {
@@ -533,12 +535,12 @@ ContextRef Source::context(ContextRef p, const Scope& s) {
   return res;
 }
 
-ContextRef Source::superposContext(ContextRef root, std::vector<ContextRef> targets) {
+ContextRef Source::superposContext(ContextRef root, std::vector<std::vector<ContextRef>> routes) {
   if(!limit().hasContexts())
     util::log::fatal() << "Source did not register for `contexts` emission!";
   if(!std::holds_alternative<Context>(root))
     util::log::fatal{} << "Attempt to root a Superposition on an improper Context!";
-  return std::get<Context>(root).superposition(std::move(targets));
+  return std::get<Context>(root).superposition(std::move(routes));
 }
 
 Source::AccumulatorsRef Source::accumulateTo(ContextRef c, Thread::Temporary& t) {

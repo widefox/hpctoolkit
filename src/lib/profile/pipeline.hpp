@@ -343,7 +343,7 @@ public:
     /// Emit a new SuperpositionedContext into the Pipeline.
     /// DataClass: `contexts`
     // MT: Externally Synchronized (this), Internally Synchronized
-    ContextRef superposContext(ContextRef, std::vector<ContextRef>);
+    ContextRef superposContext(ContextRef, std::vector<std::vector<ContextRef>>);
 
     /// Emit a new Thread into the Pipeline.
     /// DataClass: `threads`

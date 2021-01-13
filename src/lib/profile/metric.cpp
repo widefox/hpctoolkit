@@ -49,6 +49,7 @@
 #include "context.hpp"
 #include "attributes.hpp"
 
+#include <forward_list>
 #include <stack>
 #include <thread>
 #include <ostream>
@@ -407,6 +408,159 @@ static bool pullsFunction(const Context& parent, const Context& child) {
 }
 
 void Metric::finalize(Thread::Temporary& t) noexcept {
+  // Before anything else happens, we need to handle the Superpositions present
+  // in the Context tree and distribute their data.
+  for(const auto& cd: t.sp_data.citerate()) {
+    const SuperpositionedContext& c = *cd.first;
+    const Context& root = c.m_root;
+
+    // Helper function to determine the factoring Metric used for the given Context.
+    auto findDistributor = [&](const Context& c) -> util::optional_ref<const Metric> {
+      const auto* d = t.data.find(&c);
+      if(d == nullptr) return {};
+      util::optional_ref<const Metric> m;
+      for(const auto& ma: d->citerate()) {
+        const Metric& cm = *ma.first;
+        if(cm.name() == "GINS") {
+          if(!m) m = cm;
+          else if(&*m != &cm)
+            util::log::fatal{} << "Multiple distributing Metrics in the same Context: "
+              << "\"" << m->name() << "\" != \"" << cm.name() << "\"";
+        }
+      }
+      return m;
+    };
+    util::optional_ref<const Metric> distributor;
+
+    {
+      util::log::debug d{false};
+      d << "Superposition on " << root.scope() << ":";
+      for(std::size_t i = 0; i < c.m_routes.size(); i++) {
+        for(const auto& cc: c.m_routes[i]) {
+          const Context& ccc = std::get<Context>(cc);
+          d << "\n  | " << ccc.scope();
+          auto dm = findDistributor(ccc);
+          if(dm) d << " " << dm->name() << " = " << t.data[&ccc][&*dm].point.load(std::memory_order_relaxed);
+        }
+        d << "\n  > " << std::get<Context>(c.m_targets[i]).scope();
+      }
+    }
+
+    // As part of processing we'll be sorting the routes. This makes sure we
+    // don't separate them from their respective targets;
+    std::vector<std::pair<std::reference_wrapper<const std::vector<ContextRef>>, ContextRef>> routetargs;
+    routetargs.reserve(c.m_routes.size());
+    for(std::size_t i = 0; i < c.m_routes.size(); i++)
+      routetargs.emplace_back(std::ref(c.m_routes[i]), c.m_targets[i]);
+
+    // To ensure proper numeric stability, we sort + group routes together based
+    // on their prefixes, assigning a fraction of the whole to each group.
+    struct group_t {
+      decltype(routetargs)::iterator begin;
+      decltype(routetargs)::iterator end;
+      double value;
+      util::optional_ref<Context> prefix;
+    };
+    std::forward_list<group_t> groups;
+    groups.push_front({routetargs.begin(), routetargs.end(), 1, {}});
+    for(std::size_t idx = 0; !groups.empty(); idx++) {
+      std::forward_list<group_t> new_groups;
+      for(auto& g: groups) {
+        // Termination case: once a group only has one element, we can distribute!
+        if(std::distance(g.begin, g.end) == 1) {
+          util::log::debug d{false};
+          d << "Distributing group " << std::distance(routetargs.begin(), g.begin)
+            << "-" << std::distance(routetargs.begin(), g.end) << " ";
+          if(g.prefix) d << g.prefix->scope();
+          else d << "{blank prefix}";
+          d << " x" << g.value << " to " << std::get<Context>(g.begin->second).scope() << ":";
+
+          for(const auto& ma: cd.second.citerate()) {
+            auto rv = ma.second.point.load(std::memory_order_relaxed);
+            auto v = rv * g.value;
+            d << "\n  " << ma.first->name() << " " << rv << " -> " << v;
+            atomic_add(t.data[&std::get<Context>(g.begin->second)][ma.first].point, v);
+          }
+
+          continue;
+        }
+
+        // Other termination case: groups with 0 value don't need to be processed.
+        if(g.value == 0) continue;
+
+        util::log::debug d{false};
+        d << "Processing group " << std::distance(routetargs.begin(), g.begin)
+          << "-" << std::distance(routetargs.begin(), g.end) << " ";
+        if(g.prefix) d << g.prefix->scope();
+        else d << "{blank prefix}";
+        d << " x" << g.value << ":";
+
+        // First sort the routes in this group by their values at the current index
+        std::sort(g.begin, g.end, [&](const auto& a, const auto& b) -> bool{
+          const auto& va = a.first.get();
+          const auto& vb = b.first.get();
+          if(idx >= va.size()) return idx < vb.size();
+          if(idx >= vb.size()) return false;
+          return &std::get<Context>(va[idx]) < &std::get<Context>(vb[idx]);
+        });
+
+        // Then construct new groups based on elements sharing a Context prefix
+        std::forward_list<group_t> next;
+        std::size_t nextCnt = 0;
+        double totalValue = 0;
+        {
+          group_t cur = {g.begin, g.begin, 0, {}};
+          cur.end++;
+          for(; cur.end != g.end; cur.end++) {
+            const auto& vb = cur.begin->first.get();
+            const auto& ve = cur.end->first.get();
+            if(vb.size() <= idx && ve.size() <= idx) continue;
+            if(vb.size() <= idx) {
+              cur.value = 0;
+              cur.prefix = {};
+              next.push_front(cur);
+              nextCnt++;
+              cur.begin = cur.end;
+            } else if(&std::get<Context>(vb[idx]) != &std::get<Context>(ve[idx])) {
+              cur.value = 0;
+              cur.prefix = std::get<Context>(vb[idx]);
+              auto dm = findDistributor(*cur.prefix);
+              if(dm) {
+                if(!distributor) distributor = dm;
+                else if(&*distributor != &*dm)
+                  util::log::fatal{} << "Multiple distributing Metrics under the same Superposition:"
+                    << distributor->name() << " != " << dm->name();
+                cur.value = t.data[&*cur.prefix][&*dm].point.load(std::memory_order_relaxed);
+                totalValue += cur.value;
+              }
+              next.push_front(cur);
+              nextCnt++;
+              cur.begin = cur.end;
+            }
+          }
+        }
+
+        // If we have any value to play with, try to distribute it.
+        // Otherwise we distribute evenly across all the possiblities.
+        for(auto& ng: next) {
+          auto rawval = ng.value;
+          if(totalValue == 0) ng.value = g.value / nextCnt;
+          else ng.value = g.value * ng.value / totalValue;
+
+          d << "\n  " << std::distance(routetargs.begin(), ng.begin)
+            << "-" << std::distance(routetargs.begin(), ng.end) << " ";
+          if(ng.prefix) d << ng.prefix->scope();
+          else d << "{blank prefix}";
+          d << " has " << rawval << " -> x" << ng.value;
+        }
+
+        // Add all the new groups into the list for the next round
+        new_groups.splice_after(new_groups.before_begin(), std::move(next));
+      }
+      groups = std::move(new_groups);
+    }
+  }
+
   // For each Context we need to know what its children are. But we only care
   // about ones that have decendants with actual data. So we construct a
   // temporary subtree with all the bits.

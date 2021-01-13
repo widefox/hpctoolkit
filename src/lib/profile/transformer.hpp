@@ -88,13 +88,17 @@ struct RouteExpansionTransformer : public ProfileTransformer {
         const auto& c = mo.first.userdata[sink.classification()];
         auto routes = c.getRoutes(mo.second);
         if(!routes.empty()) {
-          std::vector<ContextRef> tips;
+          std::vector<std::vector<ContextRef>> paths;
+          paths.reserve(routes.size());
           for(const auto& r: routes) {
+            paths.emplace_back();
             ContextRef tip = cr;
-            for(const auto& s: r) tip = sink.context(tip, s);
-            tips.emplace_back(tip);
+            for(const auto& s: r) {
+              tip = sink.context(tip, s);
+              paths.back().emplace_back(tip);
+            }
           }
-          return sink.superposContext(cr, std::move(tips));
+          return sink.superposContext(cr, std::move(paths));
         }
       }
     }
