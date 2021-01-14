@@ -1077,6 +1077,10 @@ hpcrun_sparse_file_t* hpcrun_sparse_open(const char* path, size_t start_pos, siz
                                        //(block = a chunk containing value and metric id pairs for one cct node)
 
   //initialize footer
+  if(end_pos == 0) {
+    fseek(fs, 0, SEEK_END);
+    sparse_fs->end_pos = end_pos = ftell(fs);
+  }
   size_t footer_position = end_pos - SF_footer_SIZE;
   fseek(fs, footer_position, SEEK_SET);
   int ret = hpcrun_fmt_footer_fread(&(sparse_fs->footer), fs);

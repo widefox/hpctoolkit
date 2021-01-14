@@ -62,7 +62,7 @@ Hpcrun4::Hpcrun4(const stdshim::filesystem::path& fn)
     tracepath(fn.parent_path() / fn.stem().concat(".hpctrace")),
     trace_sort(false) {
   // Try to open up the file. Errors handled inside somewhere.
-  file = hpcrun_sparse_open(path.c_str());
+  file = hpcrun_sparse_open(path.c_str(), 0, 0);
   if(file == nullptr) {
     fileValid = false;
     return;
