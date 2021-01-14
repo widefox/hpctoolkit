@@ -99,7 +99,7 @@ extern "C" {
 
 #define CMS_hdr_SIZE (HPCCCTSPARSE_FMT_MagicLen + HPCCCTSPARSE_FMT_VersionLen \
   + HPCCCTSPARSE_FMT_NumCtxLen + HPCCCTSPARSE_FMT_NumSecLen \
-  + HPCCCTSPARSE_FMT_SecLen*(HPCCCTSPARSE_FMT_NumSec-2))
+  + HPCCCTSPARSE_FMT_SecLen * (HPCCCTSPARSE_FMT_NumSec-2))
 
 typedef struct cms_hdr_t{
   uint8_t versionMajor;

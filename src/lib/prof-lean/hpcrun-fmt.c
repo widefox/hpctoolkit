@@ -1057,7 +1057,7 @@ hpcrun_fmt_footer_fprint(hpcrun_fmt_footer_t* x, FILE* fs, const char* pre)
 // File sections in order:
 // hdr, loadmap, ccts, metric-tbl, sparse metrics, footer
 //***************************************************************************
-hpcrun_sparse_file_t* hpcrun_sparse_open(const char* path)
+hpcrun_sparse_file_t* hpcrun_sparse_open(const char* path, size_t start_pos, size_t end_pos)
 {
   FILE* fs = hpcio_fopen_r(path);
   if(!fs) return NULL;
@@ -1065,18 +1065,19 @@ hpcrun_sparse_file_t* hpcrun_sparse_open(const char* path)
   hpcrun_sparse_file_t* sparse_fs = (hpcrun_sparse_file_t*) malloc(sizeof(hpcrun_sparse_file_t));
   sparse_fs->file = fs;
   sparse_fs->mode = OPENED;
-  sparse_fs->cur_pos = 0;
+  sparse_fs->cur_pos = start_pos;
+  sparse_fs->start_pos = start_pos;
+  sparse_fs->end_pos = end_pos;
 
   sparse_fs->cct_nodes_read    = 0;    //number of cct nodes that have been read
   sparse_fs->metric_bytes_read = 0;    //number of bytes for metric-tbl section that have been read
   sparse_fs->cur_metric_id     = 0;    //keep track of id for metrics
   sparse_fs->lm_bytes_read     = 0;    //number of bytes for loadmap section that have been read
   sparse_fs->sm_block_touched  = 0;    //number of sparse metrics blocks that have been touched (entries might not have been read yet)
-                                        //(block = a chunk containing value and metric id pairs for one cct node)
+                                       //(block = a chunk containing value and metric id pairs for one cct node)
 
   //initialize footer
-  fseek(fs, 0, SEEK_END);
-  size_t footer_position = ftell(fs) - SF_footer_SIZE;
+  size_t footer_position = end_pos - SF_footer_SIZE;
   fseek(fs, footer_position, SEEK_SET);
   int ret = hpcrun_fmt_footer_fread(&(sparse_fs->footer), fs);
   if(ret != HPCFMT_OK){
@@ -1084,9 +1085,30 @@ hpcrun_sparse_file_t* hpcrun_sparse_open(const char* path)
     free(sparse_fs);
     return NULL;
   }
+  hpcrun_sparse_footer_update_w_start(&(sparse_fs->footer), start_pos); //temp
   fseek(fs, sparse_fs->footer.hdr_start, SEEK_SET); 
 
   return sparse_fs;
+}
+
+//TEMPARARY function: we concatenate hpcrun files into one giant file for experiments
+// so we need to update the footer
+// TODO in the future: if hpcrun output is one file at the beginning,
+// the footer info should already be correct
+void hpcrun_sparse_footer_update_w_start(hpcrun_fmt_footer_t *f, size_t start_pos)
+{
+  f->hdr_start     += start_pos;
+  f->hdr_end       += start_pos;
+  f->loadmap_start += start_pos;
+  f->loadmap_end   += start_pos;
+  f->cct_start     += start_pos;
+  f->cct_end       += start_pos;
+  f->met_tbl_start += start_pos;
+  f->met_tbl_end   += start_pos;
+  f->sm_start      += start_pos;
+  f->sm_end        += start_pos;
+  f->footer_start  += start_pos;
+  
 }
 
 /* succeed: return 0; fail: return 1; */
@@ -1101,7 +1123,7 @@ int hpcrun_sparse_pause(hpcrun_sparse_file_t* sparse_fs)
   return ret;
 }
 
-/* succeed: return 0; fail open: return 1; was open already: return -1 */
+/* succeed: return 0; fail open: return 1; was open already or current position out of range: return -1 */
 int hpcrun_sparse_resume(hpcrun_sparse_file_t* sparse_fs, const char* path)
 {
   int ret = hpcrun_sparse_check_mode(sparse_fs, PAUSED, __func__);
@@ -1109,6 +1131,9 @@ int hpcrun_sparse_resume(hpcrun_sparse_file_t* sparse_fs, const char* path)
 
   FILE* fs = hpcio_fopen_r(path);
   if(!fs) return SF_FAIL;
+  if((sparse_fs->cur_pos < sparse_fs->start_pos)
+    ||(sparse_fs->cur_pos >= sparse_fs->end_pos))
+    return SF_ERR;
   sparse_fs->file = fs;
   fseek(fs, sparse_fs->cur_pos, SEEK_SET);
   sparse_fs->mode = OPENED;
@@ -1200,7 +1225,6 @@ int hpcrun_sparse_next_context(hpcrun_sparse_file_t* sparse_fs, hpcrun_fmt_cct_n
   if(realoffset > sparse_fs->footer.cct_end) return SF_ERR;
   fseek(sparse_fs->file, realoffset, SEEK_SET);
   epoch_flags_t fake = {0};//need to remove in the future
-  //node->num_metrics = 0;
   HPCFMT_ThrowIfError(hpcrun_fmt_cct_node_fread(node, fake, sparse_fs->file));
   sparse_fs->cct_nodes_read ++;
   return node->id;
@@ -1252,9 +1276,11 @@ int hpcrun_sparse_next_block(hpcrun_sparse_file_t* sparse_fs)
   HPCFMT_ThrowIfError(hpcfmt_int8_fread(&val_mid_idx,sparse_fs->file));
 
   //set up records for this current block
-  sparse_fs->cur_block_start = val_mid_idx;
+  sparse_fs->cur_block_start = sparse_fs->val_mid_offset + (SF_mid_SIZE + SF_val_SIZE) * val_mid_idx;
   fseek(sparse_fs->file, SF_cct_node_id_SIZE, SEEK_CUR);
-  HPCFMT_ThrowIfError(hpcfmt_int8_fread(&(sparse_fs->cur_block_end),sparse_fs->file));
+  uint64_t next_block_start_idx;
+  HPCFMT_ThrowIfError(hpcfmt_int8_fread(&next_block_start_idx,sparse_fs->file));
+  sparse_fs->cur_block_end = sparse_fs->val_mid_offset + (SF_mid_SIZE + SF_val_SIZE) * next_block_start_idx;
   sparse_fs->sm_block_touched++;
 
   //seek to the first val_metricID place
@@ -1275,8 +1301,8 @@ int hpcrun_sparse_next_entry(hpcrun_sparse_file_t* sparse_fs, hpcrun_metricVal_t
     return SF_ERR;
   }
   size_t cur_pos = ftell(sparse_fs->file);
-  size_t cur_block_start_pos = sparse_fs->val_mid_offset + (SF_mid_SIZE + SF_val_SIZE) * sparse_fs->cur_block_start;
-  size_t cur_block_end_pos   = sparse_fs->val_mid_offset + (SF_mid_SIZE + SF_val_SIZE) * sparse_fs->cur_block_end;
+  size_t cur_block_start_pos = sparse_fs->cur_block_start;
+  size_t cur_block_end_pos   = sparse_fs->cur_block_end;
   if(cur_pos > sparse_fs->footer.sm_end || cur_block_start_pos > sparse_fs->footer.sm_end || cur_block_end_pos > sparse_fs->footer.sm_end) return SF_ERR;
   if((cur_pos < cur_block_start_pos) || (cur_pos > cur_block_end_pos)){
     fprintf(stderr, "ERROR: cannot read next entry for current cct: current position of hpcrun_sparse_file object is not within curren cct block's range.\n");

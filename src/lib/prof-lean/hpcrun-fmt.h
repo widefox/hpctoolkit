@@ -691,12 +691,13 @@ static const int SF_cct_node_idx_SIZE     = 8;
 
 typedef struct hpcrun_sparse_file {
   FILE* file;
-  //size_t footer[7];
   hpcrun_fmt_footer_t footer;
 
   //use for Pause, Resume
   bool mode;
   size_t cur_pos;
+  size_t start_pos;
+  size_t end_pos;
 
   //keep track for next_xx functions
   uint64_t num_cct_nodes;       //should be 32-bit since cct id is 32-bit, but the original writing in cct section for num_cct_nodes is 64-bit
@@ -717,7 +718,9 @@ typedef struct hpcrun_sparse_file {
 
 } hpcrun_sparse_file_t;
 
-hpcrun_sparse_file_t* hpcrun_sparse_open(const char* path);
+void hpcrun_sparse_footer_update_w_start(hpcrun_fmt_footer_t *f, size_t start_pos);
+
+hpcrun_sparse_file_t* hpcrun_sparse_open(const char* path, size_t start_pos, size_t end_pos);
 int hpcrun_sparse_pause(hpcrun_sparse_file_t* sparse_fs);
 int hpcrun_sparse_resume(hpcrun_sparse_file_t* sparse_fs, const char* path);
 void hpcrun_sparse_close(hpcrun_sparse_file_t* sparse_fs);
