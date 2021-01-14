@@ -52,6 +52,7 @@
 
 #include "lib/profile/pipeline.hpp"
 #include "lib/profile/source.hpp"
+#include "lib/profile/sources/hpcrun4.hpp"
 #include "lib/profile/packedids.hpp"
 #include "lib/profile/sinks/packed.hpp"
 #include "lib/profile/sinks/hpctracedb2.hpp"
@@ -95,8 +96,14 @@ int rankN(ProfArgs&& args) {
     ANNOTATE_HAPPENS_AFTER(&start_arc);
     std::vector<std::unique_ptr<ProfileSource>> my_sources;
     #pragma omp for schedule(dynamic) nowait
-    for(std::size_t i = 0; i < args.sources.size(); i++)
-      my_sources.emplace_back(ProfileSource::create_for(args.sources[i].second));
+    for(std::size_t i = 0; i < args.sources.size(); i++) {
+      const auto& p = args.sources[i].second;
+      if(p.extension() == ".@prof2tar") {
+        my_sources.emplace_back(std::make_unique<sources::Hpcrun4>(
+          p.parent_path(), std::stoull(p.stem().string())));
+      } else
+        my_sources.emplace_back(ProfileSource::create_for(p));
+    }
     #pragma omp critical
     for(auto& s: my_sources) pipelineB1 << std::move(s);
     ANNOTATE_HAPPENS_BEFORE(&end_arc);
