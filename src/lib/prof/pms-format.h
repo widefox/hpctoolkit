@@ -86,7 +86,7 @@ extern "C" {
 #define HPCPROFILESPARSE_FMT_Magic   "HPCPROF-pmsdb___" //16 bytes
 #define HPCPROFILESPARSE_FMT_VersionMajor 1             //1  byte
 #define HPCPROFILESPARSE_FMT_VersionMinor 0             //1  byte
-#define HPCPROFILESPARSE_FMT_NumSec 4                   //2  byte
+#define HPCPROFILESPARSE_FMT_NumSec 2                   //2  byte
 
 #define HPCPROFILESPARSE_FMT_MagicLen     (sizeof(HPCPROFILESPARSE_FMT_Magic) - 1)
 #define HPCPROFILESPARSE_FMT_VersionLen   2
@@ -99,7 +99,7 @@ extern "C" {
 
 #define PMS_hdr_SIZE (HPCPROFILESPARSE_FMT_MagicLen + HPCPROFILESPARSE_FMT_VersionLen \
   + HPCPROFILESPARSE_FMT_NumProfLen + HPCPROFILESPARSE_FMT_NumSecLen \
-  + HPCPROFILESPARSE_FMT_SecLen * (HPCPROFILESPARSE_FMT_NumSec-2))
+  + HPCPROFILESPARSE_FMT_SecLen * HPCPROFILESPARSE_FMT_NumSec)
 
 typedef struct pms_hdr_t{
   uint8_t versionMajor;

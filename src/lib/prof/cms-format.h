@@ -86,7 +86,7 @@ extern "C" {
 #define HPCCCTSPARSE_FMT_Magic        "HPCPROF-cmsdb___"  //16 bytes
 #define HPCCCTSPARSE_FMT_VersionMajor 1                   //1  byte
 #define HPCCCTSPARSE_FMT_VersionMinor 0                   //1  byte
-#define HPCCCTSPARSE_FMT_NumSec       3                   //2  byte
+#define HPCCCTSPARSE_FMT_NumSec       1                   //2  byte
 
 #define HPCCCTSPARSE_FMT_MagicLen     (sizeof(HPCCCTSPARSE_FMT_Magic) - 1)
 #define HPCCCTSPARSE_FMT_VersionLen   2
@@ -99,7 +99,7 @@ extern "C" {
 
 #define CMS_hdr_SIZE (HPCCCTSPARSE_FMT_MagicLen + HPCCCTSPARSE_FMT_VersionLen \
   + HPCCCTSPARSE_FMT_NumCtxLen + HPCCCTSPARSE_FMT_NumSecLen \
-  + HPCCCTSPARSE_FMT_SecLen * (HPCCCTSPARSE_FMT_NumSec-2))
+  + HPCCCTSPARSE_FMT_SecLen * HPCCCTSPARSE_FMT_NumSec)
 
 typedef struct cms_hdr_t{
   uint8_t versionMajor;
