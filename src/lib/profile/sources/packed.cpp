@@ -159,7 +159,9 @@ std::vector<uint8_t>::const_iterator Packed::unpackReferences(iter_t it) noexcep
 
 std::vector<uint8_t>::const_iterator Packed::unpackContexts(iter_t it) noexcept {
   std::stack<ContextRef, std::vector<ContextRef>> tip;
-  // Format: children... [sentinal]
+  // Format: <global> children... [sentinal]
+  if(unpack<std::uint64_t>(it) != (std::uint64_t)Scope::Type::global)
+    util::log::fatal{} << "Packed unpacked a non-global root?";
   while(1) {
     auto next = unpack<std::uint64_t>(it);
     if(next == (0xFEF1F0F3ULL << 32)) {
@@ -169,13 +171,29 @@ std::vector<uint8_t>::const_iterator Packed::unpackContexts(iter_t it) noexcept 
     }
 
     Scope s;
-    if(next == (0xF0F1F2F3ULL << 32)) {
-      // Format: [magic] children... [sentinal]
-      s = Scope{};  // Unknown scope
-    } else {
+    switch(next) {
+    case (std::uint64_t)Scope::Type::point: {
       // Format: [module id] [offset] children... [sentinal]
+      auto midx = unpack<std::uint64_t>(it);
       auto off = unpack<std::uint64_t>(it);
-      s = Scope{modules.at(next), off};  // Module scope
+      s = Scope{modules.at(midx), off};
+      break;
+    }
+    case (std::uint64_t)Scope::Type::call: {
+      // Format: [module id] [offset] children... [sentinal]
+      auto midx = unpack<std::uint64_t>(it);
+      auto off = unpack<std::uint64_t>(it);
+      s = Scope{Scope::call, modules.at(midx), off};
+      break;
+    }
+    case (std::uint64_t)Scope::Type::unknown:
+      s = Scope{};
+      break;
+    case (std::uint64_t)Scope::Type::global:
+      util::log::fatal{} << "Packed unpacked Global Scope not at root!";
+    default:
+      util::log::fatal{} << "Unhandled Scope type in Packed::unpackContexts: "
+                         << next;
     }
     auto c = sink.context(tip.empty() ? sink.global() : (ContextRef)tip.top(), s);
     tip.push(c);

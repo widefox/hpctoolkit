@@ -129,17 +129,30 @@ void IdPacker::notifyContextExpansion(ContextRef::const_t from, Scope s, Context
     // Format: [parent id] (Scope)
     auto cid = fc->userdata[src.identifier()];
     pack(buffer, (std::uint64_t)cid);
-    if(s.type() == Scope::Type::point || s.type() == Scope::Type::classified_point
-       || s.type() == Scope::Type::call || s.type() == Scope::Type::classified_call) {
-      // Format: [module id] [offset]
+    switch(s.type()) {
+    case Scope::Type::point:
+    case Scope::Type::call: {
+      // Format: [call] [module id] [offset]
       auto mo = s.point_data();
+      pack(buffer, (std::uint64_t)(s.type() == Scope::Type::call ? 1 : 0));
       pack(buffer, (std::uint64_t)mo.first.userdata[src.identifier()]);
       pack(buffer, (std::uint64_t)mo.second);
-    } else if(s.type() == Scope::Type::unknown) {
+      break;
+    }
+    case Scope::Type::unknown:
       // Format: [magic]
       pack(buffer, (std::uint64_t)0xF0F1F2F3ULL << 32);
-    } else
-      util::log::fatal{} << "PackedIds can't handle non-point Contexts!";
+      break;
+    case Scope::Type::global:
+    case Scope::Type::classified_point:
+    case Scope::Type::classified_call:
+    case Scope::Type::function:
+    case Scope::Type::inlined_function:
+    case Scope::Type::loop:
+    case Scope::Type::line:
+    case Scope::Type::concrete_line:
+      util::log::fatal{} << "PackedIds can't handle non-point Contexts, saw " << s;
+    }
 
     if(auto tc = std::get_if<const Context>(to)) {
       // Format: [cnt] ([type] [context id])...
@@ -239,8 +252,10 @@ void IdUnpacker::unpack(ProfilePipeline::Source& sink) {
       s = {};  // Unknown Scope
     } else {
       // Format: [module id] [offset]
+      auto midx = ::unpack<std::uint64_t>(it);
       auto off = ::unpack<std::uint64_t>(it);
-      s = {modmap.at(next), off};
+      if(next) s = {Scope::call, modmap.at(midx), off};
+      else s = {modmap.at(midx), off};
     }
     std::size_t cnt = ::unpack<std::uint64_t>(it);
     auto& scopes = exmap[parent][s];
@@ -250,7 +265,7 @@ void IdUnpacker::unpack(ProfilePipeline::Source& sink) {
       it++;
       auto id = ::unpack<std::uint64_t>(it);
       switch(ty) {
-      case 0:  // unknown or point -> point
+      case 0:  // unknown or point or call -> point
         scopes.emplace_back(*exmod, id);
         break;
       case 1:  // function or inlined_function -> inlined_function
@@ -286,7 +301,7 @@ ContextRef IdUnpacker::Expander::context(ContextRef c, Scope& s) noexcept {
     auto x = shared.exmap.find(co->userdata[sink.identifier()]);
     if(x == shared.exmap.end()) util::log::fatal{} << "No data for context id " << co->userdata[sink.identifier()];
     auto y = x->second.find(s);
-    if(y == x->second.end()) util::log::fatal{} << "No data for scope " << s.point_data().second << " from context " << co->userdata[sink.identifier()];
+    if(y == x->second.end()) util::log::fatal{} << "No data for scope " << s << " from context " << co->userdata[sink.identifier()];
     ContextRef r = *co;
     for(const auto& next: y->second) {
       if(!first) r = sink.context(r, s);
@@ -314,7 +329,7 @@ void IdUnpacker::Finalizer::context(const Context& c, unsigned int& id) {
     if(&c.scope().function_data() != shared.exfunc.get())
       util::log::fatal{} << "inlined_function scope with real Function in IdUnpacker!";
     // fallthrough
-  case Scope::Type::loop: {
+  case Scope::Type::line: {
     auto fl = c.scope().line_data();
     if(&fl.first != shared.exfile)
       util::log::fatal{} << "inlined_function scope with real File in IdUnpacker!";
@@ -322,7 +337,7 @@ void IdUnpacker::Finalizer::context(const Context& c, unsigned int& id) {
     return;
   }
   default:
-    util::log::fatal{} << "Unrecognized Scope in IdUnpacker!";
+    util::log::fatal{} << "Unrecognized Scope in IdUnpacker: " << c.scope();
   }
 }
 

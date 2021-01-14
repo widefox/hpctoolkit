@@ -138,17 +138,29 @@ void Packed::packReferences(std::vector<std::uint8_t>& out) noexcept {
 
 void Packed::packContexts(std::vector<std::uint8_t>& out) noexcept {
   src.contexts().citerate([&](const Context& c){
-    if(c.scope().type() == Scope::Type::point) {
-      // Format: [module id] [offset] children... [sentinal]
+    pack(out, (std::uint64_t)c.scope().type());
+    switch(c.scope().type()) {
+    case Scope::Type::point:
+    case Scope::Type::call: {
+      // Format: <type> [module id] [offset] children... [sentinal]
       auto mo = c.scope().point_data();
       pack(out, moduleIDs.at(&mo.first));
       pack(out, mo.second);
-    } else if(c.scope().type() == Scope::Type::unknown) {
-      // Format: [magic] children... [sentinal]
-      pack(out, (std::uint64_t)0xF0F1F2F3ULL << 32);
-    } else if(c.scope().type() == Scope::Type::global) {
-      // Format: children... [sentinal]
-    } else util::log::fatal() << "Unhandled Scope type encountered in Packed!";
+      break;
+    }
+    case Scope::Type::unknown:
+    case Scope::Type::global:
+      // Format: <type> children... [sentinal]
+      break;
+    case Scope::Type::classified_point:
+    case Scope::Type::classified_call:
+    case Scope::Type::function:
+    case Scope::Type::inlined_function:
+    case Scope::Type::loop:
+    case Scope::Type::line:
+    case Scope::Type::concrete_line:
+      util::log::fatal() << "Unhandled Scope type encountered in Packed!";
+    }
   }, [&](const Context& c){
     pack(out, (std::uint64_t)0xFEF1F0F3ULL << 32);
   });
