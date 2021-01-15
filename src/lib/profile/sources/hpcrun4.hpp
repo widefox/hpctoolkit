@@ -66,10 +66,6 @@ public:
   // You shouldn't create these directly, use ProfileSource::create_for
   Hpcrun4() = delete;
 
-  // Special case, for now. TODO remove this after the experiments are complete.
-  // offset should point to the beginning of the tar header for the file
-  Hpcrun4(const stdshim::filesystem::path&, size_t offset);
-
   bool valid() const noexcept override;
 
   /// Read in enough data to satify a request or until a timeout is reached.
@@ -108,7 +104,6 @@ private:
   stdshim::filesystem::path tracepath;
   long trace_off;
   bool trace_sort;
-  std::size_t max_trace_cnt;
 
   // We're all friends here.
   friend std::unique_ptr<ProfileSource> ProfileSource::create_for(const stdshim::filesystem::path&);

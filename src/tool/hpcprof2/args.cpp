@@ -49,13 +49,11 @@
 #include "args.hpp"
 
 #include "lib/profile/source.hpp"
-#include "lib/profile/sources/hpcrun4.hpp"
 #include "lib/profile/finalizers/struct.hpp"
 #include "include/hpctoolkit-config.h"
 #include "lib/profile/mpi/all.hpp"
 
 #include <cassert>
-#include <fstream>
 #include <getopt.h>
 #include <iostream>
 #include <iomanip>
@@ -138,14 +136,14 @@ Current Obsolete Options:
       --struct-id             Unsupported.
 )EOF";
 
-static bool string_starts_with(const std::string& a, const std::string& n) {
+const bool string_starts_with(const std::string& a, const std::string& n) {
   auto it_n = n.begin();
   for(auto it = a.begin(); it != a.end() && it_n != n.end(); ++it, ++it_n) {
     if(*it != *it_n) return false;
   }
   return it_n == n.end();
 }
-static bool string_ends_with(const std::string& a, const std::string& n) {
+const bool string_ends_with(const std::string& a, const std::string& n) {
   auto it_n = n.rbegin();
   for(auto it = a.rbegin(); it != a.rend() && it_n != n.rend(); ++it, ++it_n) {
     if(*it != *it_n) return false;
@@ -503,51 +501,10 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
       #pragma omp for schedule(dynamic) nowait
       for(std::size_t i = 0; i < files.size(); i++) {
         auto pg = std::move(files[i]);
-        if(pg.first.filename() == "hpc.tar") {
-          // Special case: read from within a tarball
-          char buf[512];
-          std::ifstream tar(pg.first.string());
-          bool zero = false;
-          while(tar.good()) {
-            auto off = tar.tellg();
-            tar.read(buf, 512);
-            if(tar.gcount() < 512)
-              util::log::fatal{} << "Unexpected EOF in tarball!";
-            if(buf[0] == '\0') {
-              if(zero) break;  // Second 0-block, end of transmission
-              zero = true;
-              continue;  // 0-block, skip
-            } else {
-              zero = false;
-              auto len = strnlen(buf, 100);
-              if(len == 100) util::log::fatal{} << "Tarballed filename too long!";
-              fs::path fn = std::string(buf, len);
-              if(fn.has_parent_path())
-                util::log::fatal{} << "Tarballed filenames must be flat: " << fn;
-
-              if(fn.extension() == ".hpctrace" || fn.extension() == ".log") {
-                // Skip, we don't need to do anything for these
-              } else if(fn.extension() == ".hpcrun") {
-                auto s = std::make_unique<sources::Hpcrun4>(pg.first, off);
-                if(!s->valid()) util::log::fatal{} << "Invalid v4 file in tarball: " << fn;
-                my_sources.emplace_back(std::move(s),
-                  pg.first / (std::to_string(off) + ".@prof2tar"));
-                cnts_a[pg.second].fetch_add(1, std::memory_order_relaxed);
-              } else
-                util::log::fatal{} << "Tarball contains bad extension: " << fn;
-
-              auto sz = strtoull(&buf[124], nullptr, 8);
-              tar.seekg((sz/512 + (sz % 512 == 0 ? 0 : 1))*512, std::ios_base::cur);
-            }
-          }
-          if(!tar)
-            util::log::fatal{} << "I/O error while scanning tarball!";
-        } else {
-          auto s = ProfileSource::create_for(pg.first);
-          if(s) {
-            my_sources.emplace_back(std::move(s), std::move(pg.first));
-            cnts_a[pg.second].fetch_add(1, std::memory_order_relaxed);
-          }
+        auto s = ProfileSource::create_for(pg.first);
+        if(s) {
+          my_sources.emplace_back(std::move(s), std::move(pg.first));
+          cnts_a[pg.second].fetch_add(1, std::memory_order_relaxed);
         }
       }
       #pragma omp critical
@@ -629,16 +586,9 @@ ProfArgs::ProfArgs(int argc, char* const argv[])
   // Add the inputs newly allocated to us to our set
   for(auto& p_s: extra) {
     stdshim::filesystem::path p = std::move(p_s);
-    if(p.extension() == ".@prof2tar") {
-      auto s = std::make_unique<sources::Hpcrun4>(
-        p.parent_path(), std::stoull(p.stem().string()));
-      if(!s->valid()) util::log::fatal{} << "Troubles with tarballs!";
-      sources.emplace_back(std::move(s), std::move(p));
-    } else {
-      auto s = ProfileSource::create_for(p);
-      if(!s) util::log::fatal{} << "Inputs have changed during preparation!";
-      sources.emplace_back(std::move(s), std::move(p));
-    }
+    auto s = ProfileSource::create_for(p);
+    if(!s) util::log::fatal{} << "Inputs have changed during preparation!";
+    sources.emplace_back(std::move(s), std::move(p));
   }
 }
 

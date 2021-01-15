@@ -60,7 +60,7 @@ Hpcrun4::Hpcrun4(const stdshim::filesystem::path& fn)
   : ProfileSource(), fileValid(true), attrsValid(true), tattrsValid(true),
     thread(nullptr), path(fn), partial_node_id(0), unknown_node_id(0),
     tracepath(fn.parent_path() / fn.stem().concat(".hpctrace")),
-    trace_sort(false), max_trace_cnt(0) {
+    trace_sort(false) {
   // Try to open up the file. Errors handled inside somewhere.
   file = hpcrun_sparse_open(path.c_str(), 0, 0);
   if(file == nullptr) {
@@ -144,140 +144,6 @@ Hpcrun4::Hpcrun4(const stdshim::filesystem::path& fn)
   // Also check for a corrosponding tracefile. If anything goes wrong, we'll
   // just skip it.
   if(!setupTrace()) tracepath.clear();
-}
-
-Hpcrun4::Hpcrun4(const stdshim::filesystem::path& fn, std::size_t off)
-  : ProfileSource(), fileValid(true), attrsValid(true), tattrsValid(true),
-    thread(nullptr), path(fn), partial_node_id(0), unknown_node_id(0),
-    tracepath(fn), trace_sort(false), max_trace_cnt(0) {
-  // Read in the tar header and extract out the important bits. Like the size.
-  stdshim::filesystem::path tracename;
-  std::size_t sz = 0;
-  std::FILE* rawf = std::fopen(path.c_str(), "r");
-  if(rawf) {
-    char buf[512];
-    std::fseek(rawf, off, SEEK_SET);
-    if(std::fread(buf, 1, 512, rawf) < 512)
-      util::log::fatal{} << "Unexpected EOF while reparsing tar header!";
-    tracename = std::string(buf, strnlen(buf, 100));
-    tracename.replace_extension(".hpctrace");
-    sz = strtoull(&buf[124], nullptr, 8);
-  } else {
-    fileValid = false;
-    return;
-  }
-
-  // Try to open up the file. Errors handled inside somewhere.
-  file = hpcrun_sparse_open(path.c_str(), off+512, off+512+sz);
-  if(file == nullptr) {
-    fileValid = false;
-    return;
-  }
-  // We still need to check the header before we know for certain whether
-  // this is the right version. A hassle, I know.
-  hpcrun_fmt_hdr_t hdr;
-  if(hpcrun_sparse_read_hdr(file, &hdr) != 0) {
-    hpcrun_sparse_close(file);
-    fileValid = false;
-    return;
-  }
-  if(hdr.version != 4.0) {
-    hpcrun_fmt_hdr_free(&hdr, std::free);
-    hpcrun_sparse_close(file);
-    fileValid = false;
-    return;
-  }
-  stdshim::optional<unsigned long> mpirank;
-  stdshim::optional<unsigned long> threadid;
-  stdshim::optional<unsigned long> hostid;
-  for(uint32_t i = 0; i < hdr.nvps.len; i++) {
-    const std::string k(hdr.nvps.lst[i].name);
-    const auto v = hdr.nvps.lst[i].val;
-    if(k == HPCRUN_FMT_NV_prog) attrs.name(std::string(v));
-    else if(k == HPCRUN_FMT_NV_progPath)
-      attrs.path(stdshim::filesystem::path(v));
-    else if(k == HPCRUN_FMT_NV_envPath)
-      attrs.environment("PATH", std::string(v));
-    else if(k == HPCRUN_FMT_NV_jobId)
-      attrs.job(std::strtol(v, nullptr, 10));
-    else if(k == HPCRUN_FMT_NV_mpiRank)
-      mpirank = std::strtol(v, nullptr, 10);
-    else if(k == HPCRUN_FMT_NV_tid)
-      threadid = std::strtol(v, nullptr, 10);
-    else if(k == HPCRUN_FMT_NV_hostid)
-      hostid = std::strtol(v, nullptr, 16);
-    else if(k == HPCRUN_FMT_NV_pid)
-      tattrs.procid(std::strtol(v, nullptr, 10));
-    else if(k == HPCRUN_FMT_NV_traceOrdered) {
-      if(std::string(v) == "1") trace_sort = true;
-    } else if(k != HPCRUN_FMT_NV_traceMinTime
-            && k != HPCRUN_FMT_NV_traceMaxTime) {
-      util::log::warning()
-      << "Unknown file attribute in " << path.string() << ":\n"
-          "  '" << k << "'='" << std::string(v) << "'!";
-    }
-  }
-  hpcrun_fmt_hdr_free(&hdr, std::free);
-  // Try to read the hierarchical tuple, if we fail synth from the header data
-  id_tuple_t sfTuple;
-  if(hpcrun_sparse_read_id_tuple(file, &sfTuple) == SF_SUCCEED) {
-    std::vector<pms_id_t> tuple;
-    tuple.reserve(sfTuple.length);
-    for(size_t i = 0; i < sfTuple.length; i++)
-      tuple.push_back(sfTuple.ids[i]);
-    id_tuple_free(&sfTuple);
-    tattrs.idTuple(std::move(tuple));
-  } else {
-    util::log::warning{} << "Synthesizing hierarchical tuple for: "
-                         << path.string();
-    std::vector<pms_id_t> tuple;
-    if(hostid) tuple.push_back({.kind = IDTUPLE_NODE, .index=*hostid});
-    if(threadid && *threadid >= 500)  // GPUDEVICE goes before RANK
-      tuple.push_back({.kind = IDTUPLE_GPUDEVICE, .index=0});
-    if(mpirank) tuple.push_back({.kind = IDTUPLE_RANK, .index=*mpirank});
-    if(threadid) {
-      if(*threadid >= 500) {  // GPU stream
-        tuple.push_back({.kind = IDTUPLE_GPUCONTEXT, .index=0});
-        tuple.push_back({.kind = IDTUPLE_GPUSTREAM, .index=*threadid - 500});
-      } else
-        tuple.push_back({.kind = IDTUPLE_THREAD, .index=*threadid});
-    }
-    tattrs.idTuple(std::move(tuple));
-  }
-  // If all went well, we can pause the file here.
-  hpcrun_sparse_pause(file);
-
-  // The corresponding tracefile if present must be the next file in the
-  // tarball. Similar to setupTrace but with minor adjustments.
-  auto f = [&]() -> bool{
-    char buf[512];
-    std::fseek(rawf, off + 512 + (sz/512 + (sz % 512 == 0 ? 0 : 1))*512, SEEK_SET);
-    if(std::fread(buf, 1, 512, rawf) < 512)
-      util::log::fatal{} << "Unexpected EOF while reparsing tar header!";
-    stdshim::filesystem::path tname = std::string(buf, strnlen(buf, 100));
-    unsigned long long tsz = strtoull(&buf[124], nullptr, 8);
-    if(tracename != tname) return false;
-    auto tracefile_start = std::ftell(rawf);
-
-    // Read in the file header.
-    hpctrace_fmt_hdr_t thdr;
-    if(hpctrace_fmt_hdr_fread(&thdr, rawf) != HPCFMT_OK) return false;
-    if(thdr.version != 1.01) return false;
-    if(HPCTRACE_HDR_FLAGS_GET_BIT(thdr.flags, HPCTRACE_HDR_FLAGS_DATA_CENTRIC_BIT_POS))
-      return false;
-    // The file is now placed right at the start of the data.
-    trace_off = std::ftell(rawf);
-
-    // Count the number of timepoints in the file, and save it for later.
-    auto trace_end = tracefile_start + tsz;
-    if((trace_end - trace_off) % (8+4) != 0) return false;
-    max_trace_cnt = (trace_end - trace_off) / (8+4);
-    tattrs.timepointCnt(max_trace_cnt);
-    return true;
-  };
-  if(!f()) tracepath.clear();
-
-  std::fclose(rawf);
 }
 
 bool Hpcrun4::valid() const noexcept { return fileValid; }
@@ -535,11 +401,8 @@ void Hpcrun4::read(const DataClass& needed) {
 
     std::FILE* f = std::fopen(tracepath.c_str(), "rb");
     std::fseek(f, trace_off, SEEK_SET);
-    std::size_t trace_cnt = 0;
     hpctrace_fmt_datum_t tpoint;
     while(1) {
-      trace_cnt++;
-      if(trace_cnt > max_trace_cnt) break;
       int err = hpctrace_fmt_datum_fread(&tpoint, {0}, f);
       if(err == HPCFMT_EOF) break;
       else if(err != HPCFMT_OK)
