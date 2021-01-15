@@ -1013,6 +1013,15 @@ void SparseDB::writeProfileMajor(const int threads, const int world_rank,
   //write rest profiles and corresponding prof_info
   workProfSizesOffsets(world_rank, total_num_prof, threads);
   writeProfiles(profile_major_f, threads, ctx_nzval_cnts, ctx_nzmids);
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  if(world_rank == world_size - 1){
+    auto pmfi = profile_major_f.open(true);
+    auto footer_off = prof_offsets.back() + profile_sizes.back();
+    uint64_t footer_val = PROFDBft;
+    pmfi.writeat(footer_off, sizeof(footer_val), &footer_val);
+  } 
+
 }
 
 //***************************************************************************
@@ -1845,6 +1854,15 @@ void SparseDB::writeCCTMajor(const std::vector<uint64_t>& ctx_nzval_cnts,
   
   //read and write all the context groups I(rank) am responsible for
   rwAllCtxGroup(my_ctxs, prof_info_list, ctx_offs, threads, all_prof_ctx_pairs, profile_major_f, cct_major_f);
+
+  //footer
+  MPI_Barrier(MPI_COMM_WORLD);
+  if(world_rank == world_size - 1){
+    auto cmfi = cct_major_f.open(true);
+    auto footer_off = ctx_offs.back();
+    uint64_t footer_val = CCTDBftr;
+    cmfi.writeat(footer_off, sizeof(footer_val), &footer_val);
+  } 
 }
 
 

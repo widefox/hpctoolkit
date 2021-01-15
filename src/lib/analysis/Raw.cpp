@@ -241,6 +241,11 @@ Analysis::Raw::writeAsText_sparseDBthread(const char* filenm, bool easygrep)
       pms_sparse_metrics_fprint(&sm,stdout, NULL, x[i].prof_info_idx, "  ", easygrep);
       pms_sparse_metrics_free(&sm);
     }
+
+    uint64_t footer;
+    fread(&footer, sizeof(footer), 1, fs); 
+    if(footer != PROFDBft) DIAG_Throw("'" << filenm << "' is incomplete");
+    fprintf(stdout, "PROFILEDB FOOTER CORRECT, FILE COMPLETE\n");
    
     pms_profile_info_free(&x);     
     id_tuples_pms_free(&tuples, num_prof);
@@ -297,6 +302,11 @@ Analysis::Raw::writeAsText_sparseDBcct(const char* filenm, bool easygrep)
       }
       
     }
+
+    uint64_t footer;
+    fread(&footer, sizeof(footer), 1, fs); 
+    if(footer != CCTDBftr) DIAG_Throw("'" << filenm << "' is incomplete");
+    fprintf(stdout, "CCTDB FOOTER CORRECT, FILE COMPLETE\n");
 
     cms_ctx_info_free(&x);
    
