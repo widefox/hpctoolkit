@@ -339,6 +339,7 @@ Analysis::Raw::writeAsText_tracedb(const char* filenm)
 
     uint32_t num_t = hdr.num_trace;
 
+    fseek(fs, hdr.trace_hdr_sec_ptr, SEEK_SET);
     trace_hdr_t* x;
     ret = trace_hdrs_fread(&x, num_t,fs);
     if (ret != HPCFMT_OK) {

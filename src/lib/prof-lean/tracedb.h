@@ -75,7 +75,7 @@ extern "C" {
 #define HPCTRACEDB_FMT_Magic   "HPCPROF-tracedb_" //16 bytes
 #define HPCTRACEDB_FMT_VersionMajor 1             //1  byte
 #define HPCTRACEDB_FMT_VersionMinor 0             //1  byte
-#define HPCTRACEDB_FMT_NumSec       3             //2  byte
+#define HPCTRACEDB_FMT_NumSec       1             //2  byte
 
 #define HPCTRACEDB_FMT_MagicLen     (sizeof(HPCTRACEDB_FMT_Magic) - 1)
 #define HPCTRACEDB_FMT_VersionLen   2 
@@ -85,9 +85,10 @@ extern "C" {
 #define HPCTRACEDB_FMT_SecPtrLen    8
 #define HPCTRACEDB_FMT_SecLen       (HPCTRACEDB_FMT_SecSizeLen + HPCTRACEDB_FMT_SecPtrLen)
 
-#define HPCTRACEDB_FMT_HeaderLen  (HPCTRACEDB_FMT_MagicLen + HPCTRACEDB_FMT_VersionLen \
+#define HPCTRACEDB_FMT_Real_HeaderLen  (HPCTRACEDB_FMT_MagicLen + HPCTRACEDB_FMT_VersionLen \
   + HPCTRACEDB_FMT_NumTraceLen + HPCTRACEDB_FMT_NumSecLen \
-  + HPCTRACEDB_FMT_SecLen * (HPCTRACEDB_FMT_NumSec - 2))
+  + HPCTRACEDB_FMT_SecLen * HPCTRACEDB_FMT_NumSec)
+#define HPCTRACEDB_FMT_HeaderLen    128
 
 typedef struct tracedb_hdr_t{
   uint8_t versionMajor;
