@@ -124,6 +124,8 @@ cms_hdr_fprint(cms_hdr_t* hdr, FILE* fs);
 //***************************************************************************
 // cms_ctx_info_t
 //***************************************************************************
+#define CMS_ctx_info_start_POS 128 //starting position of context info section
+
 #define CMS_num_ctx_SIZE       4
 #define CMS_ctx_id_SIZE        4
 #define CMS_num_val_SIZE       8

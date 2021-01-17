@@ -264,7 +264,7 @@ private:
                                       
   void writeOneProfile(const std::pair<uint32_t, std::string>& tupleFn,
                        const MPI_Offset my_prof_offset, 
-                       const std::pair<uint32_t,uint64_t>& prof_idx_off_pair,
+                       const std::pair<uint32_t,uint64_t>& prof_idx_tuple_ptr_pair,
                        std::vector<uint64_t>& ctx_nzval_cnts,
                        std::vector<std::set<uint16_t>>& ctx_nzmids,
                        hpctoolkit::util::File::Instance& fh);

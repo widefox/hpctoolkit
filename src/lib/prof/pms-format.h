@@ -126,6 +126,7 @@ pms_hdr_fprint(pms_hdr_t* hdr, FILE* fs);
 //***************************************************************************
 // pms_profile_info_t
 //***************************************************************************
+#define PMS_prof_info_start_POS  128 //starting position of profile info section
 #define PMS_fake_id_tuple_SIZE   2 //length = 0
 
 #define PMS_num_val_SIZE         8

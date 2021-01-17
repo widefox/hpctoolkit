@@ -211,7 +211,7 @@ Analysis::Raw::writeAsText_sparseDBthread(const char* filenm, bool easygrep)
 
     uint32_t num_prof = hdr.num_prof;
 
-    //no need to fseek here since hdr is multiple of 8, prof_info_ptr == PMS_hdr_SIZE
+    fseek(fs, hdr.prof_info_sec_ptr, SEEK_SET);
     pms_profile_info_t* x;
     ret = pms_profile_info_fread(&x,num_prof,fs);
     if (ret != HPCFMT_OK) {
@@ -277,7 +277,7 @@ Analysis::Raw::writeAsText_sparseDBcct(const char* filenm, bool easygrep)
     }
     cms_hdr_fprint(&hdr, stdout);
 
-    //no need to fseek here since hdr is multiple of 8, ctx_info_ptr == CMS_hdr_SIZE
+    fseek(fs, hdr.ctx_info_sec_ptr, SEEK_SET);
     uint32_t num_ctx = hdr.num_ctx;
     cms_ctx_info_t* x;
     ret = cms_ctx_info_fread(&x, num_ctx,fs);
