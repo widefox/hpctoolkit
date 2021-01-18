@@ -516,13 +516,11 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
             const auto& ve = cur.end->first.get();
             if(vb.size() <= idx && ve.size() <= idx) continue;
             if(vb.size() <= idx) {
-              cur.value = 0;
               cur.prefix = {};
               next.push_front(cur);
               nextCnt++;
               cur.begin = cur.end;
             } else if(&std::get<Context>(vb[idx]) != &std::get<Context>(ve[idx])) {
-              cur.value = 0;
               cur.prefix = std::get<Context>(vb[idx]);
               auto dm = findDistributor(*cur.prefix);
               if(dm) {

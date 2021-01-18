@@ -263,7 +263,9 @@ void StructFile::module(const Module& m, Classification& c) noexcept {
                           std::pair<Classification::Block*, uint64_t>> rcfg;
   while(!cfg.empty()) {
     const auto [in, from, to] = cfg.front();
-    rcfg.insert({funcs.at(to), {in, from}});
+    auto it = funcs.find(to);
+    if(it != funcs.end())
+      rcfg.insert({it->second, {in, from}});
     cfg.pop_front();
   }
 

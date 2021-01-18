@@ -82,12 +82,18 @@ struct RouteExpansionTransformer : public ProfileTransformer {
   ~RouteExpansionTransformer() = default;
 
   ContextRef context(ContextRef cr, Scope& s) noexcept override {
-    if(auto co = std::get_if<Context>(cr)) {
+    if(std::holds_alternative<Context>(cr)) {
       if(s.type() == Scope::Type::point || s.type() == Scope::Type::call) {
         auto mo = s.point_data();
         const auto& c = mo.first.userdata[sink.classification()];
         auto routes = c.getRoutes(mo.second);
         if(!routes.empty()) {
+          if(routes.size() < 2) {
+            for(const auto& s: routes.front())
+              cr = sink.context(cr, s);
+            return cr;
+          }
+
           std::vector<std::vector<ContextRef>> paths;
           paths.reserve(routes.size());
           for(const auto& r: routes) {
