@@ -128,7 +128,7 @@ static stdshim::filesystem::path altfile(const stdshim::filesystem::path& path, 
 #define HPC_ELF_C_READ ELF_C_READ
 #endif
 
-void DirectClassification::module(const Module& m, Classification& c) {
+void DirectClassification::module(const Module& m, Classification& c) noexcept {
   int fd = -1;
   const auto& rpath = m.userdata[sink.resolvedPath()];
   const auto& mpath = rpath.empty() ? m.path() : rpath;

@@ -57,9 +57,11 @@ public:
   StructFile(const stdshim::filesystem::path& p);
   ~StructFile();
 
-  ExtensionClass provides() const noexcept { return ExtensionClass::classification; }
-  ExtensionClass requires() const noexcept { return {}; }
-  void module(const Module&, Classification&) override;
+  ExtensionClass provides() const noexcept override {
+    return ExtensionClass::classification;
+  }
+  ExtensionClass requires() const noexcept override { return {}; }
+  void module(const Module&, Classification&) noexcept override;
 
   const stdshim::filesystem::path& forPath() const noexcept { return modpath; }
 

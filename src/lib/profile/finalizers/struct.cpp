@@ -155,7 +155,7 @@ static std::vector<Classification::Interval> parseVs(const std::string& vs) {
   return vals;
 }
 
-void StructFile::module(const Module& m, Classification& c) {
+void StructFile::module(const Module& m, Classification& c) noexcept {
   bool matches = false;
   if(m.path() == modpath) matches = true;
   if(m.userdata[sink.resolvedPath()] == modpath) matches = true;

@@ -115,9 +115,9 @@ public:
     }
     ExtensionClass requires() const noexcept override { return {}; }
 
-    void context(const Context&, unsigned int&) override;
-    void metric(const Metric&, unsigned int&) override;
-    void metric(const Metric&, Metric::ScopedIdentifiers&) override;
+    void context(const Context&, unsigned int&) noexcept override;
+    void metric(const Metric&, unsigned int&) noexcept override;
+    void metric(const Metric&, Metric::ScopedIdentifiers&) noexcept override;
 
   private:
     IdUnpacker& shared;

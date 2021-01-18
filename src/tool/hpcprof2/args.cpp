@@ -626,7 +626,7 @@ static fs::path search(const std::unordered_map<fs::path, fs::path>& prefixes,
   return fs::path();
 }
 
-void ProfArgs::StatisticsExtender::metric(const Metric& m, Metric::StatsAccess mas) {
+void ProfArgs::StatisticsExtender::metric(const Metric& m, Metric::StatsAccess mas) noexcept {
   if(m.visibility() == Metric::Settings::visibility_t::invisible) return;
   Metric::Statistics s;
   s.sum = args.stats.sum;
@@ -638,15 +638,15 @@ void ProfArgs::StatisticsExtender::metric(const Metric& m, Metric::StatsAccess m
   mas.requestStatistics(std::move(s));
 }
 
-void ProfArgs::Prefixer::file(const File& f, stdshim::filesystem::path& p) {
+void ProfArgs::Prefixer::file(const File& f, stdshim::filesystem::path& p) noexcept {
   p = search(args.prefixes, f.path());
 }
 
-void ProfArgs::Prefixer::module(const Module& m, stdshim::filesystem::path& p) {
+void ProfArgs::Prefixer::module(const Module& m, stdshim::filesystem::path& p) noexcept {
   p = search(args.prefixes, m.path());
 }
 
-void ProfArgs::StructWarner::module(const Module& m, Classification& c) {
+void ProfArgs::StructWarner::module(const Module& m, Classification& c) noexcept {
   if(c.empty()) {
     // Check if there any Structfiles might match this Module
     const auto it = args.structheads.find(m.path().filename());

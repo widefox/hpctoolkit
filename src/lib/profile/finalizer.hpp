@@ -79,43 +79,43 @@ public:
 
   /// Classify the given Module, filling in the Classification.
   // MT: Internally Synchronized
-  virtual void module(const Module&, Classification&) {};
+  virtual void module(const Module&, Classification&) noexcept {};
 
   /// Assign a (unique, dense) ID to the given Module.
   // MT: Internally Synchronized
-  virtual void module(const Module&, unsigned int&) {};
+  virtual void module(const Module&, unsigned int&) noexcept {};
 
   /// Assign a (unique, dense) ID to the given File.
   // MT: Internally Synchronized
-  virtual void file(const File&, unsigned int&) {};
+  virtual void file(const File&, unsigned int&) noexcept {};
 
   /// Append additional Statistics to the given Metric.
   // MT: Internally Synchronized
-  virtual void metric(const Metric&, Metric::StatsAccess) {};
+  virtual void metric(const Metric&, Metric::StatsAccess) noexcept {};
 
   /// Assign a (unique, dense) ID to the given Metric.
   // MT: Internally Synchronized
-  virtual void metric(const Metric&, unsigned int&) {};
+  virtual void metric(const Metric&, unsigned int&) noexcept {};
 
   /// Assign a set of (unique, dense) IDs to the given Metric.
   // MT: Internally Synchronized
-  virtual void metric(const Metric&, Metric::ScopedIdentifiers&) {};
+  virtual void metric(const Metric&, Metric::ScopedIdentifiers&) noexcept {};
 
   /// Assign a (unique, dense) ID to the given Context.
   // MT: Internally Synchronized
-  virtual void context(const Context&, unsigned int&) {};
+  virtual void context(const Context&, unsigned int&) noexcept {};
 
   /// Assign a (unique, dense) ID to the given Thread.
   // MT: Internally Synchronized
-  virtual void thread(const Thread&, unsigned int&) {};
+  virtual void thread(const Thread&, unsigned int&) noexcept {};
 
   /// Assign the resolved path for a File.
   // MT: Internally Synchronized
-  virtual void file(const File&, stdshim::filesystem::path&) {};
+  virtual void file(const File&, stdshim::filesystem::path&) noexcept {};
 
   /// Assign the resolved path for a Module.
   // MT: Internally Synchronized
-  virtual void module(const Module&, stdshim::filesystem::path&) {};
+  virtual void module(const Module&, stdshim::filesystem::path&) noexcept {};
 
 protected:
   // This is a base class, don't construct it directly.

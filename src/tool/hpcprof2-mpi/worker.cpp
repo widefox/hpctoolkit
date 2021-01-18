@@ -155,7 +155,7 @@ int rankN(ProfArgs&& args) {
       ThreadIDAdjuster(std::size_t t) : threadIdOffset(t) {};
       ExtensionClass provides() const noexcept override { return extensions::identifier; }
       ExtensionClass requires() const noexcept override { return {}; }
-      void thread(const Thread&, unsigned int& id) override {
+      void thread(const Thread&, unsigned int& id) noexcept override {
         id += threadIdOffset;
       }
       std::size_t threadIdOffset;

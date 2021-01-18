@@ -53,19 +53,19 @@ DenseIds::DenseIds()
   : mod_id(0), file_id(0), met_id(0), smet_id(0), stat_id(0), sstat_id(0),
     ctx_id(0), t_id(0) {};
 
-void DenseIds::module(const Module&, unsigned int& id) {
+void DenseIds::module(const Module&, unsigned int& id) noexcept {
   id = mod_id.fetch_add(1, std::memory_order_relaxed);
 }
 
-void DenseIds::file(const File&, unsigned int& id) {
+void DenseIds::file(const File&, unsigned int& id) noexcept {
   id = file_id.fetch_add(1, std::memory_order_relaxed);
 }
 
-void DenseIds::metric(const Metric&, unsigned int& id) {
+void DenseIds::metric(const Metric&, unsigned int& id) noexcept {
   id = met_id.fetch_add(1, std::memory_order_relaxed);
 }
 
-void DenseIds::metric(const Metric& m, Metric::ScopedIdentifiers& ids) {
+void DenseIds::metric(const Metric& m, Metric::ScopedIdentifiers& ids) noexcept {
   auto scopes = m.scopes();
   auto id = smet_id.fetch_add(scopes.count(), std::memory_order_relaxed);
   if(scopes.has(MetricScope::point)) ids.point = id++;
@@ -73,10 +73,10 @@ void DenseIds::metric(const Metric& m, Metric::ScopedIdentifiers& ids) {
   if(scopes.has(MetricScope::execution)) ids.execution = id++;
 }
 
-void DenseIds::context(const Context&, unsigned int& id) {
+void DenseIds::context(const Context&, unsigned int& id) noexcept {
   id = ctx_id.fetch_add(1, std::memory_order_relaxed);
 }
 
-void DenseIds::thread(const Thread&, unsigned int& id) {
+void DenseIds::thread(const Thread&, unsigned int& id) noexcept {
   id = t_id.fetch_add(1, std::memory_order_relaxed);
 }

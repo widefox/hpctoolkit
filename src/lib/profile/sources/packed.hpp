@@ -104,7 +104,7 @@ public:
       return ExtensionClass::identifier;
     }
 
-    void context(const Context&, unsigned int&) override;
+    void context(const Context&, unsigned int&) noexcept override;
 
   private:
     ctx_map_t& target;

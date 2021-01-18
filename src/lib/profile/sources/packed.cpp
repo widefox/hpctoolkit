@@ -201,7 +201,7 @@ std::vector<uint8_t>::const_iterator Packed::unpackContexts(iter_t it) noexcept 
   return it;
 }
 
-void Packed::ContextTracker::context(const Context& c, unsigned int& id) {
+void Packed::ContextTracker::context(const Context& c, unsigned int& id) noexcept {
   target.emplace(id, std::ref(const_cast<Context&>(c)));
 }
 

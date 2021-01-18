@@ -77,7 +77,7 @@ public:
 
     ExtensionClass provides() const noexcept override { return ExtensionClass::classification; }
     ExtensionClass requires() const noexcept override { return {}; }
-    void module(const Module&, Classification&) override;
+    void module(const Module&, Classification&) noexcept override;
 
   private:
     ProfArgs& args;
@@ -98,7 +98,7 @@ public:
     ExtensionClass provides() const noexcept override { return {}; }
     ExtensionClass requires() const noexcept override { return {}; }
 
-    void metric(const Metric&, Metric::StatsAccess) override;
+    void metric(const Metric&, Metric::StatsAccess) noexcept override;
 
   private:
     ProfArgs& args;
@@ -112,8 +112,8 @@ public:
 
     ExtensionClass provides() const noexcept override { return ExtensionClass::resolvedPath; }
     ExtensionClass requires() const noexcept override { return {}; }
-    void file(const File&, stdshim::filesystem::path&) override;
-    void module(const Module&, stdshim::filesystem::path&) override;
+    void file(const File&, stdshim::filesystem::path&) noexcept override;
+    void module(const Module&, stdshim::filesystem::path&) noexcept override;
 
   private:
     ProfArgs& args;

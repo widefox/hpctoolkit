@@ -313,7 +313,7 @@ ContextRef IdUnpacker::Expander::context(ContextRef c, Scope& s) noexcept {
   return c;
 }
 
-void IdUnpacker::Finalizer::context(const Context& c, unsigned int& id) {
+void IdUnpacker::Finalizer::context(const Context& c, unsigned int& id) noexcept {
   switch(c.scope().type()) {
   case Scope::Type::global:
     id = shared.globalid;
@@ -341,7 +341,7 @@ void IdUnpacker::Finalizer::context(const Context& c, unsigned int& id) {
   }
 }
 
-void IdUnpacker::Finalizer::metric(const Metric& m, unsigned int& id) {
+void IdUnpacker::Finalizer::metric(const Metric& m, unsigned int& id) noexcept {
   util::call_once(shared.once, [this]{ shared.unpack(sink); });
   auto it = shared.metmap.find(m.name());
   if(it == shared.metmap.end())
@@ -349,7 +349,7 @@ void IdUnpacker::Finalizer::metric(const Metric& m, unsigned int& id) {
   id = it->second.first;
 }
 
-void IdUnpacker::Finalizer::metric(const Metric& m, Metric::ScopedIdentifiers& ids) {
+void IdUnpacker::Finalizer::metric(const Metric& m, Metric::ScopedIdentifiers& ids) noexcept {
   util::call_once(shared.once, [this]{ shared.unpack(sink); });
   auto it = shared.metmap.find(m.name());
   if(it == shared.metmap.end())
