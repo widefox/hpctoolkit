@@ -161,6 +161,12 @@ tracedb_data_fprint(hpctrace_fmt_datum_t* x, uint64_t num_datum, uint32_t prof_i
 void
 tracedb_data_free(hpctrace_fmt_datum_t** x);
 
+
+//***************************************************************************
+// footer
+//***************************************************************************
+#define TRACDBft 0x5452414344426674
+
 //***************************************************************************
 #if defined(__cplusplus)
 } /* extern "C" */

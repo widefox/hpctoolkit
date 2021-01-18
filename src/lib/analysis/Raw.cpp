@@ -361,6 +361,11 @@ Analysis::Raw::writeAsText_tracedb(const char* filenm)
       tracedb_data_free(&trace_data);
     }
 
+    uint64_t footer;
+    fread(&footer, sizeof(footer), 1, fs); 
+    if(footer != TRACDBft) DIAG_Throw("'" << filenm << "' is incomplete");
+    fprintf(stdout, "TRACEDB FOOTER CORRECT, FILE COMPLETE\n");
+
     trace_hdrs_free(&x);
     hpcio_fclose(fs);
   }

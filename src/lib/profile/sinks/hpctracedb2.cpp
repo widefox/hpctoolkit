@@ -240,7 +240,24 @@ std::string HPCTraceDB2::exmlTag() {
   return ss.str();
 }
 
-void HPCTraceDB2::write() {};
+void HPCTraceDB2::write() {
+  //make sure all processes finished
+  mpi::barrier();
+
+  //write the footer
+  if(mpi::World::rank() == 0) {
+    std::FILE* trace_f = nullptr;
+    trace_f = std::fopen(trace_p.c_str(), "ab+");
+    if(!trace_f) util::log::fatal() << "Unable to open trace.db file for footer!";
+    
+    std::fseek(trace_f, 0, SEEK_END);
+    uint64_t footer_val = TRACDBft;
+    std::fwrite(&footer_val, sizeof(footer_val), 1, trace_f);
+
+    std::fclose(trace_f);
+  }
+  
+};
 
 
 //***************************************************************************
