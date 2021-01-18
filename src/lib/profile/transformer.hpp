@@ -133,27 +133,6 @@ struct ClassificationTransformer : public ProfileTransformer {
     }
     return c;
   }
-
-protected:
-  Context& context(Context& c, Scope& s, std::vector<std::reference_wrapper<Context>>& v) {
-    std::reference_wrapper<Context> p = c;
-    if(s.type() == Scope::Type::point || s.type() == Scope::Type::call) {
-      auto mo = s.point_data();
-      const auto& c = mo.first.userdata[sink.classification()];
-      auto ss = c.getScopes(mo.second);
-      for(auto it = ss.crbegin(); it != ss.crend(); ++it) {
-        p = std::get<Context>(sink.context(p, *it));
-        v.emplace_back(p);
-      }
-      auto fl = c.getLine(mo.second);
-      if(fl.first != nullptr) {
-        s = s.type() == Scope::Type::call
-            ? Scope{Scope::call, mo.first, mo.second, *fl.first, fl.second}
-            : Scope{mo.first, mo.second, *fl.first, fl.second};
-      }
-    }
-    return p;
-  }
 };
 
 /// Transformer for merging `classified_point` Contexts based on their line information.

@@ -61,10 +61,38 @@
 
 namespace hpctoolkit::util {
 
+/// Version of std::reference_wrapper that allows for hashing and comparison.
+/// These additional operators act as if the type was a T*, so the actual
+/// objects need not be comparable.
+template<class T>
+class reference_index {
+private:
+  std::reference_wrapper<T> d;
+
+public:
+  template<class U>
+  reference_index(U&& x) noexcept : d(std::forward<U>(x)) {};
+  reference_index(const std::reference_wrapper<T>& o) noexcept : d(o) {};
+
+  reference_index(const reference_index&) noexcept = default;
+
+  reference_index& operator=(const reference_index&) noexcept = default;
+
+  operator T&() const noexcept { return d.get(); }
+  T& get() const noexcept { return d.get(); }
+
+  bool operator==(const reference_index& o) const noexcept { return &get() == &o.get(); }
+  bool operator!=(const reference_index& o) const noexcept { return &get() != &o.get(); }
+  bool operator<(const reference_index& o) const noexcept { return &get() < &o.get(); }
+  bool operator<=(const reference_index& o) const noexcept { return &get() <= &o.get(); }
+  bool operator>(const reference_index& o) const noexcept { return &get() > &o.get(); }
+  bool operator>=(const reference_index& o) const noexcept { return &get() >= &o.get(); }
+};
+
 /// Semi-equivalent to std::optional<T&>, without the errors.
 template<class T>
-class optional_ref : private std::optional<std::reference_wrapper<T>> {
-  using Base = std::optional<std::reference_wrapper<T>>;
+class optional_ref : private std::optional<reference_index<T>> {
+  using Base = std::optional<reference_index<T>>;
 
 public:
   optional_ref() noexcept = default;
@@ -79,11 +107,11 @@ public:
     return *this;
   }
   optional_ref& operator=(const optional_ref& o) noexcept {
-    Base::operator=(o);
+    Base::operator=((const Base&)o);
     return *this;
   }
   optional_ref& operator=(optional_ref&& o) noexcept {
-    Base::operator=(std::move(o));
+    Base::operator=((Base&&)std::move(o));
     return *this;
   }
 
@@ -108,7 +136,7 @@ public:
 };
 
 namespace {
-  template<class T> struct vr_ref_wrapper_s { using type = std::reference_wrapper<T>; };
+  template<class T> struct vr_ref_wrapper_s { using type = reference_index<T>; };
   template<> struct vr_ref_wrapper_s<std::monostate> { using type = std::monostate; };
   template<class T>
   using vr_ref_wrapper = typename vr_ref_wrapper_s<T>::type;
@@ -137,17 +165,20 @@ public:
 
   template<class T, std::enable_if_t<in_pack<T,Ts...>, std::nullptr_t> = nullptr>
   constexpr variant_ref(T& v)
-    : Base(std::reference_wrapper<T>(v)) {};
+    : Base(reference_index<T>(v)) {};
+  template<class T, std::enable_if_t<in_pack<T,Ts...>, std::nullptr_t> = nullptr>
+  constexpr variant_ref(reference_index<T> v)
+    : Base(reference_index<T>(v)) {};
   template<class T, std::enable_if_t<in_pack<T,Ts...>, std::nullptr_t> = nullptr>
   constexpr variant_ref(std::reference_wrapper<T> v)
-    : Base(std::reference_wrapper<T>(v)) {};
+    : Base(reference_index<T>(v)) {};
 
   template<std::size_t I, class T>
   constexpr variant_ref(std::in_place_index_t<I> i, T& v)
-    : Base(i, std::reference_wrapper<T>(v)) {};
+    : Base(i, reference_index<T>(v)) {};
   template<std::size_t I, class T>
-  constexpr variant_ref(std::in_place_index_t<I> i, std::reference_wrapper<T> v)
-    : Base(i, std::reference_wrapper<T>(v)) {};
+  constexpr variant_ref(std::in_place_index_t<I> i, reference_index<T> v)
+    : Base(i, reference_index<T>(v)) {};
 
   template<std::size_t I>
   constexpr variant_ref(std::in_place_index_t<I> i) : Base(i) {};
@@ -221,7 +252,7 @@ private:
   friend constexpr T& std::get(const variant_ref<Ns...>& v);
   template<class T>
   constexpr std::enable_if_t<!std::is_same_v<T,std::monostate>,T&> std_get() const noexcept {
-    return std::get<std::reference_wrapper<T>>((const Base&)*this).get();
+    return std::get<reference_index<T>>((const Base&)*this).get();
   }
   template<class T>
   constexpr std::enable_if_t<std::is_same_v<T,std::monostate>,T&> std_get() const noexcept {
@@ -232,7 +263,7 @@ private:
   friend constexpr hpctoolkit::util::optional_ref<T> std::get_if(const variant_ref<Ns...>& v) noexcept;
   template<class T>
   constexpr std::enable_if_t<!std::is_same_v<T,std::monostate>,optional_ref<T>> std_get_if() const noexcept {
-    if(auto pv = std::get_if<std::reference_wrapper<T>>(&(const Base&)*this))
+    if(auto pv = std::get_if<reference_index<T>>(&(const Base&)*this))
       return pv->get();
     return std::nullopt;
   }
@@ -245,6 +276,13 @@ private:
 };
 
 }
+
+template<class T>
+struct std::hash<hpctoolkit::util::reference_index<T>> : private std::hash<T*> {
+  std::size_t operator()(const hpctoolkit::util::reference_index<T>& v) {
+    return std::hash<T*>::operator()(&v.get());
+  }
+};
 
 template<class... Ts>
 struct std::variant_size<hpctoolkit::util::variant_ref<Ts...>>
