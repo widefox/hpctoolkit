@@ -97,9 +97,10 @@ extern "C" {
 #define HPCPROFILESPARSE_FMT_SecLen       (HPCPROFILESPARSE_FMT_SecSizeLen + HPCPROFILESPARSE_FMT_SecPtrLen)
 
 
-#define PMS_hdr_SIZE (HPCPROFILESPARSE_FMT_MagicLen + HPCPROFILESPARSE_FMT_VersionLen \
+#define PMS_real_hdr_SIZE (HPCPROFILESPARSE_FMT_MagicLen + HPCPROFILESPARSE_FMT_VersionLen \
   + HPCPROFILESPARSE_FMT_NumProfLen + HPCPROFILESPARSE_FMT_NumSecLen \
   + HPCPROFILESPARSE_FMT_SecLen * HPCPROFILESPARSE_FMT_NumSec)
+#define PMS_hdr_SIZE 128 //starting position of profile info section
 
 typedef struct pms_hdr_t{
   uint8_t versionMajor;
@@ -126,7 +127,6 @@ pms_hdr_fprint(pms_hdr_t* hdr, FILE* fs);
 //***************************************************************************
 // pms_profile_info_t
 //***************************************************************************
-#define PMS_prof_info_start_POS  128 //starting position of profile info section
 #define PMS_fake_id_tuple_SIZE   2 //length = 0
 
 #define PMS_num_val_SIZE         8

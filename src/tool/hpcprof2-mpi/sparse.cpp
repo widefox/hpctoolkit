@@ -456,9 +456,9 @@ void SparseDB::writePMSHdr(const uint32_t total_num_prof, const util::File& fh)
   b = convertToByte8(id_tuples_sec_ptr);
   hdr.insert(hdr.end(), b.begin(), b.end());
   
-  assert(hdr.size() == PMS_hdr_SIZE);
+  assert(hdr.size() == PMS_real_hdr_SIZE);
   auto fhi = fh.open(true);
-  fhi.writeat(0, PMS_hdr_SIZE, hdr.data());
+  fhi.writeat(0, PMS_real_hdr_SIZE, hdr.data());
   
 }
 
@@ -503,7 +503,7 @@ void SparseDB::getMyProfOffset(const uint32_t total_prof, const uint64_t my_offs
   #pragma omp parallel for num_threads(threads) 
   for(uint i = 0; i < tmp.size();i++){
     if(i < tmp.size() - 1) assert(tmp[i] + profile_sizes[i] == tmp[i+1]);
-    prof_offsets[i] = tmp[i] + my_offset + PMS_prof_info_start_POS
+    prof_offsets[i] = tmp[i] + my_offset + PMS_hdr_SIZE
       + (MULTIPLE_8(prof_info_sec_size)) + (MULTIPLE_8(id_tuples_sec_size)); 
   }
 
@@ -927,7 +927,7 @@ void SparseDB::writeOneProfile(const std::pair<uint32_t, std::string>& tupleFn,
   std::copy(bytes.begin() + PMS_fake_id_tuple_SIZE, bytes.begin() + PMS_prof_skip_SIZE, partial_info.begin());
   // metadata_ptr, sparse_one/two are empty now, so 0,0,0
   std::vector<char> info = profInfoBytes(partial_info, prof_idx_tuple_ptr_pair.second, 0, 0, 0, my_prof_offset);
-  MPI_Offset info_off = PMS_prof_info_start_POS + prof_idx_tuple_ptr_pair.first * PMS_prof_info_SIZE;
+  MPI_Offset info_off = PMS_hdr_SIZE + prof_idx_tuple_ptr_pair.first * PMS_prof_info_SIZE;
   fh.writeat(info_off, PMS_prof_info_SIZE, info.data());
 
   //write profile data
@@ -1000,7 +1000,7 @@ void SparseDB::writeProfileMajor(const int threads, const int world_rank,
   uint32_t total_num_prof = getTotalNumProfiles(my_num_prof);
 
   //set hdr info, id_tuples_sec_size will be set in wordIdTuplesSection
-  prof_info_sec_ptr = PMS_prof_info_start_POS;
+  prof_info_sec_ptr = PMS_hdr_SIZE;
   prof_info_sec_size = total_num_prof * PMS_prof_info_SIZE;
   id_tuples_sec_ptr = prof_info_sec_ptr + (MULTIPLE_8(prof_info_sec_size));
 
@@ -1067,12 +1067,12 @@ void SparseDB::writeCMSHdr(util::File::Instance& cct_major_fi)
 
   b = convertToByte8(ctxcnt * CMS_ctx_info_SIZE); // ctx_info_sec_size
   hdr.insert(hdr.end(), b.begin(), b.end());
-  b = convertToByte8(CMS_ctx_info_start_POS); //ctx_info_sec_ptr
+  b = convertToByte8(CMS_hdr_SIZE); //ctx_info_sec_ptr
   hdr.insert(hdr.end(), b.begin(), b.end());
   
-  assert(hdr.size() == CMS_hdr_SIZE);
+  assert(hdr.size() == CMS_real_hdr_SIZE);
 
-  cct_major_fi.writeat(0, CMS_hdr_SIZE, hdr.data());
+  cct_major_fi.writeat(0, CMS_real_hdr_SIZE, hdr.data());
 }
 
 
@@ -1114,7 +1114,7 @@ void SparseDB::writeCtxInfoSec(const std::vector<std::set<uint16_t>>& ctx_nzmids
   }
 
   assert(info_bytes.size() == CMS_ctx_info_SIZE * ctxcnt);
-  ofh.writeat(CMS_ctx_info_start_POS, info_bytes.size(), info_bytes.data());
+  ofh.writeat(CMS_hdr_SIZE, info_bytes.size(), info_bytes.data());
 }
 
 //---------------------------------------------------------------------------
@@ -1287,7 +1287,7 @@ void SparseDB::updateCtxOffsets(const int threads, std::vector<uint64_t>& ctx_of
 
   #pragma omp parallel for num_threads(threads)
   for(uint i = 0; i < ctxcnt + 1; i++)
-    ctx_off[i] += (MULTIPLE_8(ctxcnt * CMS_ctx_info_SIZE)) + CMS_ctx_info_start_POS;
+    ctx_off[i] += (MULTIPLE_8(ctxcnt * CMS_ctx_info_SIZE)) + CMS_hdr_SIZE;
   
 }
 
@@ -1321,7 +1321,7 @@ std::vector<pms_profile_info_t> SparseDB::profInfoList(const int threads, const 
   //read the whole Profile Information section
   int count = num_prof * PMS_prof_info_SIZE; 
   char input[count];
-  fhi.readat(PMS_prof_info_start_POS + PMS_prof_info_SIZE, count, input); //skip one prof_info (summary)
+  fhi.readat(PMS_hdr_SIZE + PMS_prof_info_SIZE, count, input); //skip one prof_info (summary)
 
   //interpret the section and store in a vector of pms_profile_info_t
   prof_info.resize(num_prof);

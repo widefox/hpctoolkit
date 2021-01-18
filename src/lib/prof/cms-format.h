@@ -97,9 +97,10 @@ extern "C" {
 #define HPCCCTSPARSE_FMT_SecLen       (HPCCCTSPARSE_FMT_SecSizeLen + HPCCCTSPARSE_FMT_SecPtrLen)
 
 
-#define CMS_hdr_SIZE (HPCCCTSPARSE_FMT_MagicLen + HPCCCTSPARSE_FMT_VersionLen \
+#define CMS_real_hdr_SIZE (HPCCCTSPARSE_FMT_MagicLen + HPCCCTSPARSE_FMT_VersionLen \
   + HPCCCTSPARSE_FMT_NumCtxLen + HPCCCTSPARSE_FMT_NumSecLen \
   + HPCCCTSPARSE_FMT_SecLen * HPCCCTSPARSE_FMT_NumSec)
+#define CMS_hdr_SIZE 128 //starting position of context info section
 
 typedef struct cms_hdr_t{
   uint8_t versionMajor;
@@ -124,8 +125,6 @@ cms_hdr_fprint(cms_hdr_t* hdr, FILE* fs);
 //***************************************************************************
 // cms_ctx_info_t
 //***************************************************************************
-#define CMS_ctx_info_start_POS 128 //starting position of context info section
-
 #define CMS_num_ctx_SIZE       4
 #define CMS_ctx_id_SIZE        4
 #define CMS_num_val_SIZE       8
