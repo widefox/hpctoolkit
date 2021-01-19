@@ -435,51 +435,52 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
     {
       util::log::debug d{false};
       d << "Superposition on " << root.scope() << ":";
-      for(std::size_t i = 0; i < c.m_routes.size(); i++) {
-        for(const auto& cc: c.m_routes[i]) {
+      for(const auto& tt: c.m_targets) {
+        for(const auto& cc: tt.route) {
           const Context& ccc = std::get<Context>(cc);
           d << "\n  | " << ccc.scope();
           auto dm = findDistributor(ccc);
           if(dm) d << " " << dm->name() << " = " << t.data[&ccc][&*dm].point.load(std::memory_order_relaxed);
         }
-        d << "\n  > " << std::get<Context>(c.m_targets[i]).scope();
+        d << "\n  > " << std::get<Context>(tt.target).scope();
       }
     }
 
-    // As part of processing we'll be sorting the routes. This makes sure we
-    // don't separate them from their respective targets;
-    std::vector<std::pair<std::reference_wrapper<const std::vector<ContextRef>>, ContextRef>> routetargs;
-    routetargs.reserve(c.m_routes.size());
-    for(std::size_t i = 0; i < c.m_routes.size(); i++)
-      routetargs.emplace_back(std::ref(c.m_routes[i]), c.m_targets[i]);
+    // Before we begin we sort the routes lexigraphically, along with their
+    // associated targets. This saves us some time later.
+    std::vector<std::reference_wrapper<const SuperpositionedContext::Target>>
+      targets(c.m_targets.begin(), c.m_targets.end());
+    std::sort(targets.begin(), targets.end(), [](const auto& a, const auto& b)-> bool{
+      return a.get().route < b.get().route;
+    });
 
-    // To ensure proper numeric stability, we sort + group routes together based
+    // To ensure proper numeric stability, we group routes together based
     // on their prefixes, assigning a fraction of the whole to each group.
     struct group_t {
-      decltype(routetargs)::iterator begin;
-      decltype(routetargs)::iterator end;
+      decltype(targets)::iterator begin;
+      decltype(targets)::iterator end;
       double value;
       util::optional_ref<Context> prefix;
     };
     std::forward_list<group_t> groups;
-    groups.push_front({routetargs.begin(), routetargs.end(), 1, {}});
+    groups.push_front({targets.begin(), targets.end(), 1, {}});
     for(std::size_t idx = 0; !groups.empty(); idx++) {
       std::forward_list<group_t> new_groups;
       for(auto& g: groups) {
         // Termination case: once a group only has one element, we can distribute!
         if(std::distance(g.begin, g.end) == 1) {
           util::log::debug d{false};
-          d << "Distributing group " << std::distance(routetargs.begin(), g.begin)
-            << "-" << std::distance(routetargs.begin(), g.end) << " ";
+          d << "Distributing group " << std::distance(targets.begin(), g.begin)
+            << "-" << std::distance(targets.begin(), g.end) << " ";
           if(g.prefix) d << g.prefix->scope();
           else d << "{blank prefix}";
-          d << " x" << g.value << " to " << std::get<Context>(g.begin->second).scope() << ":";
+          d << " x" << g.value << " to " << std::get<Context>(g.begin->get().target).scope() << ":";
 
           for(const auto& ma: cd.second.citerate()) {
             auto rv = ma.second.point.load(std::memory_order_relaxed);
             auto v = rv * g.value;
             d << "\n  " << ma.first->name() << " " << rv << " -> " << v;
-            atomic_add(t.data[&std::get<Context>(g.begin->second)][ma.first].point, v);
+            atomic_add(t.data[&std::get<Context>(g.begin->get().target)][ma.first].point, v);
           }
 
           continue;
@@ -489,22 +490,13 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
         if(g.value == 0) continue;
 
         util::log::debug d{false};
-        d << "Processing group " << std::distance(routetargs.begin(), g.begin)
-          << "-" << std::distance(routetargs.begin(), g.end) << " ";
+        d << "Processing group " << std::distance(targets.begin(), g.begin)
+          << "-" << std::distance(targets.begin(), g.end) << " ";
         if(g.prefix) d << g.prefix->scope();
         else d << "{blank prefix}";
         d << " x" << g.value << ":";
 
-        // First sort the routes in this group by their values at the current index
-        std::sort(g.begin, g.end, [&](const auto& a, const auto& b) -> bool{
-          const auto& va = a.first.get();
-          const auto& vb = b.first.get();
-          if(idx >= va.size()) return idx < vb.size();
-          if(idx >= vb.size()) return false;
-          return &std::get<Context>(va[idx]) < &std::get<Context>(vb[idx]);
-        });
-
-        // Then construct new groups based on elements sharing a Context prefix
+        // Construct new groups based on elements sharing a Context prefix
         std::forward_list<group_t> next;
         std::size_t nextCnt = 0;
         double totalValue = 0;
@@ -512,8 +504,8 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
           group_t cur = {g.begin, g.begin, 0, {}};
           cur.end++;
           for(; cur.end != g.end; cur.end++) {
-            const auto& vb = cur.begin->first.get();
-            const auto& ve = cur.end->first.get();
+            const auto& vb = cur.begin->get().route;
+            const auto& ve = cur.end->get().route;
             if(vb.size() <= idx && ve.size() <= idx) continue;
             if(vb.size() <= idx) {
               cur.prefix = {};
@@ -545,8 +537,8 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
           if(totalValue == 0) ng.value = g.value / nextCnt;
           else ng.value = g.value * ng.value / totalValue;
 
-          d << "\n  " << std::distance(routetargs.begin(), ng.begin)
-            << "-" << std::distance(routetargs.begin(), ng.end) << " ";
+          d << "\n  " << std::distance(targets.begin(), ng.begin)
+            << "-" << std::distance(targets.begin(), ng.end) << " ";
           if(ng.prefix) d << ng.prefix->scope();
           else d << "{blank prefix}";
           d << " has " << rawval << " -> x" << ng.value;

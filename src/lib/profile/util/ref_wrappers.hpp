@@ -237,6 +237,25 @@ public:
   using Base::valueless_by_exception;
   using Base::swap;
 
+  constexpr bool operator==(const variant_ref& o) const noexcept {
+    return ((const Base&)*this) == ((const Base&)o);
+  }
+  constexpr bool operator!=(const variant_ref& o) const noexcept {
+    return ((const Base&)*this) != ((const Base&)o);
+  }
+  constexpr bool operator<(const variant_ref& o) const noexcept {
+    return ((const Base&)*this) < ((const Base&)o);
+  }
+  constexpr bool operator<=(const variant_ref& o) const noexcept {
+    return ((const Base&)*this) <= ((const Base&)o);
+  }
+  constexpr bool operator>(const variant_ref& o) const noexcept {
+    return ((const Base&)*this) > ((const Base&)o);
+  }
+  constexpr bool operator>=(const variant_ref& o) const noexcept {
+    return ((const Base&)*this) >= ((const Base&)o);
+  }
+
 private:
   template<class V, class... Vs>
   friend constexpr decltype(auto) std::visit(V&&, Vs&&...);

@@ -526,7 +526,7 @@ ContextRef Source::context(ContextRef p, const Scope& s) {
   if(auto rc = std::get_if<Context>(res)) {
     res = newCtx(*rc, rs);
   } else if(auto rc = std::get_if<SuperpositionedContext>(res)) {
-    for(auto& t: rc->m_targets) t = newCtx(t, rs);
+    for(auto& t: rc->m_targets) t.target = newCtx(t.target, rs);
   } else abort();  // unreachable
 
   if(tskip >= pipe->transformers.size())

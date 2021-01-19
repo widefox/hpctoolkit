@@ -136,6 +136,7 @@ public:
 
   // Comparison, as usual
   bool operator==(const Scope& o) const noexcept;
+  bool operator!=(const Scope& o) const noexcept { return !operator==(o); }
 
 private:
   Type ty;

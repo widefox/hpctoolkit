@@ -159,9 +159,9 @@ SuperpositionedContext& Context::superposition(std::vector<std::vector<ContextRe
 
 SuperpositionedContext::SuperpositionedContext(Context& root,
   std::vector<std::vector<ContextRef>> routes)
-  : m_root(root), m_routes(std::move(routes)) {
-  if(m_routes.size() < 2)
+  : m_root(root) {
+  if(routes.size() < 2)
     util::log::fatal{} << "Attempt to create a Superposition without enough proper Contexts!";
   m_targets.reserve(routes.size());
-  for(auto& r: m_routes) m_targets.emplace_back(r.back());
+  for(auto& r: std::move(routes)) m_targets.emplace_back(std::move(r));
 }

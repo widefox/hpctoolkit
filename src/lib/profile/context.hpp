@@ -151,16 +151,21 @@ class SuperpositionedContext {
 public:
   ~SuperpositionedContext() = default;
 
-  const std::vector<ContextRef>& targets() const noexcept {
+  struct Target {
+    Target(std::vector<ContextRef> r)
+      : target(r.back()), route(std::move(r)) {};
+
+    ContextRef target;
+    std::vector<ContextRef> route;
+  };
+
+  const std::vector<Target>& targets() const noexcept {
     return m_targets;
   }
 
 private:
   Context& m_root;
-  std::vector<ContextRef> m_targets;
-
-  // Deciding routes, one per target.
-  std::vector<std::vector<ContextRef>> m_routes;
+  std::vector<Target> m_targets;
 
   friend class ProfilePipeline;
   friend class Context;
