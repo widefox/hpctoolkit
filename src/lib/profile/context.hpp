@@ -66,6 +66,35 @@ class SuperpositionedContext;
 /// Use ContextRef::const_t for a constant reference to a Context-like.
 using ContextRef = util::variant_ref<Context, SuperpositionedContext>;
 
+/// A calling context (similar to Context) but that is "in superposition" across
+/// multiple individual target Contexts. The thread-local metrics associated
+/// with this "Context" are distributed across the targets based on the given
+/// Metric.
+class SuperpositionedContext {
+public:
+  ~SuperpositionedContext() = default;
+
+  struct Target {
+    Target(std::vector<ContextRef>, ContextRef);
+
+    std::vector<ContextRef> route;
+    ContextRef target;
+  };
+
+  const std::vector<Target>& targets() const noexcept {
+    return m_targets;
+  }
+
+private:
+  Context& m_root;
+  std::vector<Target> m_targets;
+
+  friend class ProfilePipeline;
+  friend class Context;
+  friend class Metric;
+  SuperpositionedContext(Context&, std::vector<Target>);
+};
+
 // A single calling Context.
 class Context {
 public:
@@ -134,42 +163,13 @@ private:
   /// The created Context will distribute from this Context based on the
   /// relative value of the given Metric along each of the given paths,
   /// depositing onto the last element of each route.
-  SuperpositionedContext& superposition(std::vector<std::vector<ContextRef>>);
+  SuperpositionedContext& superposition(std::vector<SuperpositionedContext::Target>);
 
   util::uniqable_key<Context*> u_parent;
   util::uniqable_key<Scope> u_scope;
 
   friend class util::uniqued<Context>;
   util::uniqable_key<Scope>& uniqable_key() { return u_scope; }
-};
-
-/// A calling context (similar to Context) but that is "in superposition" across
-/// multiple individual target Contexts. The thread-local metrics associated
-/// with this "Context" are distributed across the targets based on the given
-/// Metric.
-class SuperpositionedContext {
-public:
-  ~SuperpositionedContext() = default;
-
-  struct Target {
-    Target(std::vector<ContextRef>);
-
-    ContextRef target;
-    std::vector<ContextRef> route;
-  };
-
-  const std::vector<Target>& targets() const noexcept {
-    return m_targets;
-  }
-
-private:
-  Context& m_root;
-  std::vector<Target> m_targets;
-
-  friend class ProfilePipeline;
-  friend class Context;
-  friend class Metric;
-  SuperpositionedContext(Context&, std::vector<std::vector<ContextRef>>);
 };
 
 }

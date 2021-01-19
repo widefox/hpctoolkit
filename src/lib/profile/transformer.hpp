@@ -93,16 +93,14 @@ struct RouteExpansionTransformer : public ProfileTransformer {
           return cr;
         }
 
-        std::vector<std::vector<ContextRef>> paths;
+        std::vector<SuperpositionedContext::Target> paths;
         paths.reserve(routes.size());
         for(const auto& r: routes) {
-          paths.emplace_back();
-          ContextRef tip = cr;
+          paths.push_back({{}, cr});
           for(const auto& s: r) {
-            tip = sink.context(tip, s);
-            paths.back().emplace_back(sink.context(cr, s, true));
+            paths.back().target = sink.context(paths.back().target, s);
+            paths.back().route.emplace_back(sink.context(cr, s, true));
           }
-          paths.back().emplace_back(tip);
         }
         return sink.superposContext(cr, std::move(paths));
       }

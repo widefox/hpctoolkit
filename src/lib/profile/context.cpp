@@ -136,35 +136,36 @@ std::pair<Context&,bool> Context::ensure(Scope&& s) {
   return {x.first(), x.second};
 }
 
-SuperpositionedContext& Context::superposition(std::vector<std::vector<ContextRef>> routes) {
-  for(const auto& r: routes) {
-    for(ContextRef t: r) {
+SuperpositionedContext& Context::superposition(std::vector<SuperpositionedContext::Target> targets) {
+  for(const auto& targ: targets) {
+    for(ContextRef t: targ.route) {
       if(auto tc = std::get_if<Context>(t)) {
         Context* c = &*tc;
         for(; c != nullptr && c != this; c = c->direct_parent());
         if(c == nullptr)
-          util::log::fatal{} << "Attempt to target a non-decendant Context in a Superposition: "
+          util::log::fatal{} << "Attempt to route via a non-decendant Context in a Superposition: "
             << tc->scope() << " is not a child of " << scope();
+      } else if(auto tc = std::get_if<SuperpositionedContext>(t)) {
+        if(&tc->m_root != this)
+          util::log::fatal{} << "Attempt to route via an incorrectly rooted Superposition in a Superposition: "
+            << tc->m_root.scope() << " is not " << scope();
       } else
-        util::log::fatal{} << "Attempt to target a non-proper Context in a Superposition!";
+        util::log::fatal{} << "Attempt to route via an unsupported Context in a Superposition!";
     }
+    if(!std::holds_alternative<Context>(targ.target))
+      util::log::fatal{} << "Attempt to target an improper Context in a Superposition!";
   }
 
-  auto c = new SuperpositionedContext(*this, std::move(routes));
+  auto c = new SuperpositionedContext(*this, std::move(targets));
   superpositionRoots.emplace(c);
   return *c;
 }
 
-SuperpositionedContext::SuperpositionedContext(Context& root,
-  std::vector<std::vector<ContextRef>> routes)
-  : m_root(root) {
-  if(routes.size() < 2)
+SuperpositionedContext::SuperpositionedContext(Context& root, std::vector<Target> targets)
+  : m_root(root), m_targets(std::move(targets)) {
+  if(m_targets.size() < 2)
     util::log::fatal{} << "Attempt to create a Superposition without enough proper Contexts!";
-  m_targets.reserve(routes.size());
-  for(auto& r: std::move(routes)) m_targets.emplace_back(std::move(r));
 }
 
-SuperpositionedContext::Target::Target(std::vector<ContextRef> r)
-  : target(r.back()), route(std::move(r)) {
-  route.pop_back();
-}
+SuperpositionedContext::Target::Target(std::vector<ContextRef> r, ContextRef t)
+  : route(std::move(r)), target(t) {};

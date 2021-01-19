@@ -535,12 +535,12 @@ ContextRef Source::context(ContextRef p, const Scope& s, bool recurse) {
   return res;
 }
 
-ContextRef Source::superposContext(ContextRef root, std::vector<std::vector<ContextRef>> routes) {
+ContextRef Source::superposContext(ContextRef root, std::vector<SuperpositionedContext::Target> targets) {
   if(!limit().hasContexts())
     util::log::fatal() << "Source did not register for `contexts` emission!";
   if(!std::holds_alternative<Context>(root))
     util::log::fatal{} << "Attempt to root a Superposition on an improper Context!";
-  return std::get<Context>(root).superposition(std::move(routes));
+  return std::get<Context>(root).superposition(std::move(targets));
 }
 
 Source::AccumulatorsRef Source::accumulateTo(ContextRef c, Thread::Temporary& t) {
