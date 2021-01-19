@@ -72,13 +72,25 @@ std::vector<Scope> Classification::getScopes(uint64_t pos) const noexcept {
     for(Block* sc = it->second; sc != nullptr; sc = sc->parent)
       res.push_back(sc->scope);
   }
+  std::reverse(res.begin(), res.end());
   return res;
 }
 
-std::pair<const File*, uint64_t> Classification::getLine(uint64_t pos) const noexcept {
+std::tuple<const File*, uint64_t, bool> Classification::getLine(uint64_t pos) const noexcept {
   auto lsp = getLineScope(pos);
-  if(lsp) return {lsp->file, lsp->line};
-  return {nullptr, 0};
+  if(lsp != nullptr) return {lsp->file, lsp->line, lsp->isCall};
+  return {nullptr, 0, false};
+}
+
+Scope Classification::classifyLine(Scope s) const noexcept {
+  if(s.type() != Scope::Type::point && s.type() != Scope::Type::call)
+    util::log::fatal{} << "Attempt to line-classify a non-point type Scope: " << s;
+  auto mo = s.point_data();
+  auto lsp = getLineScope(mo.second);
+  if(lsp == nullptr || lsp->file == nullptr) return s;
+  return lsp->isCall || s.type() == Scope::Type::call
+    ? Scope{Scope::call, mo.first, mo.second, *lsp->file, lsp->line}
+    : Scope{mo.first, mo.second, *lsp->file, lsp->line};
 }
 
 const Classification::LineScope* Classification::getLineScope(uint64_t pos) const noexcept {

@@ -338,7 +338,7 @@ public:
     /// Emit a new Context into the Pipeline, as a child of another.
     /// DataClass: `contexts`
     // MT: Externally Synchronized (this), Internally Synchronized
-    ContextRef context(ContextRef, const Scope&);
+    ContextRef context(ContextRef, const Scope&, bool recurse = false);
 
     /// Emit a new SuperpositionedContext into the Pipeline.
     /// DataClass: `contexts`

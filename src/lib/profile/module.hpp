@@ -118,22 +118,28 @@ public:
       : parent(p), scope(Scope::loop, fn, l) {};
   };
 
-  /// Look up the stack of Scopes for the given address. If the address
+  /// Look up the inclosing Scopes for the given address. If the address
   /// references a currently unknown region, the result will be empty.
+  /// Scopes are ordered from highest-level to lowest-level.
   /// If only the lowest-level Scope is needed, see getScope.
   // MT: Safe (const)
   std::vector<Scope> getScopes(uint64_t) const noexcept;
 
-  /// Look up all the possible routes to the particular address, to be appended
-  /// to the prefix given by getScopes().
-  /// If empty, there are no meaningful routes to the given address.
+  /// Look up all the possible routes to the particular address.
+  /// Scopes are ordered in order of forward control flow (i.e. callers appear
+  /// before callees).
+  /// May be empty if there are no routes to the given address.
   // MT: Safe (const)
   std::vector<std::vector<Scope>> getRoutes(uint64_t) const noexcept;
 
-  /// Look up the file and line info for the given address. If unknown, responds
-  /// with a `nullptr` file at line 0.
+  /// Look up the file, line and is_call info for the given address. If unknown,
+  /// responds with a `nullptr` file at line 0.
   // MT: Safe (const)
-  std::pair<const File*, uint64_t> getLine(uint64_t) const noexcept;
+  std::tuple<const File*, uint64_t, bool> getLine(uint64_t) const noexcept;
+
+  /// Turn the given Scope into a `classified_*` variant, based on the offset
+  /// contained within. Does not add additional
+  Scope classifyLine(Scope) const noexcept;
 
   /// The master table for Functions. These can be used to generate Scopes for
   /// various addScope and setScope.
@@ -173,8 +179,11 @@ public:
     uint64_t addr;
     const File* file;
     uint64_t line;
+    bool isCall;
     LineScope(uint64_t a, const File* f, uint64_t l)
-      : addr(a), file(f), line(l) {};
+      : addr(a), file(f), line(l), isCall(false) {};
+    LineScope(uint64_t a, Scope::call_t, const File* f, uint64_t l)
+      : addr(a), file(f), line(l), isCall(true) {};
     bool operator<(const LineScope& o) const noexcept {
       if(addr != o.addr) return addr < o.addr;
       if(file != o.file) {

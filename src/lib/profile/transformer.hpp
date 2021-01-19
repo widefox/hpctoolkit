@@ -87,25 +87,24 @@ struct RouteExpansionTransformer : public ProfileTransformer {
         auto mo = s.point_data();
         const auto& c = mo.first.userdata[sink.classification()];
         auto routes = c.getRoutes(mo.second);
-        if(!routes.empty()) {
-          if(routes.size() < 2) {
-            for(const auto& s: routes.front())
-              cr = sink.context(cr, s);
-            return cr;
-          }
-
-          std::vector<std::vector<ContextRef>> paths;
-          paths.reserve(routes.size());
-          for(const auto& r: routes) {
-            paths.emplace_back();
-            ContextRef tip = cr;
-            for(const auto& s: r) {
-              tip = sink.context(tip, s);
-              paths.back().emplace_back(tip);
-            }
-          }
-          return sink.superposContext(cr, std::move(paths));
+        if(routes.empty()) return cr;
+        if(routes.size() == 1) {
+          for(const auto& s: routes.front()) cr = sink.context(cr, s);
+          return cr;
         }
+
+        std::vector<std::vector<ContextRef>> paths;
+        paths.reserve(routes.size());
+        for(const auto& r: routes) {
+          paths.emplace_back();
+          ContextRef tip = cr;
+          for(const auto& s: r) {
+            tip = sink.context(tip, s);
+            paths.back().emplace_back(sink.context(cr, s, true));
+          }
+          paths.back().emplace_back(tip);
+        }
+        return sink.superposContext(cr, std::move(paths));
       }
     }
     return cr;
@@ -121,15 +120,8 @@ struct ClassificationTransformer : public ProfileTransformer {
     if(s.type() == Scope::Type::point || s.type() == Scope::Type::call) {
       auto mo = s.point_data();
       const auto& cl = mo.first.userdata[sink.classification()];
-      auto ss = cl.getScopes(mo.second);
-      for(auto it = ss.crbegin(); it != ss.crend(); ++it)
-        c = sink.context(c, *it);
-      auto fl = cl.getLine(mo.second);
-      if(fl.first != nullptr) {
-        s = s.type() == Scope::Type::call
-            ? Scope{Scope::call, mo.first, mo.second, *fl.first, fl.second}
-            : Scope{mo.first, mo.second, *fl.first, fl.second};
-      }
+      for(const auto& s: cl.getScopes(mo.second)) c = sink.context(c, s);
+      s = cl.classifyLine(s);
     }
     return c;
   }

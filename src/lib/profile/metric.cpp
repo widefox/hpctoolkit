@@ -412,7 +412,6 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
   // in the Context tree and distribute their data.
   for(const auto& cd: t.sp_data.citerate()) {
     const SuperpositionedContext& c = *cd.first;
-    const Context& root = c.m_root;
 
     // Helper function to determine the factoring Metric used for the given Context.
     auto findDistributor = [&](const Context& c) -> util::optional_ref<const Metric> {
@@ -431,20 +430,6 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
       return m;
     };
     util::optional_ref<const Metric> distributor;
-
-    {
-      util::log::debug d{false};
-      d << "Superposition on " << root.scope() << ":";
-      for(const auto& tt: c.m_targets) {
-        for(const auto& cc: tt.route) {
-          const Context& ccc = std::get<Context>(cc);
-          d << "\n  | " << ccc.scope();
-          auto dm = findDistributor(ccc);
-          if(dm) d << " " << dm->name() << " = " << t.data[&ccc][&*dm].point.load(std::memory_order_relaxed);
-        }
-        d << "\n  > " << std::get<Context>(tt.target).scope();
-      }
-    }
 
     // Before we begin we sort the routes lexigraphically, along with their
     // associated targets. This saves us some time later.
@@ -469,32 +454,16 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
       for(auto& g: groups) {
         // Termination case: once a group only has one element, we can distribute!
         if(std::distance(g.begin, g.end) == 1) {
-          util::log::debug d{false};
-          d << "Distributing group " << std::distance(targets.begin(), g.begin)
-            << "-" << std::distance(targets.begin(), g.end) << " ";
-          if(g.prefix) d << g.prefix->scope();
-          else d << "{blank prefix}";
-          d << " x" << g.value << " to " << std::get<Context>(g.begin->get().target).scope() << ":";
-
           for(const auto& ma: cd.second.citerate()) {
             auto rv = ma.second.point.load(std::memory_order_relaxed);
             auto v = rv * g.value;
-            d << "\n  " << ma.first->name() << " " << rv << " -> " << v;
             atomic_add(t.data[&std::get<Context>(g.begin->get().target)][ma.first].point, v);
           }
-
           continue;
         }
 
         // Other termination case: groups with 0 value don't need to be processed.
         if(g.value == 0) continue;
-
-        util::log::debug d{false};
-        d << "Processing group " << std::distance(targets.begin(), g.begin)
-          << "-" << std::distance(targets.begin(), g.end) << " ";
-        if(g.prefix) d << g.prefix->scope();
-        else d << "{blank prefix}";
-        d << " x" << g.value << ":";
 
         // Construct new groups based on elements sharing a Context prefix
         std::forward_list<group_t> next;
@@ -533,15 +502,8 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
         // If we have any value to play with, try to distribute it.
         // Otherwise we distribute evenly across all the possiblities.
         for(auto& ng: next) {
-          auto rawval = ng.value;
           if(totalValue == 0) ng.value = g.value / nextCnt;
           else ng.value = g.value * ng.value / totalValue;
-
-          d << "\n  " << std::distance(targets.begin(), ng.begin)
-            << "-" << std::distance(targets.begin(), ng.end) << " ";
-          if(ng.prefix) d << ng.prefix->scope();
-          else d << "{blank prefix}";
-          d << " has " << rawval << " -> x" << ng.value;
         }
 
         // Add all the new groups into the list for the next round

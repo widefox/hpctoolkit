@@ -498,13 +498,13 @@ void Source::metricFreeze(Metric& m) {
 }
 
 Context& Source::global() { return *pipe->cct; }
-ContextRef Source::context(ContextRef p, const Scope& s) {
+ContextRef Source::context(ContextRef p, const Scope& s, bool recurse) {
   if(!limit().hasContexts())
     util::log::fatal() << "Source did not register for `contexts` emission!";
   ContextRef res = p;
   Scope rs = s;
   for(std::size_t i = 0; i < pipe->transformers.size(); i++)
-    if(i != tskip)
+    if(recurse || i != tskip)
       res = pipe->transformers[i].get().context(res, rs);
 
   auto newCtx = [&](ContextRef p, const Scope& s) -> ContextRef {

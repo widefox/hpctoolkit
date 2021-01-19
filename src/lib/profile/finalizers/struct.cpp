@@ -239,7 +239,7 @@ void StructFile::module(const Module& m, Classification& c) noexcept {
       auto is = parseVs(xmlstr(attr.getValue(XMLStr("v"))));
       if(is.size() != 1) util::log::fatal{} << "Structfile contains C tag with multiple v ranges!";
       auto i = is[0];
-      lscopes.emplace_back(i.lo, stack.top().file, l);
+      lscopes.emplace_back(i.lo, Scope::call, stack.top().file, l);
       c.setScope(i, stack.top().scope);
       auto tstr = xmlstr(attr.getValue(XMLStr("t")));
       auto t = std::strtoll(&tstr.c_str()[2], nullptr, 16);
@@ -281,14 +281,18 @@ void StructFile::module(const Module& m, Classification& c) noexcept {
       if(range.first == range.second) {
         // Terminate the route, we have nowhere else to go
         if(route.empty()) return;
-        root->addRoute(route);
+        auto froute = route;
+        std::reverse(froute.begin(), froute.end());
+        root->addRoute(std::move(froute));
       } else {
         for(auto it = range.first; it != range.second; ++it) {
           const auto [from, addr] = it->second;
           if(!seen.emplace(from).second) {
             // Terminate the route, we've looped on ourselves.
             route.push_back(unknown_block);
-            root->addRoute(route);
+            auto froute = route;
+            std::reverse(froute.begin(), froute.end());
+            root->addRoute(std::move(froute));
             route.pop_back();
           } else {
             route.push_back(addr);

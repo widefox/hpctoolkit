@@ -152,8 +152,7 @@ public:
   ~SuperpositionedContext() = default;
 
   struct Target {
-    Target(std::vector<ContextRef> r)
-      : target(r.back()), route(std::move(r)) {};
+    Target(std::vector<ContextRef>);
 
     ContextRef target;
     std::vector<ContextRef> route;
