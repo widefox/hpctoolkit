@@ -96,8 +96,15 @@ public:
     return *this;
   }
 
+  using key_type = typename real_t::key_type;
+  using mapped_type = typename real_t::mapped_type;
+  using value_type = typename real_t::value_type;
   using size_type = typename real_t::size_type;
   using difference_type = typename real_t::difference_type;
+  using hasher = typename real_t::hasher;
+  using key_equal = typename real_t::key_equal;
+  using reference = typename real_t::reference;
+  using const_reference = typename real_t::const_reference;
   using allocator_type = typename real_t::allocator_type;
   using pointer = typename std::allocator_traits<allocator_type>::pointer;
   using const_pointer = typename std::allocator_traits<allocator_type>::const_pointer;

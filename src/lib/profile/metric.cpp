@@ -414,8 +414,11 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
     const SuperpositionedContext& c = *cd.first;
 
     // Helper function to determine the factoring Metric used for the given Context.
-    auto findDistributor = [&](const Context& c) -> util::optional_ref<const Metric> {
-      const auto* d = t.data.find(&c);
+    auto findDistributor = [&](ContextRef c) -> util::optional_ref<const Metric> {
+      const decltype(t.data)::mapped_type* d = nullptr;
+      if(auto tc = std::get_if<Context>(c)) d = t.data.find(&*tc);
+      else if(auto tc = std::get_if<SuperpositionedContext>(c)) d = t.sp_data.find(&*tc);
+      else abort();  // unreachable
       if(d == nullptr) return {};
       util::optional_ref<const Metric> m;
       for(const auto& ma: d->citerate()) {
@@ -445,10 +448,9 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
       decltype(targets)::iterator begin;
       decltype(targets)::iterator end;
       double value;
-      util::optional_ref<Context> prefix;
     };
     std::forward_list<group_t> groups;
-    groups.push_front({targets.begin(), targets.end(), 1, {}});
+    groups.push_front({targets.begin(), targets.end(), 1});
     for(std::size_t idx = 0; !groups.empty(); idx++) {
       std::forward_list<group_t> new_groups;
       for(auto& g: groups) {
@@ -457,7 +459,8 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
           for(const auto& ma: cd.second.citerate()) {
             auto rv = ma.second.point.load(std::memory_order_relaxed);
             auto v = rv * g.value;
-            atomic_add(t.data[&std::get<Context>(g.begin->get().target)][ma.first].point, v);
+            auto& tc = std::get<Context>(g.begin->get().target);
+            atomic_add(t.data[&tc][ma.first].point, v);
           }
           continue;
         }
@@ -470,26 +473,28 @@ void Metric::finalize(Thread::Temporary& t) noexcept {
         std::size_t nextCnt = 0;
         double totalValue = 0;
         {
-          group_t cur = {g.begin, g.begin, 0, {}};
+          group_t cur = {g.begin, g.begin, 0};
           cur.end++;
           for(; cur.end != g.end; cur.end++) {
             const auto& vb = cur.begin->get().route;
             const auto& ve = cur.end->get().route;
             if(vb.size() <= idx && ve.size() <= idx) continue;
             if(vb.size() <= idx) {
-              cur.prefix = {};
               next.push_front(cur);
               nextCnt++;
               cur.begin = cur.end;
-            } else if(&std::get<Context>(vb[idx]) != &std::get<Context>(ve[idx])) {
-              cur.prefix = std::get<Context>(vb[idx]);
-              auto dm = findDistributor(*cur.prefix);
+            } else if(vb[idx] != ve[idx]) {
+              auto dm = findDistributor(vb[idx]);
               if(dm) {
                 if(!distributor) distributor = dm;
                 else if(&*distributor != &*dm)
                   util::log::fatal{} << "Multiple distributing Metrics under the same Superposition:"
                     << distributor->name() << " != " << dm->name();
-                cur.value = t.data[&*cur.prefix][&*dm].point.load(std::memory_order_relaxed);
+                if(auto tc = std::get_if<Context>(vb[idx]))
+                  cur.value = t.data[&*tc][&*dm].point.load(std::memory_order_relaxed);
+                else if(auto tc = std::get_if<SuperpositionedContext>(vb[idx]))
+                  cur.value = t.sp_data[&*tc][&*dm].point.load(std::memory_order_relaxed);
+                else abort();  // unreachable
                 totalValue += cur.value;
               }
               next.push_front(cur);
