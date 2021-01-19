@@ -99,7 +99,7 @@ public:
   optional_ref(std::nullopt_t) noexcept {};
   optional_ref(const optional_ref&) noexcept = default;
   optional_ref(optional_ref&&) noexcept = default;
-  optional_ref(T& v) : Base(v) {};
+  optional_ref(T& v) noexcept : Base(v) {};
   ~optional_ref() = default;
 
   optional_ref& operator=(std::nullopt_t n) noexcept {
@@ -160,8 +160,8 @@ public:
   ~variant_ref() = default;
 
   constexpr variant_ref() noexcept = default;
-  constexpr variant_ref(const variant_ref&) noexcept = default;
-  constexpr variant_ref(variant_ref&&) noexcept = default;
+  constexpr variant_ref(const variant_ref&) = default;
+  constexpr variant_ref(variant_ref&&) = default;
 
   template<class T, std::enable_if_t<in_pack<T,Ts...>, std::nullptr_t> = nullptr>
   constexpr variant_ref(T& v)
@@ -296,30 +296,34 @@ private:
 
 }
 
+namespace std {
+
 template<class T>
-struct std::hash<hpctoolkit::util::reference_index<T>> : private std::hash<T*> {
+struct hash<hpctoolkit::util::reference_index<T>> : private std::hash<T*> {
   std::size_t operator()(const hpctoolkit::util::reference_index<T>& v) {
     return std::hash<T*>::operator()(&v.get());
   }
 };
 
 template<class... Ts>
-struct std::variant_size<hpctoolkit::util::variant_ref<Ts...>>
+struct variant_size<hpctoolkit::util::variant_ref<Ts...>>
   : std::integral_constant<std::size_t, sizeof...(Ts)> {};
 
 template<class T, class... Ts>
-constexpr bool std::holds_alternative(const hpctoolkit::util::variant_ref<Ts...>& v) noexcept {
+constexpr bool holds_alternative(const hpctoolkit::util::variant_ref<Ts...>& v) noexcept {
   return v.template std_holds_alternative<T>();
 }
 
 template<class T, class... Ts>
-constexpr T& std::get(const hpctoolkit::util::variant_ref<Ts...>& v) {
+constexpr T& get(const hpctoolkit::util::variant_ref<Ts...>& v) {
   return v.template std_get<T>();
 }
 
 template<class T, class... Ts>
-constexpr hpctoolkit::util::optional_ref<T> std::get_if(const hpctoolkit::util::variant_ref<Ts...>& v) noexcept {
+constexpr hpctoolkit::util::optional_ref<T> get_if(const hpctoolkit::util::variant_ref<Ts...>& v) noexcept {
   return v.template std_get_if<T>();
+}
+
 }
 
 #endif  // HPCTOOLKIT_PROFILE_UTIL_REF_WRAPPERS_H
