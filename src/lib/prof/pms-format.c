@@ -86,8 +86,8 @@ int
 pms_hdr_fwrite(pms_hdr_t* hdr, FILE* fs)
 {
   fwrite(HPCPROFILESPARSE_FMT_Magic,   1, HPCPROFILESPARSE_FMT_MagicLen,   fs);
-  int versionMajor = HPCPROFILESPARSE_FMT_VersionMajor;
-  int versionMinor = HPCPROFILESPARSE_FMT_VersionMinor;
+  uint8_t versionMajor = HPCPROFILESPARSE_FMT_VersionMajor;
+  uint8_t versionMinor = HPCPROFILESPARSE_FMT_VersionMinor;
   fwrite(&versionMajor, 1, 1, fs);
   fwrite(&versionMinor, 1, 1, fs);
   HPCFMT_ThrowIfError(hpcfmt_int4_fwrite(hdr->num_prof, fs));

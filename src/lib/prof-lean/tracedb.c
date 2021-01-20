@@ -87,8 +87,8 @@ int
 tracedb_hdr_fwrite(tracedb_hdr_t* hdr,FILE* fs)
 {
   fwrite(HPCTRACEDB_FMT_Magic, 1, HPCTRACEDB_FMT_MagicLen,   fs);
-  int versionMajor = HPCTRACEDB_FMT_VersionMajor;
-  int versionMinor = HPCTRACEDB_FMT_VersionMinor;
+  uint8_t versionMajor = HPCTRACEDB_FMT_VersionMajor;
+  uint8_t versionMinor = HPCTRACEDB_FMT_VersionMinor;
   fwrite(&versionMajor, 1, 1, fs);
   fwrite(&versionMinor, 1, 1, fs);
 

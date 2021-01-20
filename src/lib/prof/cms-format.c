@@ -86,8 +86,8 @@ int
 cms_hdr_fwrite(cms_hdr_t* hdr,FILE* fs)
 {
   fwrite(HPCCCTSPARSE_FMT_Magic,   1, HPCCCTSPARSE_FMT_MagicLen,   fs);
-  int versionMajor = HPCCCTSPARSE_FMT_VersionMajor;
-  int versionMinor = HPCCCTSPARSE_FMT_VersionMinor;
+  uint8_t versionMajor = HPCCCTSPARSE_FMT_VersionMajor;
+  uint8_t versionMinor = HPCCCTSPARSE_FMT_VersionMinor;
   fwrite(&versionMajor, 1, 1, fs);
   fwrite(&versionMinor, 1, 1, fs);
   HPCFMT_ThrowIfError(hpcfmt_int4_fwrite(hdr->num_ctx, fs));
