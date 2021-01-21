@@ -58,31 +58,79 @@
 #############################################################################
 
 # We do not want the standard GNU files (NEWS README AUTHORS ChangeLog...)
-AUTOMAKE_OPTIONS = foreign
+AUTOMAKE_OPTIONS = foreign subdir-objects
+
+#############################################################################
+# Common settings
+#############################################################################
+
+include $(top_srcdir)/src/Makeinclude.config
+
+#############################################################################
+# Local settings
+#############################################################################
+
+MYSOURCES = \
+	stdshim/shared_mutex.cpp stdshim/atomic.cpp stdshim/futex-detail.c \
+	\
+	util/ragged_vector.cpp util/once.cpp util/xml.cpp util/log.cpp \
+	util/file-posix.cpp \
+	\
+	pipeline.cpp source.cpp context.cpp scope.cpp metric.cpp \
+	module.cpp attributes.cpp dataclass.cpp sink.cpp packedids.cpp \
+	\
+	sources/hpcrun.cpp sources/packed.cpp sources/hpcrun4.cpp \
+	\
+	sinks/hpctracedb2.cpp sinks/packed.cpp sinks/experimentxml4.cpp \
+	\
+	finalizers/struct.cpp finalizers/directclassification.cpp \
+	finalizers/denseids.cpp
+
+MYSTANDALONESOURCES = mpi/standalone.cpp
+
+# GNU binutils flags are needed for HPCLIB_ISA.
+MYCFLAGS   = @HOST_CFLAGS@   $(HPC_IFLAGS) @VALGRIND_IFLAGS@ -I@LIBELF_INC@
+MYCXXFLAGS = @HOST_CXXFLAGS@ $(HPC_IFLAGS) @BOOST_IFLAGS@ @VALGRIND_IFLAGS@ \
+	     @XERCES_IFLAGS@ -I@LIBELF_INC@ -std=gnu++17
+
+if OPT_ENABLE_OPENMP
+MYCFLAGS += $(OPENMP_FLAG)
+MYCXXFLAGS += $(OPENMP_FLAG)
+endif
+
+if IS_HOST_AR
+  MYAR = @HOST_AR@
+else
+  MYAR = $(AR) cru
+endif
+
+MYLIBADD = @HOST_LIBTREPOSITORY@ -L@LIBELF_LIB@ -ldw -lelf
+
+MYCLEAN = @HOST_LIBTREPOSITORY@
 
 #############################################################################
 # Automake rules
 #############################################################################
 
-SUBDIRS = \
-	prof-lean \
-	support-lean
+noinst_LTLIBRARIES = libHPCprofile.la libHPCprofile_standalone.la
 
-if OPT_BUILD_LIB_ALL
-SUBDIRS += \
-	analysis \
-	banal \
-	binutils \
-	isa \
-	prof \
-	profile \
-	profxml \
-	xml \
-	support \
-	stubs-gcc_s
-endif
+libHPCprofile_la_SOURCES  = $(MYSOURCES)
+libHPCprofile_la_CFLAGS   = $(MYCFLAGS)
+libHPCprofile_la_CXXFLAGS = $(MYCXXFLAGS)
+libHPCprofile_la_AR       = $(MYAR)
+libHPCprofile_la_LIBADD   = $(MYLIBADD)
 
+libHPCprofile_standalone_la_SOURCES  = $(MYSTANDALONESOURCES)
+libHPCprofile_standalone_la_CFLAGS   = $(MYCFLAGS)
+libHPCprofile_standalone_la_CXXFLAGS = $(MYCXXFLAGS)
+libHPCprofile_standalone_la_AR       = $(MYAR)
+libHPCprofile_standalone_la_LIBADD   = $(MYLIBADD)
+
+MOSTLYCLEANFILES = $(MYCLEAN)
 
 #############################################################################
-# Other rules
+# Common rules
 #############################################################################
+
+include $(top_srcdir)/src/Makeinclude.rules
+
