@@ -65,6 +65,7 @@ using namespace xercesc;
 
 static std::string xmlstr(const XMLCh* const str) {
   char* n = XMLString::transcode(str);
+  if(n == nullptr) return "";
   std::string r(n);
   XMLString::release(&n);
   return r;
@@ -188,7 +189,7 @@ void StructFile::module(const Module& m, Classification& c) noexcept {
   std::vector<Classification::LineScope> lscopes;
   std::unordered_map<uint64_t, Classification::Block*> funcs;
   std::forward_list<std::tuple<Classification::Block*, uint64_t, uint64_t>> cfg;
-  LHandler handler([&](const std::string& ename, const Attributes& attr) {
+  LHandler handler([&](const std::string& ename, const Attributes& attr) noexcept {
     if(ename == "HPCToolkitStructure") {
       stack.emplace();
       if(seenhts) util::log::fatal() << "Only one HPCToolkitStructure tag is allowed!";
@@ -241,9 +242,12 @@ void StructFile::module(const Module& m, Classification& c) noexcept {
       auto i = is[0];
       lscopes.emplace_back(i.lo, Scope::call, stack.top().file, l);
       c.setScope(i, stack.top().scope);
-      auto tstr = xmlstr(attr.getValue(XMLStr("t")));
-      auto t = std::strtoll(&tstr.c_str()[2], nullptr, 16);
-      cfg.emplace_front(stack.rootScope(), i.lo, t);
+      auto d = xmlstr(attr.getValue(XMLStr("d")));
+      if(!d.empty()) {
+        auto tstr = xmlstr(attr.getValue(XMLStr("t")));
+        auto t = std::strtoll(&tstr.c_str()[2], nullptr, 16);
+        cfg.emplace_front(stack.rootScope(), i.lo, t);
+      }
     } else util::log::fatal() << "Unknown tag in struct file!";
   }, [&](const std::string& ename){
     if(ename == "LM") return;
@@ -277,6 +281,14 @@ void StructFile::module(const Module& m, Classification& c) noexcept {
     std::vector<Classification::Block::route_t> route;
     std::unordered_set<Classification::Block*> seen;
     std::function<void(Classification::Block*)> dfs = [&](Classification::Block* b) {
+      if(!seen.insert(b).second) {
+        // Terminate the route, we've looped on ourselves.
+        route.back() = unknown_block;
+        auto froute = route;
+        std::reverse(froute.begin(), froute.end());
+        root->addRoute(std::move(froute));
+        return;
+      }
       auto range = rcfg.equal_range(b);
       if(range.first == range.second) {
         // Terminate the route, we have nowhere else to go
@@ -287,21 +299,12 @@ void StructFile::module(const Module& m, Classification& c) noexcept {
       } else {
         for(auto it = range.first; it != range.second; ++it) {
           const auto [from, addr] = it->second;
-          if(!seen.emplace(from).second) {
-            // Terminate the route, we've looped on ourselves.
-            route.push_back(unknown_block);
-            auto froute = route;
-            std::reverse(froute.begin(), froute.end());
-            root->addRoute(std::move(froute));
-            route.pop_back();
-          } else {
-            route.push_back(addr);
-            dfs(from);
-            route.pop_back();
-          }
-          seen.erase(from);
+          route.push_back(addr);
+          dfs(from);
+          route.pop_back();
         }
       }
+      seen.erase(b);
     };
     dfs(root);
   }

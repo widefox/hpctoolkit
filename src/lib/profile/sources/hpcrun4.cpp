@@ -337,10 +337,10 @@ void Hpcrun4::read(const DataClass& needed) {
           auto tmp = templates.find(n.id_parent);
           if(tmp == templates.end())
               util::log::fatal() << "CCT nodes not in a preorder!";
-          templates.erase(tmp);
           auto mo = tmp->second.second.point_data();
           ppar = nodes.emplace(n.id_parent,
             sink.context(tmp->second.first, {Scope::call, mo.first, mo.second})).first;
+          templates.erase(tmp);
         }
         par = ppar->second;
       }
