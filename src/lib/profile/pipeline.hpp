@@ -223,16 +223,9 @@ public:
   /// Destructor.
   ~ProfilePipeline() = default;
 
-  /// Type to use for timeouts. Because sometimes we just don't like waiting.
-  using timeout_t = std::chrono::nanoseconds;
-  static constexpr timeout_t timeout_forever = timeout_t::max();
-
-  /// Process all the data scheduled for the given Class, optionally with
-  /// a timeout. A false return value indicates that the operation has not
-  /// completed and a later call is required.
+  /// Process everything until there's nothing left.
   // MT: Externally Synchronized
   void run();
-  bool run(timeout_t);
 
   /// Storage structure for the various Userdata slots available.
   struct Structs {

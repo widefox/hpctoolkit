@@ -214,6 +214,7 @@ public:
 // This detail appends the special Integral functions
 template<class T>
 class atomic_int : public atomic_nonint<T> {
+public:
   atomic_int() noexcept = default;
   constexpr atomic_int(T v) noexcept : atomic_nonint<T>(v) {};
   atomic_int(const atomic_int&) = delete;

@@ -79,19 +79,11 @@ public:
   // MT: Safe (const)
   virtual DataClass provides() const noexcept = 0;
 
-  /// Read in enough data to satisfy the given request or a timeout is reached.
-  /// The core idea is to handle the cases where data a) could be in a somewhat
-  /// arbitrary order, b) may not be available for a second pass, and c) may
-  /// require blocking to obtain. To that end, we specify both the data we
-  /// want as well as the data we may want later, and a timeout.
-  // MT: Externally Synchronized
-  virtual bool read(const DataClass&, ProfilePipeline::timeout_t);
-
   /// Read in enough data to satisfy a request. Unlike the former overload, this
   /// handles cases where the implementation does not obey timeouts, or there is
   /// a better implementation if the limit is not imposed.
   // MT: Externally Synchronized
-  virtual void read(const DataClass&);
+  virtual void read(const DataClass&) = 0;
 
   /// In many cases there are dependencies between data reads, due to the nature
   /// of the conversion. This call allows a Source to adjust its request input

@@ -49,6 +49,7 @@
 
 #include "pipeline.hpp"
 #include "util/locked_unordered.hpp"
+#include "util/parallel_work.hpp"
 
 #include <chrono>
 
@@ -59,27 +60,22 @@ class ProfileSink {
 public:
   virtual ~ProfileSink() = default;
 
-  /// Write as much data from the Pipeline as possible into the Sink. If any
-  /// operation would have to block for longer than the timeout, return false
-  /// and have the user come back later.
-  /// NOTE: Semantic under review.
-  // MT: Externally Synchronized
-  virtual bool write(ProfilePipeline::timeout_t);
-
   /// Write as much data from the Pipeline as possible.
-  /// NOTE: Semantic under review.
   // MT: Externally Synchronized
-  virtual void write();
+  virtual void write() = 0;
 
-  /// Try to help another thread that is currently in a write(). Returns whether
-  /// the help is complete (and so the master thread has to finish up).
+  /// Try to assist another thread that is currently in a write(). Returns the
+  /// amount this call contributed to the overall workshare.
+  /// Unless this is overridden, Sinks are assumed to be single-threaded.
   // MT: Internally Synchronized
-  virtual bool help(std::chrono::nanoseconds timeout);
+  virtual util::WorkshareResult help();
 
   /// Bind a new Pipeline to this Sink.
+  // MT: Externally Synchronized
   void bindPipeline(ProfilePipeline::Sink&& se) noexcept;
 
   /// Notify the Sink that a Pipeline has been bound, and register any userdata.
+  // MT: Externally Synchronized
   virtual void notifyPipeline() noexcept;
 
   /// Query what Classes of data this Sink is able to accept.

@@ -71,12 +71,3 @@ bool ProfileSource::valid() const noexcept { return true; }
 void ProfileSource::bindPipeline(ProfilePipeline::Source&& se) noexcept {
   sink = std::move(se);
 }
-
-bool ProfileSource::read(const DataClass&, ProfilePipeline::timeout_t) {
-  util::log::fatal() << "Source is not able to handle a timeout!";
-  return false;
-}
-
-void ProfileSource::read(const DataClass& min) {
-  read(min, ProfilePipeline::timeout_forever);
-}

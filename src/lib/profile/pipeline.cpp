@@ -64,8 +64,6 @@ using Source = ProfilePipeline::Source;
 using Sink = ProfilePipeline::Sink;
 using WavefrontOrdering = ProfilePipeline::WavefrontOrdering;
 
-const ProfilePipeline::timeout_t ProfilePipeline::timeout_forever;
-
 detail::ProfilePipelineBase::SourceEntry::SourceEntry(ProfileSource& s)
   : source(s), up_source(nullptr) {};
 detail::ProfilePipelineBase::SourceEntry::SourceEntry(std::unique_ptr<ProfileSource>&& up)
@@ -382,17 +380,33 @@ void ProfilePipeline::run() {
     #pragma omp for schedule(dynamic) nowait
     for(std::size_t idx = 0; idx < sinks.size(); ++idx)
       sinks[idx]().write();
-    for(std::size_t idx = 0; idx < sinks.size(); ++idx)
-      sinks[idx]().help(timeout_forever);
+
+    // We don't have any work to do, so attempt to assist the others.
+    std::forward_list<std::reference_wrapper<SinkEntry>> workingSinks(sinks.begin(), sinks.end());
+    bool didwork = true;
+    do {
+      // If we didn't do any work in the last iteration, we may contend for
+      // resources if we try to poll again. So we yield this thread to whoever.
+      if(!didwork) std::this_thread::yield();
+      didwork = false;
+
+      auto before_it = workingSinks.before_begin();
+      auto it = workingSinks.begin();
+      while(it != workingSinks.end()) {
+        auto result = (*it)().help();
+        didwork = didwork || result.contributed;
+        if(result.completed) {
+          it = workingSinks.erase_after(before_it);
+        } else {
+          ++before_it;
+          ++it;
+        }
+      }
+    } while(!workingSinks.empty());
 
     ANNOTATE_HAPPENS_BEFORE(&end_arc);
   }
   ANNOTATE_HAPPENS_AFTER(&end_arc);
-}
-
-bool ProfilePipeline::run(timeout_t to) {
-  util::log::fatal() << "Pipeline::run(timeout) to be implemented!";
-  return false;
 }
 
 Source::Source() : pipe(nullptr), tskip(std::numeric_limits<std::size_t>::max()) {};

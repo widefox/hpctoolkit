@@ -50,17 +50,9 @@
 
 using namespace hpctoolkit;
 
-bool ProfileSink::write(ProfilePipeline::timeout_t) {
-  util::log::fatal() << "Sink cannot handle a timeout!";
-  return false;
-}
-
-void ProfileSink::write() {
-  write(ProfilePipeline::timeout_forever);
-}
-
-bool ProfileSink::help(ProfilePipeline::timeout_t) {
-  return true;  // Unless specified otherwise, Sinks are single-threaded
+util::WorkshareResult ProfileSink::help() {
+  // Unless specified otherwise, Sinks are single-threaded
+  return {false, true};
 }
 
 void ProfileSink::bindPipeline(ProfilePipeline::Sink&& se) noexcept {
