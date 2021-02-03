@@ -89,10 +89,6 @@ public:
   // MT: Internally Synchronized
   virtual void file(const File&, unsigned int&) noexcept {};
 
-  /// Append additional Statistics to the given Metric.
-  // MT: Internally Synchronized
-  virtual void metric(const Metric&, Metric::StatsAccess) noexcept {};
-
   /// Assign a (unique, dense) ID to the given Metric.
   // MT: Internally Synchronized
   virtual void metric(const Metric&, unsigned int&) noexcept {};

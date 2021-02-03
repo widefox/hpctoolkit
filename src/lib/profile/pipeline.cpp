@@ -499,9 +499,8 @@ Metric& Source::metric(Metric::Settings s) {
     util::log::fatal() << "Source did not register for `attributes` emission!";
   auto x = pipe->mets.emplace(pipe->structs.metric, std::move(s));
   slocal->thawedMetrics.insert(&x.first());
-  if(!x.second) return x.first();
-  for(ProfileFinalizer& f: pipe->finalizers.all)
-    f.metric(x.first(), x.first().statsAccess());
+  for(ProfileTransformer& t: pipe->transformers)
+    t.metric(x.first(), x.first().statsAccess());
   return x.first();
 }
 

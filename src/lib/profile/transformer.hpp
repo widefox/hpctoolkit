@@ -68,6 +68,10 @@ public:
   // MT: Internally Synchronized
   virtual ContextRef context(ContextRef c, Scope&) noexcept { return c; }
 
+  /// Append additional Statistics to the given Metric.
+  // MT: Internally Synchronized
+  virtual void metric(const Metric&, Metric::StatsAccess) noexcept {};
+
 protected:
   // Use a subclass to implement the bits.
   ProfileTransformer() = default;
