@@ -89,6 +89,7 @@ protected:
 
     DataClass dataLimit;
 
+    util::Once wavesComplete;
     std::mutex lock;
     std::reference_wrapper<ProfileSource> source;
     std::unique_ptr<ProfileSource> up_source;

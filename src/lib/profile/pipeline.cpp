@@ -319,6 +319,15 @@ void ProfilePipeline::run() {
     for(std::size_t i = 0; i < sinkwaves.unscheduled.size(); ++i)
       notify(sinkwaves.unscheduled[i], unscheduledWaves);
 
+    // Unblock the finishing wave for any Sources that don't have waves.
+    #pragma omp for schedule(dynamic) nowait
+    for(std::size_t i = 0; i < sources.size(); ++i) {
+      if(!(scheduledWaves & sources[i].dataLimit).hasAny()) {
+        // util::log::debug{false} << "Pre-signaling " << i;
+        sources[i].wavesComplete.signal();
+      }
+    }
+
     // The rest of the waves have the same general format
     auto wave = [&](DataClass d, std::size_t idx, const std::vector<std::reference_wrapper<SinkEntry>>& sinks) {
       if(!(d & scheduledWaves).hasAny()) return;
@@ -329,7 +338,13 @@ void ProfilePipeline::run() {
           DataClass req = (sources[i]().finalizeRequest(d) - sources[i].read)
                           & sources[i].dataLimit;
           sources[i].read |= req;
-          if(req.hasAny()) sources[i]().read(req);
+          if(req.hasAny()) {
+            sources[i]().read(req);
+            // If there are (as of now) no more available waves for this source,
+            // emit a signal to unblock the finishing wave
+            if(sources[i].read.allOf(scheduledWaves & sources[i].dataLimit))
+              sources[i].wavesComplete.signal();
+          }
         }
         if(countdowns[idx].fetch_sub(1, std::memory_order_acq_rel)-1 == 0) {
           for(SinkEntry& e: sinks) notify(e, d);
@@ -345,6 +360,7 @@ void ProfilePipeline::run() {
     #pragma omp for schedule(dynamic) nowait
     for(std::size_t i = 0; i < sources.size(); ++i) {
       {
+        sources[i].wavesComplete.wait();
         std::unique_lock<std::mutex> l(sources[i].lock);
         DataClass req = (sources[i]().finalizeRequest(scheduled - scheduledWaves)
                          - sources[i].read) & sources[i].dataLimit;
